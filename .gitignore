@@ -28,4 +28,4 @@ runs/
 .idea
 outputs/
 *.hydra*
-.DS_Store
+*.DS_Store
