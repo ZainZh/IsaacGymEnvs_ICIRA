@@ -8,7 +8,7 @@ params:
 
   network:
     name: soft_actor_critic  # model_builder.NetworkBuilder ->network_builder.SACBuilder
-    separate: False
+    separate: True
 
     space:
       continuous:
@@ -29,6 +29,8 @@ params:
         name: default
       regularizer:
         name: None
+
+    log_std_bounds: [-5, 2]   # should have this
 
   load_checkpoint: ${if:${...checkpoint},True,False} # flag which sets whether to load the checkpoint
   load_path: ${...checkpoint} # path to the checkpoint to load
@@ -70,14 +72,19 @@ params:
     # add 
     num_seed_steps: 2 # total steps: num_actors * num_steps_per_episode * num_seed_steps
     # gamma:
-    critic_tau:
-    batch_size:
-    init_alpha:
+    critic_tau: 
+    batch_size: 
+    init_alpha: 
     learnable_temperature:
     replay_buffer_size:
     num_steps_per_episode:
     # normalize_input:
     max_env_steps:
+    actor_lr: 
+    critic_lr: 
+    alpha_lr:
+
+
     
 
 

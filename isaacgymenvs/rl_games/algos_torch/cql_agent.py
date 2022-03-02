@@ -105,7 +105,7 @@ class CQLAgent(BaseAlgorithm):
 
         self.env_info = config.get('env_info')
         if self.env_info is None:
-            self.vec_env = vecenv.create_vec_env(self.env_name, self.num_actors, **self.env_config)
+            self.vec_env = vecenv.create_vec_env(self.env_name, self.num_actors, **self.env_config)     # ('rlgpu',10,{})
             self.env_info = self.vec_env.get_env_info()
 
         self.sac_device = config.get('device', 'cuda:0')
@@ -319,8 +319,9 @@ class CQLAgent(BaseAlgorithm):
     
     def env_reset(self):
         with torch.no_grad():
-            obs = self.vec_env.reset()
+            obs = self.vec_env.reset()['obs']
 
+        # obs_to_tensors() in 1.1.3, changed
         if self.is_tensor_obses is None:
             self.is_tensor_obses = torch.is_tensor(obs)
             print("Observations are tensors:", self.is_tensor_obses)
@@ -450,6 +451,7 @@ class CQLAgent(BaseAlgorithm):
         # rep_count = 0
         self.frame = 0
         self.obs = self.env_reset()
+        print('Start training')     # add hint
 
         while True:
             self.epoch_num += 1

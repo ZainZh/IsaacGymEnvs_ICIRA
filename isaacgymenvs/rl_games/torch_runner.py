@@ -23,7 +23,7 @@ def _restore(agent, args):
 
 def _override_sigma(agent, args):
     if args['sigma'] is not None:
-        net = agent.model.a2c_network
+        net = agent.model.sac_network   # a2c_network -> sac_network
         if hasattr(net, 'sigma') and hasattr(net, 'fixed_sigma'):
             if net.fixed_sigma:
                 with torch.no_grad():
