@@ -46,7 +46,7 @@ headless: True
 defaults:
   - task: Ant
   #- train: ${task}PPO
-  - train: ${task}CQL   # if use CQL -> suffix
+  - train: ${task}CQL   # if use CQL need to use this suffix
   - hydra/job_logging: disabled
 
 # set the directory where the output files get saved

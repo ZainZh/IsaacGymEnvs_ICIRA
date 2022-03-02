@@ -29,6 +29,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+
 import isaacgym
 
 import os
@@ -110,6 +111,8 @@ def launch_rlg_hydra(cfg: DictConfig):
     runner.run({
         'train': not cfg.test,
         'play': cfg.test,
+        'checkpoint': None,     # need checkpoint arg, not tested
+        'sigma': None,  # torch_runner line 26
     })
 
 if __name__ == "__main__":
