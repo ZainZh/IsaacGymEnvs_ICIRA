@@ -38,6 +38,7 @@ from tasks.humanoid import Humanoid
 from tasks.ingenuity import Ingenuity
 from tasks.quadcopter import Quadcopter
 from tasks.shadow_hand import ShadowHand
+from tasks.dual_franka import DualFranka
 from isaacgymenvs.tasks.trifinger import Trifinger
 
 # Mappings from strings to environments
@@ -54,4 +55,5 @@ isaacgym_task_map = {
     "Quadcopter": Quadcopter,
     "ShadowHand": ShadowHand,
     "Trifinger": Trifinger,
+    "DualFranka": DualFranka
 }
