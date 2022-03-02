@@ -7,6 +7,7 @@ physics_engine: ${..physics_engine}
 env:
   #numEnvs: ${resolve_default:4096,${...num_envs}}
   numEnvs: ${resolve_default:10,${...num_envs}}
+  numAgents: 1
   envSpacing: 2
   episodeLength: 500
   enableDebugVis: False

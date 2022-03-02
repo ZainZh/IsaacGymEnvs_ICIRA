@@ -217,3 +217,8 @@ class SACPlayer(BasePlayer):
 
     def reset(self):
         pass
+
+
+class CQLPlayer(SACPlayer):
+    def __init__(self,params):
+        super().__init__(self,params)

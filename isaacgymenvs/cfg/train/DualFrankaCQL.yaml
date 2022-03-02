@@ -1,13 +1,13 @@
 params:
   seed: ${...seed}
   algo:
-    name: a2c_continuous
+    name: cql   # main Runner: cql_agent.CQLAgent
 
   model:
-    name: continuous_a2c_logstd
+    name: soft_actor_critic   # model_builder.ModelBuilder -> models.ModelSACContinuous
 
   network:
-    name: actor_critic
+    name: soft_actor_critic  # model_builder.NetworkBuilder ->network_builder.SACBuilder
     separate: False
 
     space:
@@ -34,7 +34,7 @@ params:
   load_path: ${...checkpoint} # path to the checkpoint to load
 
   config:
-    name: ${resolve_default:DualFrankaPPO,${....experiment}}
+    name: ${resolve_default:DualFrankaCQL,${....experiment}}
     full_experiment_name: ${.name}
     env_name: rlgpu
     ppo: True
@@ -67,3 +67,18 @@ params:
     clip_value: True
     seq_len: 4
     bounds_loss_coef: 0.0001
+    # add 
+    num_seed_steps: 2 # total steps: num_actors * num_steps_per_episode * num_seed_steps
+    # gamma:
+    critic_tau:
+    batch_size:
+    init_alpha:
+    learnable_temperature:
+    replay_buffer_size:
+    num_steps_per_episode:
+    # normalize_input:
+    max_env_steps:
+    
+
+
+
