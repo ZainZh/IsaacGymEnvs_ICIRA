@@ -110,6 +110,8 @@ def launch_rlg_hydra(cfg: DictConfig):
     runner.run({
         'train': not cfg.test,
         'play': cfg.test,
+        'checkpoint': None,     # need checkpoint arg, not tested
+        'sigma': None,  # torch_runner line 26
     })
 
 if __name__ == "__main__":

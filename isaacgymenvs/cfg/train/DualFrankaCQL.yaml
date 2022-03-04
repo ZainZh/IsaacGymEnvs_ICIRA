@@ -1,0 +1,91 @@
+params:
+  seed: ${...seed}
+  algo:
+    name: cql   # main Runner: cql_agent.CQLAgent
+
+  model:
+    name: soft_actor_critic   # model_builder.ModelBuilder -> models.ModelSACContinuous
+
+  network:
+    name: soft_actor_critic  # model_builder.NetworkBuilder ->network_builder.SACBuilder
+    separate: True
+
+    space:
+      continuous:
+        mu_activation: None
+        sigma_activation: None
+        mu_init:
+          name: default
+        sigma_init:
+          name: const_initializer
+          val: 0
+        fixed_sigma: True
+    mlp:
+      units: [256, 128, 64]
+      activation: elu
+      d2rl: False
+
+      initializer:
+        name: default
+      regularizer:
+        name: None
+
+    log_std_bounds: [-5, 2]   # should have this
+
+  load_checkpoint: ${if:${...checkpoint},True,False} # flag which sets whether to load the checkpoint
+  load_path: ${...checkpoint} # path to the checkpoint to load
+
+  config:
+    name: ${resolve_default:DualFrankaCQL,${....experiment}}
+    full_experiment_name: ${.name}
+    env_name: rlgpu
+    ppo: True
+    mixed_precision: False
+    normalize_input: True
+    normalize_value: True
+    num_actors: ${....task.env.numEnvs}
+    reward_shaper:
+      scale_value: 0.01
+    normalize_advantage: True
+    gamma: 0.99
+    tau: 0.95
+    learning_rate: 5e-4
+    lr_schedule: adaptive
+    kl_threshold: 0.008
+    score_to_win: 5000
+    max_epochs: ${resolve_default:1500,${....max_iterations}}
+    save_best_after: 200
+    save_frequency: 100
+    print_stats: True
+    grad_norm: 1.0
+    entropy_coef: 0.0
+    truncate_grads: True
+    e_clip: 0.2
+    horizon_length: 16
+   # minibatch_size: 8192
+    minibatch_size: 10
+    mini_epochs: 8
+    critic_coef: 4
+    clip_value: True
+    seq_len: 4
+    bounds_loss_coef: 0.0001
+    # add 
+    num_seed_steps: 2 # total steps: num_actors * num_steps_per_episode * num_seed_steps
+    # gamma:
+    critic_tau: 
+    batch_size: 
+    init_alpha: 
+    learnable_temperature:
+    replay_buffer_size:
+    num_steps_per_episode:
+    # normalize_input:
+    max_env_steps:
+    actor_lr: 
+    critic_lr: 
+    alpha_lr:
+
+
+    
+
+
+

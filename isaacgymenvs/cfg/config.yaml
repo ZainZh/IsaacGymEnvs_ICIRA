@@ -40,13 +40,13 @@ checkpoint: ''
 multi_gpu: False
 
 # disables rendering
-headless: False
-#headless: True
+headless: True
 
 # set default task and default training config based on task
 defaults:
   - task: Ant
-  - train: ${task}PPO
+  #- train: ${task}PPO
+  - train: ${task}CQL   # if use CQL need to use this suffix
   - hydra/job_logging: disabled
 
 # set the directory where the output files get saved
