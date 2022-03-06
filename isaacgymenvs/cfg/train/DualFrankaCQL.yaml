@@ -53,17 +53,21 @@ params:
     max_epochs: ${resolve_default:1500,${....max_iterations}}   # can be overrided in main config
     reward_shaper:    # needed
       scale_value: 0.1
+<<<<<<< HEAD
     games_to_track: 100   # max size of game track?
+=======
+    games_to_track: 100  # max size of game track?
+>>>>>>> 1c5d1110a7c519b546e86cf484d41645d8a1bce8
 
     # agent init
     num_seed_steps: 2 # first few epochs, random play
     # ? total steps: num_actors * num_steps_per_episode * num_seed_steps
     gamma: 0.99
     critic_tau: 0.99   # critic soft update tau
-    batch_size: 20    
+    batch_size: 100
     init_alpha: 1   # inital log_alpha
     learnable_temperature: True   # learnable alpha, alpha_lr
-    replay_buffer_size: 30
+    replay_buffer_size: 100000
     num_steps_per_episode: 1000
     normalize_input: True
     max_env_steps: 1000   # compare with current_lengths
@@ -77,7 +81,11 @@ params:
     
     # normalize_value: True
     
+<<<<<<< HEAD
     
+=======
+
+>>>>>>> 1c5d1110a7c519b546e86cf484d41645d8a1bce8
     # normalize_advantage: True
     sigma: 0.9    # need tune, if fixed_sigma=True
 
