@@ -15,6 +15,7 @@ from torch import nn
 import torch.nn.functional as F
 import numpy as np
 import time
+import os
 
 
 # copied from SACAgent
@@ -87,6 +88,12 @@ class CQLAgent(BaseAlgorithm):
         self.step = 0
         self.algo_observer = config['features']['observer']
 
+        # allows us to specify a folder where all experiments will reside
+        self.train_dir = config.get('train_dir', 'runs')
+        # a folder inside of train_dir containing everything related to a particular experiment
+        self.experiment_name=config.get('name')
+        self.experiment_dir = os.path.join(self.train_dir, self.experiment_name)
+        self.nn_dir = os.path.join(self.experiment_dir, 'nn')
 
         # TODO: Is there a better way to get the maximum number of episodes?
         self.max_episodes = torch.ones(self.num_actors, device=self.sac_device)*self.num_steps_per_episode
@@ -148,8 +155,8 @@ class CQLAgent(BaseAlgorithm):
         self.play_time = 0
         self.epoch_num = 0
         
-        self.writer = SummaryWriter('runs/' + config['name'] + datetime.now().strftime("_%d-%H-%M-%S"))
-        print("Run Directory:", config['name'] + datetime.now().strftime("_%d-%H-%M-%S"))
+        self.writer = SummaryWriter(self.experiment_dir + datetime.now().strftime("_%d-%H-%M-%S"))
+        print("Run Directory:", self.experiment_dir + datetime.now().strftime("_%d-%H-%M-%S"))
         
         self.is_tensor_obses = None
         self.is_rnn = False
@@ -504,14 +511,14 @@ class CQLAgent(BaseAlgorithm):
                 if mean_rewards > self.last_mean_rewards and self.epoch_num >= self.save_best_after:
                     print('saving next best rewards: ', mean_rewards)
                     self.last_mean_rewards = mean_rewards
-                    self.save("./nn/" + self.config['name'])
+                    self.save(self.nn_dir + self.config['name'])
                     if self.last_mean_rewards > self.config.get('score_to_win', float('inf')):
                         print('Network won!')
-                        self.save("./nn/" + self.config['name'] + 'ep=' + str(self.epoch_num) + 'rew=' + str(mean_rewards))
+                        self.save(self.nn_dir+ self.config['name'] + 'ep=' + str(self.epoch_num) + 'rew=' + str(mean_rewards))
                         return self.last_mean_rewards, self.epoch_num
 
                 if self.epoch_num > self.max_epochs:
-                    self.save("./nn/" + 'last_' + self.config['name'] + 'ep=' + str(self.epoch_num) + 'rew=' + str(mean_rewards))
+                    self.save(self.nn_dir + 'last_' + self.config['name'] + 'ep=' + str(self.epoch_num) + 'rew=' + str(mean_rewards))
                     print('MAX EPOCHS NUM!')
                     return self.last_mean_rewards, self.epoch_num                               
                 update_time = 0
