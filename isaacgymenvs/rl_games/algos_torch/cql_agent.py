@@ -88,13 +88,6 @@ class CQLAgent(BaseAlgorithm):
         self.step = 0
         self.algo_observer = config['features']['observer']
 
-        # allows us to specify a folder where all experiments will reside
-        self.train_dir = config.get('train_dir', 'runs')
-        # a folder inside of train_dir containing everything related to a particular experiment
-        self.experiment_name=config.get('name')
-        self.experiment_dir = os.path.join(self.train_dir, self.experiment_name)
-        self.nn_dir = os.path.join(self.experiment_dir, 'nn')
-
         # TODO: Is there a better way to get the maximum number of episodes?
         self.max_episodes = torch.ones(self.num_actors, device=self.sac_device)*self.num_steps_per_episode
         # self.episode_lengths = np.zeros(self.num_actors, dtype=int)
@@ -154,7 +147,18 @@ class CQLAgent(BaseAlgorithm):
         self.last_mean_rewards = -100500
         self.play_time = 0
         self.epoch_num = 0
-        
+
+        # allows us to specify a folder where all experiments will reside
+        self.train_dir = config.get('train_dir', 'runs')
+        # a folder inside of train_dir containing everything related to a particular experiment
+        self.experiment_name=config.get('name')
+        self.experiment_dir = os.path.join(self.train_dir, self.experiment_name)
+        print(self.experiment_dir)
+        self.nn_dir = os.path.join(self.experiment_dir, 'nn')
+        os.makedirs(self.train_dir,exist_ok=True)
+        os.makedirs(self.experiment_dir,exist_ok=True)
+        os.makedirs(self.nn_dir,exist_ok=True)
+
         self.writer = SummaryWriter(self.experiment_dir + datetime.now().strftime("_%d-%H-%M-%S"))
         print("Run Directory:", self.experiment_dir + datetime.now().strftime("_%d-%H-%M-%S"))
         
