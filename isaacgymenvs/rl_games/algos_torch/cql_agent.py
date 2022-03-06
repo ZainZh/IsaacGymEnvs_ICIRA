@@ -21,7 +21,6 @@ import time
 class CQLAgent(BaseAlgorithm):
     def __init__(self, base_name, params):
         self.config = config = params['config']
-        print("in CQLAgent")
         print(config)
         # TODO: Get obs shape and self.network
         self.load_networks(params)
@@ -114,7 +113,7 @@ class CQLAgent(BaseAlgorithm):
         print('Env info:')
         print(self.env_info)
 
-        self.rewards_shaper = config['reward_shaper']
+        # self.rewards_shaper = config['reward_shaper']
         self.observation_space = self.env_info['observation_space']
         self.weight_decay = config.get('weight_decay', 0.0)
         #self.use_action_masks = config.get('use_action_masks', False)
@@ -130,8 +129,9 @@ class CQLAgent(BaseAlgorithm):
 
         self.max_epochs = self.config.get('max_epochs', 1e6)
 
-        self.network = config['network']
-        self.rewards_shaper = config['reward_shaper']
+        self.network = config['network']    # build in load_networks
+        self.rewards_shaper = config['reward_shaper']   
+        print('self.rewards_shaper',self.rewards_shaper)    # print to test
         self.num_agents = self.env_info.get('agents', 1)
         self.obs_shape = self.observation_space.shape
 

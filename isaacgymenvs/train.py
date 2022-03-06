@@ -108,10 +108,10 @@ def launch_rlg_hydra(cfg: DictConfig):
         f.write(OmegaConf.to_yaml(cfg))
 
     runner.run({
-        'train': not cfg.test,
+        'train': not cfg.test,      # decide train or play in cfg
         'play': cfg.test,
-        'checkpoint': None,     # need checkpoint arg, not tested
-        'sigma': None,  # torch_runner line 26
+        'checkpoint': cfg.checkpoint,     # checkpoint arg, need test
+        'sigma': cfg.train.params.config.sigma,  # torch_runner line 26
     })
 
 if __name__ == "__main__":

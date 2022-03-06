@@ -12,77 +12,98 @@ params:
 
     space:
       continuous:
-        mu_activation: None
-        sigma_activation: None
-        mu_init:
-          name: default
-        sigma_init:
-          name: const_initializer
-          val: 0
-        fixed_sigma: True
+        # mu_activation: None
+        # sigma_activation: None
+        # mu_init:
+        #   name: default
+        # sigma_init:
+        #   name: const_initializer
+        #   val: 0
+        fixed_sigma: True   # if fixed_sigma=True, config.sigma is used below
+        
     mlp:
       units: [256, 128, 64]
-      activation: elu
+      activation: elu   # network_builder activations_factory line 38
       d2rl: False
 
-      initializer:
-        name: default
-      regularizer:
-        name: None
+      initializer:    # network_builder init_factory line 50
+        name: default   # default-identity
+      # regularizer:    # seems useless
+      #   name: None
 
     log_std_bounds: [-5, 2]   # should have this
 
   load_checkpoint: ${if:${...checkpoint},True,False} # flag which sets whether to load the checkpoint
-  load_path: ${...checkpoint} # path to the checkpoint to load
+  # load_path: ${...checkpoint} # seem useless, path to the checkpoint to load
 
   config:
     name: ${resolve_default:DualFrankaCQL,${....experiment}}
     full_experiment_name: ${.name}
-    env_name: rlgpu
-    ppo: True
-    mixed_precision: False
-    normalize_input: True
-    normalize_value: True
+
+    # base_init
+    # env_config: 
+    # env_info: 
     num_actors: ${....task.env.numEnvs}
-    reward_shaper:
-      scale_value: 0.01
-    normalize_advantage: True
+    env_name: rlgpu
+    device: ${...rl_device}   # sac_device
+    weight_decay: 
+    is_train: ${if:${....test},False,True}
+    save_best_after: 200    # > epoch_num can save, if not set default 500
+    print_stats: True   # print fps_step,fps_total
+    max_epochs: ${resolve_default:1500,${....max_iterations}}   # can be overrided in main config
+    # reward_shaper:    # need test
+    games_to_track:   # max size of game track?
+
+    # agent init
+    num_seed_steps: 2 # first few epochs, random play
+    # ? total steps: num_actors * num_steps_per_episode * num_seed_steps
     gamma: 0.99
-    tau: 0.95
-    learning_rate: 5e-4
-    lr_schedule: adaptive
-    kl_threshold: 0.008
-    score_to_win: 5000
-    max_epochs: ${resolve_default:1500,${....max_iterations}}
-    save_best_after: 200
-    save_frequency: 100
-    print_stats: True
-    grad_norm: 1.0
-    entropy_coef: 0.0
-    truncate_grads: True
-    e_clip: 0.2
-    horizon_length: 16
-   # minibatch_size: 8192
-    minibatch_size: 10
-    mini_epochs: 8
-    critic_coef: 4
-    clip_value: True
-    seq_len: 4
-    bounds_loss_coef: 0.0001
-    # add 
-    num_seed_steps: 2 # total steps: num_actors * num_steps_per_episode * num_seed_steps
-    # gamma:
-    critic_tau: 1
-    batch_size: 20
-    init_alpha: 1
-    learnable_temperature: 1
+    critic_tau: 0.99   # critic soft update tau
+    batch_size: 20    
+    init_alpha: 1   # inital log_alpha
+    learnable_temperature: True   # learnable alpha, alpha_lr
     replay_buffer_size: 30
-    num_steps_per_episode: 10
-    # normalize_input:
-    max_env_steps: 1000
-    actor_lr: 0.01
+    num_steps_per_episode: 1000
+    normalize_input: True
+    max_env_steps: 1000   # compare with current_lengths
+    actor_lr: 0.01    # can set actor(/critic/alpha)_betas ,default=[0.9,0.999]
     critic_lr: 0.01
     alpha_lr: 0.01
+    target_entropy_coef: 0.5  # if none, default 0.5
+
+    score_to_win: 5000
+    # mixed_precision: False
+    
+    # normalize_value: True
+    
+    scale_value: 0.01
+    # normalize_advantage: True
+    sigma: 0.9    # need tune, if fixed_sigma=True
+
+    # tau: 0.95
+    # learning_rate: 5e-4
+    # lr_schedule: adaptive
+    # kl_threshold: 0.008   # used in a2c_common
+    
+    
+    # save_frequency: 100
+    
+    # grad_norm: 1.0
+    # entropy_coef: 0.0
+    
+    # truncate_grads: True
+    # e_clip: 0.2
+    # horizon_length: 16
+    #minibatch_size: 8192
+    # minibatch_size: 10
+    # mini_epochs: 8
+    # critic_coef: 4
+    # clip_value: True
+    # seq_len: 4
+    # bounds_loss_coef: 0.0001
+    
+    
+    
 
 
 
