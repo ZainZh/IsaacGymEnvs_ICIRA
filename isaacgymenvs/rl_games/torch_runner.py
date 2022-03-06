@@ -18,7 +18,7 @@ from rl_games.algos_torch import sac_agent
 from rl_games.algos_torch import cql_agent
 
 def _restore(agent, args):
-    if args['checkpoint'] is not None:
+    if args['checkpoint'] is not None and args['checkpoint']!='':
         agent.restore(args['checkpoint'])
 
 def _override_sigma(agent, args):

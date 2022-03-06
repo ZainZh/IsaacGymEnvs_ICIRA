@@ -45,14 +45,15 @@ params:
     # env_info: 
     num_actors: ${....task.env.numEnvs}
     env_name: rlgpu
-    device: ${...rl_device}   # sac_device
+    device: ${....rl_device}   # sac_device
     weight_decay: 
     is_train: ${if:${....test},False,True}
     save_best_after: 200    # > epoch_num can save, if not set default 500
     print_stats: True   # print fps_step,fps_total
     max_epochs: ${resolve_default:1500,${....max_iterations}}   # can be overrided in main config
-    # reward_shaper:    # need test
-    games_to_track:   # max size of game track?
+    reward_shaper:    # needed
+      scale_value: 0.1
+    games_to_track: 100   # max size of game track?
 
     # agent init
     num_seed_steps: 2 # first few epochs, random play
@@ -76,7 +77,7 @@ params:
     
     # normalize_value: True
     
-    scale_value: 0.01
+    
     # normalize_advantage: True
     sigma: 0.9    # need tune, if fixed_sigma=True
 
