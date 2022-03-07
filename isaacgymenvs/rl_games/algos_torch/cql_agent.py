@@ -217,7 +217,7 @@ class CQLAgent(BaseAlgorithm):
     def set_full_state_weights(self, weights):
         self.set_weights(weights)
 
-        self.step = weights['step']
+        self.step = weights['steps']
         self.actor_optimizer.load_state_dict(weights['actor_optimizer'])
         self.critic_optimizer.load_state_dict(weights['critic_optimizer'])
         self.log_alpha_optimizer.load_state_dict(weights['log_alpha_optimizer'])
