@@ -529,7 +529,7 @@ class DualFranka(VecTask):
 
     def pre_physics_step(self,actions):
         self.actions = actions.clone().to(self.device)
-        print(self.actions,"\n")
+        # print(self.actions,"\n")
 
 
         targets = self.franka_dof_targets[:, :self.num_franka_dofs] + self.franka_dof_speed_scales * self.dt * self.actions[:,0:9] * self.action_scale
@@ -540,7 +540,7 @@ class DualFranka(VecTask):
         self.franka_dof_targets_1[:, :self.num_franka_dofs] = tensor_clamp(
             targets_1, self.franka_dof_lower_limits, self.franka_dof_upper_limits)
         self.franka_dof_targets_all=torch.cat((self.franka_dof_targets[:,0:9],self.franka_dof_targets_1[:,0:9]),1)
-        print("f_d_t=",self.franka_dof_targets_all, "\n")
+        # print("f_d_t=",self.franka_dof_targets_all, "\n")
 
         env_ids_int32 = torch.arange(self.num_envs, dtype=torch.int32, device=self.device)
         self.gym.set_dof_position_target_tensor(self.sim,

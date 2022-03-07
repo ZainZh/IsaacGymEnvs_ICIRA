@@ -158,8 +158,8 @@ class CQLAgent(BaseAlgorithm):
         os.makedirs(self.experiment_dir, exist_ok=True)
         os.makedirs(self.nn_dir, exist_ok=True)
         
-        self.writer = SummaryWriter(self.experiment_dir + datetime.now().strftime("_%d-%H-%M-%S"))
-        print("Run Directory:", self.experiment_dir + datetime.now().strftime("_%d-%H-%M-%S"))
+        self.writer = SummaryWriter(self.experiment_dir + '/' + datetime.now().strftime("%m%d-%H-%M-%S"))
+        print("Run Directory:", self.experiment_dir + '/' + datetime.now().strftime("%m%d-%H-%M-%S"))
         
         self.is_tensor_obses = None
         self.is_rnn = False
@@ -514,14 +514,14 @@ class CQLAgent(BaseAlgorithm):
                 if mean_rewards > self.last_mean_rewards and self.epoch_num >= self.save_best_after:
                     print('saving next best rewards: ', mean_rewards)
                     self.last_mean_rewards = mean_rewards
-                    self.save(self.nn_dir + self.config['name'])
+                    self.save(self.nn_dir + '/' + self.config['name'])
                     if self.last_mean_rewards > self.config.get('score_to_win', float('inf')):
                         print('Network won!')
-                        self.save(self.nn_dir+ self.config['name'] + 'ep=' + str(self.epoch_num) + 'rew=' + str(mean_rewards))
+                        self.save(self.nn_dir + '/' + self.config['name'] + 'ep=' + str(self.epoch_num) + 'rew=' + str(mean_rewards))
                         return self.last_mean_rewards, self.epoch_num
 
                 if self.epoch_num > self.max_epochs:
-                    self.save(self.nn_dir + 'last_' + self.config['name'] + 'ep=' + str(self.epoch_num) + 'rew=' + str(mean_rewards))
+                    self.save(self.nn_dir + '/' + 'last_' + self.config['name'] + 'ep=' + str(self.epoch_num) + 'rew=' + str(mean_rewards))
                     print('MAX EPOCHS NUM!')
                     return self.last_mean_rewards, self.epoch_num                               
                 update_time = 0
