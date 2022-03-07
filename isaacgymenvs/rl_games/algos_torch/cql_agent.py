@@ -158,8 +158,8 @@ class CQLAgent(BaseAlgorithm):
         os.makedirs(self.experiment_dir, exist_ok=True)
         os.makedirs(self.nn_dir, exist_ok=True)
         
-        self.writer = SummaryWriter(self.experiment_dir + '/' + datetime.now().strftime("%m%d-%H-%M-%S"))
-        print("Run Directory:", self.experiment_dir + '/' + datetime.now().strftime("%m%d-%H-%M-%S"))
+        self.writer = SummaryWriter(self.experiment_dir + '/summaries/' + datetime.now().strftime("%m%d-%H-%M-%S"))
+        print("Run Directory:", self.experiment_dir + '/summaries/' + datetime.now().strftime("%m%d-%H-%M-%S"))
         
         self.is_tensor_obses = None
         self.is_rnn = False

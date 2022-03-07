@@ -50,13 +50,13 @@ params:
     is_train: ${if:${....test},False,True}
     save_best_after: 500    # > epoch_num can save, if not set default 500
     print_stats: True   # print fps_step,fps_total
-    max_epochs: ${resolve_default:1500,${....max_iterations}}   # can be overrided in main config
+    max_epochs: ${resolve_default:3000,${....max_iterations}}   # can be overrided in main config
     reward_shaper:    # needed
       scale_value: 1.0
     games_to_track: 100   # game track if done
 
     # agent init
-    num_seed_steps: 300 # first few epochs, random play
+    num_seed_steps: 500 # first few epochs, random play
     # ? total steps: num_actors * num_steps_per_episode * num_seed_steps
     gamma: 0.99
     critic_tau: 0.005   # critic soft update tau
@@ -64,7 +64,7 @@ params:
     init_alpha: 1   # inital log_alpha
     learnable_temperature: True   # learnable alpha, alpha_lr
     replay_buffer_size: 100000
-    num_steps_per_episode: 128
+    num_steps_per_episode: 1000
     normalize_input: False
     max_env_steps: 1000   # compare with current_lengths
     actor_lr: 3e-5    # policy lr, can set actor(/critic/alpha)_betas ,default=[0.9,0.999]
@@ -72,7 +72,7 @@ params:
     alpha_lr: 3e-4    # sac entropy tuning alpha
     target_entropy_coef: 0.5  # if none, default 0.5
 
-    score_to_win: 100
+    score_to_win: 500
     sigma: 0.9    # need tune, if fixed_sigma=True
 
     # CQL args
