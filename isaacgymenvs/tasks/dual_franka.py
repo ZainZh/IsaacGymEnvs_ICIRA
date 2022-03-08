@@ -451,7 +451,7 @@ class DualFranka(VecTask):
             self.gripper_forward_axis_1,self.gripper_up_axis_1,
             self.num_envs, self.dist_reward_scale, self.rot_reward_scale, self.around_handle_reward_scale,
             self.finger_dist_reward_scale, self.action_penalty_scale, self.distX_offset, self.max_episode_length)
-        print("c is",self.cup_positions)
+        # print("c is",self.cup_positions)
 
         #important
 ###########################################################
@@ -676,7 +676,7 @@ def compute_franka_reward(
     num_envs, dist_reward_scale, rot_reward_scale, around_handle_reward_scale,
     finger_dist_reward_scale, action_penalty_scale, distX_offset, max_episode_length
 ):
-    print("cup pos is ",cup_positions)
+    # print("cup pos is ",cup_positions)
     # type: (Tensor,Tensor, Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor, Tensor, Tensor,Tensor,Tensor, Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,int, float, float, float, float, float, float, float) -> Tuple[Tensor,Tensor]
     d = torch.norm(franka_grasp_pos - cup_grasp_pos, p=2, dim=-1)
     dist_reward = 1.0 / (1.0 + d ** 2)
