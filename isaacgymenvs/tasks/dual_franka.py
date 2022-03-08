@@ -439,7 +439,7 @@ class DualFranka(VecTask):
         ##########################################################################3
         #important
 
-    def compute_reward(self,actions):
+    def compute_reward(self):
         self.rew_buf[:],self.reset_buf[:]=compute_franka_reward(
             self.reset_buf, self.progress_buf, self.actions,
             self.cup_dof_pos,self.franka_grasp_pos, self.cup_grasp_pos,self.franka_grasp_rot,
@@ -582,7 +582,7 @@ class DualFranka(VecTask):
         if len(env_ids) > 0:
             self.reset_idx(env_ids)
         self.compute_observations()
-        self.compute_reward(self.actions)
+        self.compute_reward()
         # debug viz
         if self.viewer and self.debug_viz:
             self.gym.clear_lines(self.viewer)
