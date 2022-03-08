@@ -1,4 +1,3 @@
-import argparse
 
 from isaacgym import gymapi
 from isaacgym import gymutil
@@ -6,22 +5,15 @@ from isaacgym import gymtorch
 from isaacgym.torch_utils import *
 from tasks.dual_franka import *
 
-import hydra
+import argparse
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import to_absolute_path
-
 from isaacgymenvs.utils.reformat import omegaconf_to_dict, print_dict
-from isaacgymenvs.utils.rlgames_utils import get_rlgames_env_creator
-
 from utils.utils import set_np_formatting, set_seed
-
 import math
-import numpy as np
-import torch
-
+import keyboard
 
 ## OmegaConf & Hydra Config
-
 # Resolvers used in hydra configs (see https://omegaconf.readthedocs.io/en/2.1_branch/usage.html#resolvers)
 OmegaConf.register_new_resolver('eq', lambda x, y: x.lower()==y.lower())
 OmegaConf.register_new_resolver('contains', lambda x, y: x.lower() in y.lower())
@@ -105,8 +97,16 @@ class DualFrankaTest(DualFranka):
             cam_target = gymapi.Vec3(-4, -3, 0)
             middle_env = self.envs[self.num_envs // 2 + num_per_row // 2]
             self.gym.viewer_camera_look_at(self.viewer, middle_env, cam_pos, cam_target)
+    
+    def compute_reward(self):
+        self.action=torch.zeros(self.cfg["env"]["numActions"]).to(self.device)
+        super().compute_reward()
 
-        
+def wait_keyboard(button,func):
+    if keyboard.is_pressed(button):
+        func()
+        while keyboard.is_pressed(button):
+            pass       
 
 if __name__ == "__main__":
     # parse from default config
@@ -145,7 +145,11 @@ if __name__ == "__main__":
         env.gym.step_graphics(env.sim)
         env.gym.draw_viewer(env.viewer, env.sim, False)
         env.gym.sync_frame_time(env.sim)
-        print(env.compute_reward(''))
+        # print(env.compute_reward(''))
+        wait_keyboard('o',lambda x:print('obs-',env.compute_observations()))
+        wait_keyboard('r',lambda x:print('rew-',env.compute_reward()))    #action=0
+        wait_keyboard('g',lambda x:env.reset_idx(torch.arange(env.num_envs, device=env.device)))   #reset
+        
     print("Done")
 
     env.gym.destroy_viewer(env.viewer)
