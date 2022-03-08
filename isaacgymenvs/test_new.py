@@ -100,9 +100,10 @@ class DualFrankaTest(DualFranka):
                 self.viewer, gymapi.KEY_V, "toggle_viewer_sync")
 
             # Point camera at middle env
+            num_per_row = int(math.sqrt(self.num_envs))
             cam_pos = gymapi.Vec3(4, 3, 3)
             cam_target = gymapi.Vec3(-4, -3, 0)
-            middle_env = self.envs[self.num_envs // 2 + self.num_per_row // 2]
+            middle_env = self.envs[self.num_envs // 2 + num_per_row // 2]
             self.gym.viewer_camera_look_at(self.viewer, middle_env, cam_pos, cam_target)
 
         
