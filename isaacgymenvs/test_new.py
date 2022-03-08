@@ -27,8 +27,11 @@ OmegaConf.register_new_resolver('if', lambda pred, a, b: a if pred else b)
 # allows us to resolve default arguments which are copied in multiple places in the config. used primarily for num_ensv
 OmegaConf.register_new_resolver('resolve_default', lambda default, arg: default if arg=='' else arg)
 
-@hydra.main(config_name="config", config_path="./cfg")
-def launch_rlg_hydra(cfg: DictConfig):
+
+def get_cfg():
+    from hydra import compose, initialize
+    initialize(config_path="cfg")
+    cfg = compose(config_name="config")
 
     # ensure checkpoints can be specified as relative paths
     if cfg.checkpoint:
@@ -54,7 +57,7 @@ class DualFrankaTest(DualFranka):
 
 if __name__ == "__main__":
     # parse from default config
-    cfg=launch_rlg_hydra()
+    cfg=get_cfg()
 
     # override
     args = gymutil.parse_arguments(description="Franka Tensor OSC Example",
