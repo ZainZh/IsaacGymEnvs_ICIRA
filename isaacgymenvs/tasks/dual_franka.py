@@ -77,14 +77,12 @@ class DualFranka(VecTask):
         #order of load asset:franka franka1 table cup spoon shelf
         self.dof_state = gymtorch.wrap_tensor(dof_state_tensor)
         self.franka_dof_state = self.dof_state.view(self.num_envs, -1, 2)[:, :self.num_franka_dofs]
-        self.franka_dof_state_1 = self.dof_state.view(self.num_envs, -1, 2)[:, :self.num_franka_dofs]
+        self.franka_dof_state_1 = self.dof_state.view(self.num_envs, -1, 2)[:, self.num_franka_dofs:2*self.num_franka_dofs]
         self.franka_dof_pos = self.franka_dof_state[..., 0]
         self.franka_dof_vel = self.franka_dof_state[..., 1]
         self.franka_dof_pos_1 = self.franka_dof_state_1[..., 0]
         self.franka_dof_vel_1 = self.franka_dof_state_1[..., 1]
-        self.table_dof_state = self.dof_state.view(self.num_envs, -1, 2)[:, self.num_franka_dofs:]
-        self.table_dof_pos = self.table_dof_state[..., 0]
-        self.table_dof_vel = self.table_dof_state[..., 1]
+
         self.cup_dof_state = self.dof_state.view(self.num_envs, -1, 2)[:, self.num_cup_dofs:]
         self.cup_dof_pos = self.cup_dof_state[..., 0]
         self.cup_dof_vel = self.cup_dof_state[..., 1]
@@ -92,6 +90,12 @@ class DualFranka(VecTask):
         self.spoon_dof_state = self.dof_state.view(self.num_envs, -1, 2)[:, self.num_spoon_dofs:]
         self.spoon_dof_pos = self.spoon_dof_state[..., 0]
         self.spoon_dof_vel = self.spoon_dof_state[..., 1]
+
+        #detect collision
+        net_contact_forces = self.gym.acquire_net_contact_force_tensor(self.sim)
+        self.gym.refresh_net_contact_force_tensor(self.sim)
+        self.contact_forces = gymtorch.wrap_tensor(net_contact_forces).view(self.num_envs, -1, 3)  # shape: num_envs, num_bodies, xyz axis
+
 
 
         self.rigid_body_states = gymtorch.wrap_tensor(rigid_body_tensor).view(self.num_envs, -1, 13)
@@ -448,16 +452,25 @@ class DualFranka(VecTask):
             self.cup_inward_axis,self.cup_up_axis,self.franka_lfinger_pos, self.franka_rfinger_pos,
             self.spoon_inward_axis,self.spoon_up_axis,self.franka_lfinger_pos_1, self.franka_rfinger_pos_1,
             self.gripper_forward_axis,self.gripper_up_axis,
-            self.gripper_forward_axis_1,self.gripper_up_axis_1,
+            self.gripper_forward_axis_1,self.gripper_up_axis_1,self.contact_forces,
             self.num_envs, self.dist_reward_scale, self.rot_reward_scale, self.around_handle_reward_scale,
             self.finger_dist_reward_scale, self.action_penalty_scale, self.distX_offset, self.max_episode_length)
-        # print("c is",self.cup_positions)
+        self.reset_num1=torch.cat((self.contact_forces[:,0:5,:],self.contact_forces[:,6:7,:]),1)
+        self.reset_num2=torch.cat(( self.contact_forces[:, 10:15, :], self.contact_forces[:, 16:17, :]), 1)
+        self.reset_num = torch.cat((self.reset_num1,self.reset_num2),dim=-1)
+        self.reset_numm=torch.cat((self.contact_forces[:,0:7,:],self.contact_forces[:,10:17,:]),1)
+        # print("reset_buf1 ", self.reset_num1)
+        # print("reset_buf2 ", self.reset_num2)
+        # print("reset_buff", self.reset_numm)
+        # print("11 are",self.reset_num)
+        # print("contact force are",torch.norm(torch.norm(self.reset_num[:,:,0:6],dim=1),dim=1))
 
         #important
 ###########################################################
     def compute_observations(self):
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_dof_state_tensor(self.sim)
+        self.gym.refresh_net_contact_force_tensor(self.sim)
         self.gym.refresh_rigid_body_state_tensor(self.sim)
         hand_pos = self.rigid_body_states[:, self.hand_handle][:, 0:3]
         hand_rot = self.rigid_body_states[:, self.hand_handle][:, 3:7]
@@ -505,19 +518,22 @@ class DualFranka(VecTask):
 
         return self.obs_buf
     def reset_idx(self,env_ids):
+
         env_ids_int32 = env_ids.to(dtype=torch.int32)
 
         # reset franka
+
         pos = tensor_clamp(
-            self.franka_default_dof_pos.unsqueeze(0) + 0.25 * (torch.rand((len(env_ids), self.num_franka_dofs), device=self.device) - 0.5),
+            self.franka_default_dof_pos.unsqueeze(0) + 0.15 * (torch.rand((len(env_ids), self.num_franka_dofs), device=self.device) - 0.5),
             self.franka_dof_lower_limits, self.franka_dof_upper_limits)
+       # print("pos is ", pos)
         self.franka_dof_pos[env_ids, :] = pos
         self.franka_dof_vel[env_ids, :] = torch.zeros_like(self.franka_dof_vel[env_ids])
         self.franka_dof_targets[env_ids, :self.num_franka_dofs] = pos
 
         # reset franka1
         pos_1 = tensor_clamp(
-            self.franka_default_dof_pos_1.unsqueeze(0) + 0.25 * (torch.rand((len(env_ids), self.num_franka_dofs_1), device=self.device) - 0.5),
+            self.franka_default_dof_pos_1.unsqueeze(0) -0.15 * (torch.rand((len(env_ids), self.num_franka_dofs_1), device=self.device) - 0.5),
             self.franka_dof_lower_limits, self.franka_dof_upper_limits)
         self.franka_dof_pos_1[env_ids, :] = pos_1
         self.franka_dof_vel_1[env_ids, :] = torch.zeros_like(self.franka_dof_vel_1[env_ids])
@@ -557,7 +573,9 @@ class DualFranka(VecTask):
                                               gymtorch.unwrap_tensor(self.dof_state),
                                               gymtorch.unwrap_tensor(multi_env_ids_int32), len(multi_env_ids_int32))
         self.progress_buf[env_ids] = 0
+
         self.reset_buf[env_ids] = 0
+
     def pre_physics_step(self,actions):
         self.actions = actions.clone().to(self.device)
 
@@ -576,9 +594,8 @@ class DualFranka(VecTask):
                                                 gymtorch.unwrap_tensor(self.franka_dof_targets_all))
     def post_physics_step(self):
         self.progress_buf += 1
-      #  print(self.progress_buf)
+        print("progress buffer is ",self.progress_buf)
         env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
-
         if len(env_ids) > 0:
             self.reset_idx(env_ids)
         self.compute_observations()
@@ -672,12 +689,18 @@ def compute_franka_reward(
     cup_inward_axis,cup_up_axis,franka_lfinger_pos, franka_rfinger_pos,
     spoon_inward_axis,spoon_up_axis,franka_lfinger_pos_1, franka_rfinger_pos_1,
     gripper_forward_axis,gripper_up_axis,
-    gripper_forward_axis_1,gripper_up_axis_1,
+    gripper_forward_axis_1,gripper_up_axis_1,contact_forces,
     num_envs, dist_reward_scale, rot_reward_scale, around_handle_reward_scale,
     finger_dist_reward_scale, action_penalty_scale, distX_offset, max_episode_length
 ):
-    # print("cup pos is ",cup_positions)
-    # type: (Tensor,Tensor, Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor, Tensor, Tensor,Tensor,Tensor, Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,int, float, float, float, float, float, float, float) -> Tuple[Tensor,Tensor]
+    reset_num1 = torch.cat((contact_forces[:, 0:5, :], contact_forces[:, 6:7, :]), 1)
+    reset_num2 = torch.cat((contact_forces[:, 10:15, :], contact_forces[:, 16:17, :]), dim=1)
+    reset_num = torch.cat((reset_num1, reset_num2), dim=-1)
+    reset_numm=torch.norm(torch.norm(reset_num[:, :, 0:6], dim=1), dim=1)
+    # print("11 are", reset_num)
+    # print("contact force are", reset_numm)
+
+    # type: (Tensor,Tensor, Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor, Tensor, Tensor,Tensor,Tensor, Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,int, float, float, float, float, float, float, float) -> Tuple[Tensor,Tensor]
     d = torch.norm(franka_grasp_pos - cup_grasp_pos, p=2, dim=-1)
     dist_reward = 1.0 / (1.0 + d ** 2)
     dist_reward *= dist_reward
@@ -745,26 +768,24 @@ def compute_franka_reward(
             -action_penalty*action_penalty_scale
 
     #bonus for take up the cup properly
-    rewards = torch.where(cup_positions[:,1] > 1.01,rewards+0.5,rewards)
-    rewards = torch.where(cup_positions[:,1] > 1.2, rewards + around_handle_reward, rewards)
-    rewards = torch.where(cup_positions[:,1] > 1.3, rewards + (2*around_handle_reward), rewards)
+    # rewards = torch.where(cup_positions[:,1] > 1.01,rewards+0.5,rewards)
+    # rewards = torch.where(cup_positions[:,1] > 1.2, rewards + around_handle_reward, rewards)
+    # rewards = torch.where(cup_positions[:,1] > 1.3, rewards + (2*around_handle_reward), rewards)
     #print("cup pos is ",cup_positions)
     #bonus for take up the cup properly
-    rewards= torch.where(spoon_positions[:,1] > 1.12,rewards+0.5,rewards)
-    rewards = torch.where(spoon_positions[:,1] > 1.2, rewards + around_handle_reward_1, rewards)
-    rewards = torch.where(spoon_positions[:,1] > 1.3, rewards + (2*around_handle_reward_1), rewards)
+    # rewards= torch.where(spoon_positions[:,1] > 1.12,rewards+0.5,rewards)
+    # rewards = torch.where(spoon_positions[:,1] > 1.2, rewards + around_handle_reward_1, rewards)
+    # rewards = torch.where(spoon_positions[:,1] > 1.3, rewards + (2*around_handle_reward_1), rewards)
 
     #reset if cup and spoon is taken up (max) or max length reached
-    reset_buf = torch.where(cup_positions[:,1]>1.0,torch.ones_like(reset_buf),reset_buf)
-
-    reset_buf = torch.where(cup_positions[:,1] == 1.035, torch.ones_like(reset_buf), reset_buf)
+    # reset_buf = torch.where(cup_positions[:,1]>1.0,torch.ones_like(reset_buf),reset_buf)
+    # reset_buf = torch.where(cup_positions[:,1] <0.2, torch.ones_like(reset_buf), reset_buf)
+    # reset_buf = torch.where(spoon_positions[:,1] <0.2, torch.ones_like(reset_buf),reset_buf)
+    # reset_buf = torch.where(reset_numm>0, torch.ones_like(reset_buf), reset_buf)
    # reset_buf=  torch.where(spoon_dof_pos[:, 1] > 0.3, torch.ones_like(reset_buf),reset_buf)
    # reset_buf = torch.where(spoon_dof_pos[:, 1] <-0.5, torch.ones_like(reset_buf),reset_buf)
    # reset_buf = torch.where(cup_dof_pos[:, 1] < -0.5, torch.ones_like(reset_buf), reset_buf)
     reset_buf = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
-
-
-
     return rewards,reset_buf
 
 ##### franka1
