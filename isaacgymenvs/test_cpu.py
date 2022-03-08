@@ -9,7 +9,6 @@ import math
 import numpy as np
 import torch
 
-
 def orientation_error(desired, current):
     cc = quat_conjugate(current)
     q_r = quat_mul(desired, cc)
