@@ -82,6 +82,29 @@ class DualFrankaTest(DualFranka):
     def __init__(self, cfg, sim_device, graphics_device_id, headless,sim_params):
         self.sim_params=sim_params
         super().__init__(cfg, sim_device, graphics_device_id, headless)
+
+    def set_viewer(self):
+        """Create the viewer."""
+        # todo: read from config
+        self.enable_viewer_sync = True
+        self.viewer = None
+
+        # if running with a viewer, set up keyboard shortcuts and camera
+        if self.headless == False:
+            # subscribe to keyboard shortcuts
+            self.viewer = self.gym.create_viewer(
+                self.sim, gymapi.CameraProperties())
+            self.gym.subscribe_viewer_keyboard_event(
+                self.viewer, gymapi.KEY_ESCAPE, "QUIT")
+            self.gym.subscribe_viewer_keyboard_event(
+                self.viewer, gymapi.KEY_V, "toggle_viewer_sync")
+
+            # Point camera at middle env
+            cam_pos = gymapi.Vec3(4, 3, 3)
+            cam_target = gymapi.Vec3(-4, -3, 0)
+            middle_env = self.envs[self.num_envs // 2 + self.num_per_row // 2]
+            self.gym.viewer_camera_look_at(self.viewer, middle_env, cam_pos, cam_target)
+
         
 
 if __name__ == "__main__":
@@ -121,7 +144,7 @@ if __name__ == "__main__":
         env.gym.step_graphics(env.sim)
         env.gym.draw_viewer(env.viewer, env.sim, False)
         env.gym.sync_frame_time(env.sim)
-        # print(env.compute_reward(env.actions))
+        print(env.compute_reward(''))
     print("Done")
 
     env.gym.destroy_viewer(env.viewer)
