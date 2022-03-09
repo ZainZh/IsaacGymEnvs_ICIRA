@@ -510,7 +510,10 @@ class CQLAgent(BaseAlgorithm):
         total_time = total_time_end - total_time_start
         play_time = total_time - total_update_time
 
-        return step_time, play_time, total_update_time, total_time, actor_losses, entropies, alphas, alpha_losses, critic1_losses, critic2_losses, min_qf1_loss, min_qf2_loss, std_q1, std_q2
+        if not random_exploration:
+            return step_time, play_time, total_update_time, total_time, actor_losses, entropies, alphas, alpha_losses, critic1_losses, critic2_losses, min_qf1_loss, min_qf2_loss, std_q1, std_q2
+        else:
+            return step_time, play_time, total_update_time, total_time, actor_losses, entropies, alphas, alpha_losses, critic1_losses, critic2_losses
 
     def train_epoch(self):
         if self.epoch_num < self.num_seed_steps:
