@@ -11,7 +11,7 @@ from hydra.utils import to_absolute_path
 from isaacgymenvs.utils.reformat import omegaconf_to_dict, print_dict
 from utils.utils import set_np_formatting, set_seed
 import math
-import keyboard
+
 
 ## OmegaConf & Hydra Config
 # Resolvers used in hydra configs (see https://omegaconf.readthedocs.io/en/2.1_branch/usage.html#resolvers)
@@ -102,11 +102,6 @@ class DualFrankaTest(DualFranka):
         self.action=torch.zeros(self.cfg["env"]["numActions"]).to(self.device)
         super().compute_reward()
 
-def wait_keyboard(button,func):
-    if keyboard.is_pressed(button):
-        func()
-        while keyboard.is_pressed(button):
-            pass       
 
 if __name__ == "__main__":
     # parse from default config
@@ -137,7 +132,9 @@ if __name__ == "__main__":
             headless=False,
             sim_params=sim_params)
 
+    t=0
     while not env.gym.query_viewer_has_closed(env.viewer):
+        t+=1
         # Step the physics
         env.gym.simulate(env.sim)
         env.gym.fetch_results(env.sim, True)
@@ -146,9 +143,11 @@ if __name__ == "__main__":
         env.gym.draw_viewer(env.viewer, env.sim, False)
         env.gym.sync_frame_time(env.sim)
         # print(env.compute_reward(''))
-        wait_keyboard('o',lambda x:print('obs-',env.compute_observations()))
-        wait_keyboard('r',lambda x:print('rew-',env.compute_reward()))    #action=0
-        wait_keyboard('g',lambda x:env.reset_idx(torch.arange(env.num_envs, device=env.device)))   #reset
+        if t%50==0:
+            t=0
+            print('obs-',env.compute_observations())
+            print('rew-',env.compute_reward()) #action=0
+        # env.reset_idx(torch.arange(env.num_envs, device=env.device))
         
     print("Done")
 
