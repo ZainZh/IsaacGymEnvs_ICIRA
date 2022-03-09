@@ -76,13 +76,14 @@ params:
     sigma: 0.9    # need tune, if fixed_sigma=True
 
     # CQL args
-    max_q_backup: False
-    deterministic_backup: True
-    policy_eval_start: 40000
+    # max_q_backup: False   # not added
+    # deterministic_backup: False
+    # policy_eval_start: 40000    # same as num_seed_steps
     min_q_weight: 1.0
     min_q_version: 3  # choose cql(rho/H)
     with_lagrange: True
     lagrange_thresh: 5.0
+    num_random : 10
 
     # env_config:
     #   name: HumanoidRun-v0
@@ -101,8 +102,7 @@ params:
     # truncate_grads: True
     # e_clip: 0.2
     # horizon_length: 16
-    #minibatch_size: 8192
-    # minibatch_size: 10
+    # minibatch_size: 8192
     # mini_epochs: 8
     # critic_coef: 4
     # clip_value: True
