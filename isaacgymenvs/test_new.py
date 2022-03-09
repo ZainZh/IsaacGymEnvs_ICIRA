@@ -99,8 +99,9 @@ class DualFrankaTest(DualFranka):
             self.gym.viewer_camera_look_at(self.viewer, middle_env, cam_pos, cam_target)
     
     def compute_reward(self):
-        self.action=torch.zeros(self.cfg["env"]["numActions"]).to(self.device)
+        self.actions=torch.zeros(self.cfg["env"]["numActions"]).to(self.device)
         super().compute_reward()
+        return self.rew_buf
 
 
 if __name__ == "__main__":
