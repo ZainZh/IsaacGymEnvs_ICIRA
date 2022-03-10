@@ -38,7 +38,7 @@ class CQLAgent(BaseAlgorithm):
 
         self.max_env_steps = config.get("max_env_steps", 1000) # temporary, in future we will use other approach
 
-        print(self.batch_size, self.num_actors, self.num_agents)
+        print('batch_size,num_actor,num_agent',self.batch_size, self.num_actors, self.num_agents)
 
         self.num_frames_per_epoch = self.num_actors * self.num_steps_per_episode
 
@@ -269,7 +269,7 @@ class CQLAgent(BaseAlgorithm):
         # critic_loss = critic1_loss + critic2_loss 
 
         # add CQL here
-        random_actions_tensor = torch.FloatTensor(current_Q2.shape[0] * self.num_random, action.shape[-1]).uniform_(-1, 1)
+        random_actions_tensor = torch.FloatTensor(current_Q2.shape[0] * self.num_random, action.shape[-1]).uniform_(-1, 1).to(self.sac_device)
         curr_actions_tensor, curr_log_pis = self._get_policy_actions(obs, num_actions=self.num_random, network=self.model.actor)
         new_curr_actions_tensor, new_log_pis = self._get_policy_actions(next_obs, num_actions=self.num_random, network=self.model.actor)
         q1_rand, q2_rand = self._get_tensor_values(obs, random_actions_tensor, network=self.model.critic)
@@ -304,14 +304,13 @@ class CQLAgent(BaseAlgorithm):
         min_qf2_loss = min_qf2_loss - current_Q2.mean() * self.min_q_weight
         
         if self.with_lagrange:
-            # use self.alpha_prime_loss to use in writer
             alpha_prime = torch.clamp(self.log_alpha_prime.exp(), min=0.0, max=1000000.0)
             min_qf1_loss = alpha_prime * (min_qf1_loss - self.target_action_gap)  # target_action_gap=threshold
             min_qf2_loss = alpha_prime * (min_qf2_loss - self.target_action_gap)
 
             self.alpha_prime_optimizer.zero_grad()
-            self.alpha_prime_loss = (-min_qf1_loss - min_qf2_loss)*0.5 
-            self.alpha_prime_loss.backward(retain_graph=True)
+            alpha_prime_loss = (-min_qf1_loss - min_qf2_loss)*0.5 
+            alpha_prime_loss.backward(retain_graph=True)
             self.alpha_prime_optimizer.step()
 
         critic1_loss = critic1_loss + min_qf1_loss
@@ -323,7 +322,7 @@ class CQLAgent(BaseAlgorithm):
         critic_loss.backward()
         self.critic_optimizer.step()
 
-        return critic_loss.detach(), critic1_loss.detach(), critic2_loss.detach(), min_qf1_loss.detach(), min_qf2_loss.detach(), std_q1.detach(), std_q2.detach()
+        return critic_loss.detach(), critic1_loss.detach(), critic2_loss.detach(), min_qf1_loss.detach(), min_qf2_loss.detach(), std_q1.detach(), std_q2.detach(), alpha_prime_loss.detach()
 
     def update_actor_and_alpha(self, obs, step):
         for p in self.model.sac_network.critic.parameters():
@@ -369,14 +368,14 @@ class CQLAgent(BaseAlgorithm):
         obs = self.preproc_obs(obs)
         next_obs = self.preproc_obs(next_obs)
         # add return value
-        critic_loss, critic1_loss, critic2_loss, min_qf1_loss, min_qf2_loss, std_q1, std_q2 = self.update_critic(obs, action, reward, next_obs, not_done, step)
+        critic_loss, critic1_loss, critic2_loss, min_qf1_loss, min_qf2_loss, std_q1, std_q2, alpha_prime_loss = self.update_critic(obs, action, reward, next_obs, not_done, step)
 
         actor_loss, entropy, alpha, alpha_loss = self.update_actor_and_alpha(obs, step)
 
         actor_loss_info = actor_loss, entropy, alpha, alpha_loss
         self.soft_update_params(self.model.sac_network.critic, self.model.sac_network.critic_target,
                                      self.critic_tau)
-        return actor_loss_info, critic1_loss, critic2_loss, min_qf1_loss, min_qf2_loss, std_q1, std_q2
+        return actor_loss_info, critic1_loss, critic2_loss, min_qf1_loss, min_qf2_loss, std_q1, std_q2, alpha_prime_loss
 
     def preproc_obs(self, obs):
         if isinstance(obs, dict):
@@ -442,6 +441,12 @@ class CQLAgent(BaseAlgorithm):
         alpha_losses = []
         critic1_losses = []
         critic2_losses = []
+        # add cql params
+        min_qf1_losses = []
+        min_qf2_losses = []
+        std_q1s = []
+        std_q2s = []
+        alpha_prime_losses = []
 
         obs = self.obs
         for _ in range(self.num_steps_per_episode):
@@ -494,13 +499,18 @@ class CQLAgent(BaseAlgorithm):
             if not random_exploration:
                 self.set_train() 
                 update_time_start = time.time()
-                actor_loss_info, critic1_loss, critic2_loss, min_qf1_loss, min_qf2_loss, std_q1, std_q2 = self.update(self.epoch_num)
+                actor_loss_info, critic1_loss, critic2_loss, min_qf1_loss, min_qf2_loss, std_q1, std_q2, alpha_prime_loss = self.update(self.epoch_num)
                 update_time_end = time.time()
                 update_time = update_time_end - update_time_start
 
                 self.extract_actor_stats(actor_losses, entropies, alphas, alpha_losses, actor_loss_info)
                 critic1_losses.append(critic1_loss)
                 critic2_losses.append(critic2_loss)
+                min_qf1_losses.append(min_qf1_loss)
+                min_qf2_losses.append(min_qf2_loss)
+                std_q1s.append(std_q1)
+                std_q2s.append(std_q2)
+                alpha_prime_losses.append(alpha_prime_loss)
             else:
                 update_time = 0
 
@@ -510,18 +520,16 @@ class CQLAgent(BaseAlgorithm):
         total_time = total_time_end - total_time_start
         play_time = total_time - total_update_time
 
-        if not random_exploration:
-            return step_time, play_time, total_update_time, total_time, actor_losses, entropies, alphas, alpha_losses, critic1_losses, critic2_losses, min_qf1_loss, min_qf2_loss, std_q1, std_q2
-        else:
-            return step_time, play_time, total_update_time, total_time, actor_losses, entropies, alphas, alpha_losses, critic1_losses, critic2_losses
+        return step_time, play_time, total_update_time, total_time, actor_losses, entropies, alphas, alpha_losses, critic1_losses, critic2_losses, min_qf1_losses, min_qf2_losses, std_q1s, std_q2s, alpha_prime_losses
+        
 
     def train_epoch(self):
         if self.epoch_num < self.num_seed_steps:
-            step_time, play_time, total_update_time, total_time, actor_losses, entropies, alphas, alpha_losses, critic1_losses, critic2_losses, min_qf1_loss, min_qf2_loss, std_q1, std_q2 = self.play_steps(random_exploration=True)
+            step_time, play_time, total_update_time, total_time, actor_losses, entropies, alphas, alpha_losses, critic1_losses, critic2_losses, min_qf1_losses, min_qf2_losses, std_q1s, std_q2s, alpha_prime_losses = self.play_steps(random_exploration=True)
         else:
-            step_time, play_time, total_update_time, total_time, actor_losses, entropies, alphas, alpha_losses, critic1_losses, critic2_losses, min_qf1_loss, min_qf2_loss, std_q1, std_q2 = self.play_steps(random_exploration=False)
+            step_time, play_time, total_update_time, total_time, actor_losses, entropies, alphas, alpha_losses, critic1_losses, critic2_losses, min_qf1_losses, min_qf2_losses, std_q1s, std_q2s, alpha_prime_losses = self.play_steps(random_exploration=False)
 
-        return step_time, play_time, total_update_time, total_time, actor_losses, entropies, alphas, alpha_losses, critic1_losses, critic2_losses, min_qf1_loss, min_qf2_loss, std_q1, std_q2
+        return step_time, play_time, total_update_time, total_time, actor_losses, entropies, alphas, alpha_losses, critic1_losses, critic2_losses, min_qf1_losses, min_qf2_losses, std_q1s, std_q2s, alpha_prime_losses
 
     def train(self):
         self.init_tensors()
@@ -535,7 +543,7 @@ class CQLAgent(BaseAlgorithm):
 
         while True:
             self.epoch_num += 1
-            step_time, play_time, update_time, epoch_total_time, actor_losses, entropies, alphas, alpha_losses, critic1_losses, critic2_losses, min_qf1_loss, min_qf2_loss, std_q1, std_q2 = self.train_epoch()
+            step_time, play_time, update_time, epoch_total_time, actor_losses, entropies, alphas, alpha_losses, critic1_losses, critic2_losses, min_qf1_losses, min_qf2_losses, std_q1s, std_q2s, alpha_prime_losses = self.train_epoch()
 
             total_time += epoch_total_time
 
@@ -563,12 +571,12 @@ class CQLAgent(BaseAlgorithm):
                 self.writer.add_scalar('losses/c1_loss', torch_ext.mean_list(critic1_losses).item(), frame)
                 self.writer.add_scalar('losses/c2_loss', torch_ext.mean_list(critic2_losses).item(), frame)
                 # std Q value add
-                self.writer.add_scalar('losses/std_c1_loss', torch_ext.mean_list(std_q1).item(), frame)
-                self.writer.add_scalar('losses/std_c2_loss', torch_ext.mean_list(std_q2).item(), frame)
-                self.writer.add_scalar('losses/min_c1_loss', torch_ext.mean_list(min_qf1_loss).item(), frame)
-                self.writer.add_scalar('losses/min_c2_loss', torch_ext.mean_list(min_qf2_loss).item(), frame)
+                self.writer.add_scalar('losses/std_c1_loss', torch_ext.mean_list(std_q1s).item(), frame)
+                self.writer.add_scalar('losses/std_c2_loss', torch_ext.mean_list(std_q2s).item(), frame)
+                self.writer.add_scalar('losses/min_c1_loss', torch_ext.mean_list(min_qf1_losses).item(), frame)
+                self.writer.add_scalar('losses/min_c2_loss', torch_ext.mean_list(min_qf2_losses).item(), frame)
                 if self.with_lagrange:
-                    self.writer.add_scalar('losses/alpha_prime_loss', torch_ext.mean_list(self.alpha_prime_loss).item(), frame)
+                    self.writer.add_scalar('losses/alpha_prime_loss', torch_ext.mean_list(alpha_prime_losses).item(), frame)
                 # end cql
                 self.writer.add_scalar('losses/entropy', torch_ext.mean_list(entropies).item(), frame)
                 if alpha_losses[0] is not None:
@@ -607,7 +615,7 @@ class CQLAgent(BaseAlgorithm):
     # copy from CQL
     def _get_policy_actions(self, obs, num_actions, network=None):
         obs_temp = obs.unsqueeze(1).repeat(1, num_actions, 1).view(obs.shape[0] * num_actions, obs.shape[1])
-        dist = network(obs)
+        dist = network(obs_temp)
         new_obs_actions = dist.rsample()
         new_obs_log_pi = dist.log_prob(new_obs_actions).sum(-1, keepdim=True)
         
