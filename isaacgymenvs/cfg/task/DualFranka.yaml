@@ -41,7 +41,7 @@ env:
 
 sim:
   dt: 0.0166 # 1/60
-  substeps: 1
+  substeps: 2
   up_axis: "y"
   use_gpu_pipeline: ${eq:${...pipeline},"gpu"}
   gravity: [0.0, -9.81, 0.0]
@@ -58,7 +58,7 @@ sim:
     default_buffer_size_multiplier: 5.0
     max_gpu_contact_pairs: 1048576 # 1024*1024
     num_subscenes: ${....num_subscenes}
-    contact_collection: 0 # 0: CC_NEVER (don't collect contact info), 1: CC_LAST_SUBSTEP (collect only contacts on last substep), 2: CC_ALL_SUBSTEPS (default - all contacts)
+    contact_collection: 1 # 0: CC_NEVER (don't collect contact info), 1: CC_LAST_SUBSTEP (collect only contacts on last substep), 2: CC_ALL_SUBSTEPS (default - all contacts)
 
 task:
   randomize: False

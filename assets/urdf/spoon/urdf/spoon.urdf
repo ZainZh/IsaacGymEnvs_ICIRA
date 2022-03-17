@@ -8,17 +8,17 @@
     name="base_link">
     <inertial>
       <origin
-        xyz="0.021708 -3.7578E-05 -1.8583E-05"
+        xyz="0.070103 0.0042279 1.6263E-08"
         rpy="0 0 0" />
       <mass
-        value="0.0022598" />
+        value="0.040738" />
       <inertia
-        ixx="3.2745E-07"
-        ixy="-7.7618E-07"
-        ixz="-2.4304E-09"
-        iyy="5.4028E-06"
-        iyz="1.8053E-09"
-        izz="5.3927E-06" />
+        ixx="1.7203E-06"
+        ixy="-3.6856E-06"
+        ixz="-1.2991E-08"
+        iyy="6.1151E-05"
+        iyz="4.3293E-09"
+        izz="6.117E-05" />
     </inertial>
     <visual>
       <origin
@@ -31,7 +31,7 @@
       <material
         name="">
         <color
-          rgba="1 1 1 1" />
+          rgba="0.89804 0.91765 0.92941 1" />
       </material>
     </visual>
     <collision>
