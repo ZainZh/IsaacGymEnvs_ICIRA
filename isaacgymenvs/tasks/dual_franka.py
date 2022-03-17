@@ -136,7 +136,7 @@ class DualFranka(VecTask):
         asset_options.flip_visual_attachments = True
         asset_options.fix_base_link = True
         asset_options.collapse_fixed_joints = True
-        asset_options.disable_gravity = True
+        asset_options.disable_gravity = False
         asset_options.armature = 0.01
         asset_options.default_dof_drive_mode = gymapi.DOF_MODE_POS
         asset_options.use_mesh_materials = True
@@ -144,25 +144,25 @@ class DualFranka(VecTask):
         franka_asset_1 = self.gym.load_asset(self.sim, asset_root, franka_asset_file, asset_options)
 
         # load table asset
-        cup_asset_options = gymapi.AssetOptions()
+        table_asset_options = gymapi.AssetOptions()
+        table_asset_options.fix_base_link = True
         table_dims = gymapi.Vec3(1, 0.8, 1.5)
-        table_asset = self.gym.create_box(self.sim, table_dims.x, table_dims.y, table_dims.z, asset_options)
-        cup_asset_options.fix_base_link = True
-        cup_asset = self.gym.load_asset(self.sim, asset_root, cup_asset_file, cup_asset_options)
-
-        shelf_asset = self.gym.load_asset(self.sim, asset_root, shelf_asset_file, cup_asset_options)
-
-        box_opts = gymapi.AssetOptions()
-        box_opts.density = 400
-        prop_asset = self.gym.create_box(self.sim, self.prop_width, self.prop_height, self.prop_width, box_opts)
+        table_asset = self.gym.create_box(self.sim, table_dims.x, table_dims.y, table_dims.z, table_asset_options)
+        shelf_asset = self.gym.load_asset(self.sim, asset_root, shelf_asset_file, table_asset_options)
+        
         # load cup and spoon
-
-        asset_options.fix_base_link = False
-        asset_options.disable_gravity = False
+        cup_asset_options = gymapi.AssetOptions()
+        cup_asset_options.fix_base_link = False
+        cup_asset_options.disable_gravity = False
+        spoon_asset = self.gym.load_asset(self.sim, asset_root, spoon_asset_file, cup_asset_options)
+        cup_asset = self.gym.load_asset(self.sim, asset_root, cup_asset_file, cup_asset_options)
 
         # cup_asset_options.fix_base_link = False
 
-        spoon_asset = self.gym.load_asset(self.sim, asset_root, spoon_asset_file, asset_options)
+        # box_opts = gymapi.AssetOptions()
+        # box_opts.density = 400
+        # prop_asset = self.gym.create_box(self.sim, self.prop_width, self.prop_height, self.prop_width, box_opts)
+
 
         franka_dof_stiffness = to_torch([400, 400, 400, 400, 400, 400, 400, 1.0e6, 1.0e6], dtype=torch.float,
                                         device=self.device)
@@ -618,11 +618,12 @@ class DualFranka(VecTask):
     def post_physics_step(self):  # what do frankas do after compute reward
         self.progress_buf += 1
         # print("progress buffer is ",self.progress_buf)
-        self.compute_observations()
-        self.compute_reward()
         env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(env_ids) > 0:
             self.reset_idx(env_ids)
+        
+        self.compute_observations()
+        self.compute_reward() 
 
         # debug viz
         if self.viewer and self.debug_viz:
@@ -717,7 +718,6 @@ class DualFranka(VecTask):
     def set_viewer(self):
         """Create the viewer."""
 
-        # todo: read from config
         self.enable_viewer_sync = True
         self.viewer = None
 
@@ -757,7 +757,7 @@ def compute_franka_reward(
 ):
     # type: (Tensor,Tensor, Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor, Tensor,Tensor,Tensor, Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,Tensor,int, float, float, float, float, float, float, float) -> Tuple[Tensor,Tensor]
 
-    ## distance reward - grasp and object
+    ## 1. distance reward - grasp and object
     d = torch.norm(franka_grasp_pos - cup_grasp_pos, p=2, dim=-1)
     dist_reward = 1.0 / (1.0 + d ** 2)
     dist_reward *= dist_reward
@@ -768,7 +768,7 @@ def compute_franka_reward(
     dist_reward_1 *= dist_reward_1
     dist_reward_1 = torch.where(d_1 <= 0.02, dist_reward_1 * 2, dist_reward_1)
 
-    ##  rotation reward
+    ## 2. rotation reward
     # define axis to make sure the alignment
     axis1 = tf_vector(franka_grasp_rot, gripper_forward_axis)  # franka
     axis2 = tf_vector(cup_grasp_rot, cup_inward_axis)  # [0,0,1]
@@ -792,7 +792,7 @@ def compute_franka_reward(
     rot_reward = 0.5 * (torch.sign(dot1) * dot1 ** 2 + torch.sign(dot2) * dot2 ** 2)
     rot_reward_1 = 0.5 * (torch.sign(dot1_1) * dot1_1 ** 2 + torch.sign(dot2_1) * dot2_1 ** 2)
 
-    ## around reward
+    ## 3. around reward
     # bonus if left finger is above the drawer handle and right below
     around_handle_reward = torch.zeros_like(rot_reward)
     around_handle_reward = torch.where(franka_lfinger_pos[:, 2] < cup_grasp_pos[:, 2],
@@ -805,7 +805,7 @@ def compute_franka_reward(
                                                      around_handle_reward_1 + 0.5, around_handle_reward_1),
                                          around_handle_reward_1)
 
-    ## finger dist reward
+    ## 4. finger dist reward
     # reward for distance of each finger from the cup, finger distance=0.08
     finger_dist_reward = torch.zeros_like(rot_reward)
     lfinger_dist = torch.abs(franka_lfinger_pos[:, 2] - cup_grasp_pos[:, 2])
@@ -824,13 +824,13 @@ def compute_franka_reward(
                                                    50 * (0.08 - lfinger_dist_1 - rfinger_dist_1), finger_dist_reward_1),
                                        finger_dist_reward)
 
-    ##fall penalty
+    ## 5. fall penalty
     # cup
     fall_penalty_table = torch.where(cup_orientations[:, 1] > 0.071, torch.where(cup_orientations[:, 1] < 0.072, 1, 0), 0)
     fall_penalty_ground = torch.where(cup_positions[:, 1] < 0.2, 1, 0)
     # TODO:spoon
 
-    ## action penalty
+    ## 6. action penalty
     # regularization on the actions (summed for each environment) (more actions more penalty)
     action_penalty = torch.sum(actions ** 2, dim=-1)
 
@@ -846,13 +846,13 @@ def compute_franka_reward(
               - action_penalty * action_penalty_scale \
               - fall_penalty_table - fall_penalty_ground
 
-    ## reward bonus
-    # bonus for take up the cup properly
+    ## II. reward bonus
+    # 1. bonus for take up the cup properly
     rewards = torch.where(cup_positions[:, 1] > 1.01, rewards + 0.5, rewards)
     rewards = torch.where(cup_positions[:, 1] > 1.2, rewards + around_handle_reward, rewards)
     rewards = torch.where(cup_positions[:, 1] > 1.3, rewards + (2 * around_handle_reward), rewards)
 
-    ## collision penalty (contact)
+    ## 2. collision penalty (contact)
     # ignore franka&franka1: link6, gripper force
     reset_num1 = torch.cat((contact_forces[:, 0:5, :], contact_forces[:, 6:7, :]), dim=1)
     reset_num2 = torch.cat((contact_forces[:, 10:15, :], contact_forces[:, 16:17, :]), dim=1)
@@ -862,7 +862,7 @@ def compute_franka_reward(
     # reward compute
     rewards = torch.where(reset_numm > 600, rewards - 1, rewards)
 
-    ## bonus for take up the cup properly
+    ## 3. bonus for take up the cup properly
     rewards = torch.where(spoon_positions[:, 1] > 1.12, rewards + 0.5, rewards)
     rewards = torch.where(spoon_positions[:, 1] > 1.2, rewards + around_handle_reward_1, rewards)
     rewards = torch.where(spoon_positions[:, 1] > 1.3, rewards + (2 * around_handle_reward_1), rewards)
@@ -896,6 +896,12 @@ def compute_franka_reward(
 
     # reset when max_episode_length
     reset_buf = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset_buf)
+
+    # list rewards details for test
+    reward_franka_0 = [(dist_reward, dist_reward_scale), (rot_reward, rot_reward_scale), (around_handle_reward, around_handle_reward_scale), (finger_dist_reward, finger_dist_reward_scale)]
+    reward_franka_1 = [(dist_reward_1, dist_reward_scale), (rot_reward_1, rot_reward_scale), (around_handle_reward_1, around_handle_reward_scale), (finger_dist_reward_1, finger_dist_reward_scale)]
+    rewards_other = [action_penalty, ]
+    rewards_list = [reward_franka_0, reward_franka_1, rewards_other]
 
     return rewards, reset_buf
 
