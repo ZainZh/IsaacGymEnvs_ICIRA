@@ -605,9 +605,11 @@ class CQLAgent(BaseAlgorithm):
 
             self.writer.add_scalar('info/epochs', self.epoch_num, frame)
             self.algo_observer.after_print_stats(frame, self.epoch_num, total_time)
+            # print('Current rewards: {}'.format(self.current_rewards))
 
             if self.game_rewards.current_size > 0:
-                # current_rewards = self.game_rewards.
+                print('Current length: {}'.format(self.current_lengths))
+                print('Current rewards: {}'.format(self.current_rewards/self.current_lengths))
                 mean_rewards = self.game_rewards.get_mean()
                 mean_lengths = self.game_lengths.get_mean()
 
