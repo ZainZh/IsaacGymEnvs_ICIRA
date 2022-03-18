@@ -265,7 +265,7 @@ class DualFranka(VecTask):
         spoon_pose.p.x = table_pose.p.x - 0.35
         spoon_pose.p.y = 0.505
         spoon_pose.p.z = 0.29
-        spoon_pose.r = gymapi.Quat(0.707107, 0.0, 0.0, 0.707107)
+        spoon_pose.r = gymapi.Quat(0.8272,-0.0903,-0.0554,-0.5518)
 
         shelf_pose = gymapi.Transform()
         shelf_pose.p.x = table_pose.p.x - 0.3
@@ -563,9 +563,10 @@ class DualFranka(VecTask):
         self.spoon_positions[env_ids, 0] = -0.35
         self.spoon_positions[env_ids, 1] = 0.505
         self.spoon_positions[env_ids, 2] = 0.29
-        self.spoon_orientations[env_ids, 0] = 0.707107
-        self.spoon_orientations[env_ids, 1:3] = 0
-        self.spoon_orientations[env_ids, 3] = 0.707107
+        self.spoon_orientations[env_ids, 0] = 0.8272
+        self.spoon_orientations[env_ids, 1] = -0.0903
+        self.spoon_orientations[env_ids, 2] = -0.0554
+        self.spoon_orientations[env_ids, 3] = -0.5518
         self.spoon_angvels[env_ids] = 0
         self.spoon_linvels[env_ids] = 0
 
@@ -647,9 +648,10 @@ class DualFranka(VecTask):
         self.spoon_positions[env_ids, 0] = -0.35
         self.spoon_positions[env_ids, 1] = 0.505
         self.spoon_positions[env_ids, 2] = 0.29
-        self.spoon_orientations[env_ids, 0] = 0.707107
-        self.spoon_orientations[env_ids, 1:3] = 0
-        self.spoon_orientations[env_ids, 3] = 0.707107
+        self.spoon_orientations[env_ids, 0] = 0.8272
+        self.spoon_orientations[env_ids, 1] = -0.0903
+        self.spoon_orientations[env_ids, 2] = -0.0554
+        self.spoon_orientations[env_ids, 3] = -0.5518
         self.spoon_angvels[env_ids] = 0
         self.spoon_linvels[env_ids] = 0
 
@@ -711,9 +713,10 @@ class DualFranka(VecTask):
         self.spoon_positions[env_ids, 0] = -0.35
         self.spoon_positions[env_ids, 1] = 0.505
         self.spoon_positions[env_ids, 2] = 0.29
-        self.spoon_orientations[env_ids, 0] = 0.707107
-        self.spoon_orientations[env_ids, 1:3] = 0
-        self.spoon_orientations[env_ids, 3] = 0.707107
+        self.spoon_orientations[env_ids, 0] = 0.8272
+        self.spoon_orientations[env_ids, 1] = -0.0903
+        self.spoon_orientations[env_ids, 2] = -0.0554
+        self.spoon_orientations[env_ids, 3] = -0.5518
         self.spoon_angvels[env_ids] = 0
         self.spoon_linvels[env_ids] = 0
 
