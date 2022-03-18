@@ -160,18 +160,16 @@ class DualFranka(VecTask):
         table_asset = self.gym.create_box(self.sim, table_dims.x, table_dims.y, table_dims.z, asset_options)
         other_asset_options = gymapi.AssetOptions()
         cup_asset = self.gym.load_asset(self.sim, asset_root, cup_asset_file, other_asset_options)
-        
-        
+
         # load shelf and spoon
         other_asset_options.fix_base_link = True
         shelf_asset = self.gym.load_asset(self.sim, asset_root, shelf_asset_file, other_asset_options)
+        other_asset_options.fix_base_link = False
         spoon_asset = self.gym.load_asset(self.sim, asset_root, spoon_asset_file, other_asset_options)
-       
-        
+
         # box_opts = gymapi.AssetOptions()
         # box_opts.density = 400
         # prop_asset = self.gym.create_box(self.sim, self.prop_width, self.prop_height, self.prop_width, box_opts)
-        
 
         franka_dof_stiffness = to_torch([400, 400, 400, 400, 400, 400, 400, 1.0e6, 1.0e6], dtype=torch.float,
                                         device=self.device)
@@ -267,7 +265,7 @@ class DualFranka(VecTask):
         spoon_pose.p.x = table_pose.p.x - 0.35
         spoon_pose.p.y = 0.505
         spoon_pose.p.z = 0.29
-        spoon_pose.r = gymapi.Quat(0, 0.0, 0.0, 0.707107)
+        spoon_pose.r = gymapi.Quat(0.707107, 0.0, 0.0, 0.707107)
 
         shelf_pose = gymapi.Transform()
         shelf_pose.p.x = table_pose.p.x - 0.3
@@ -565,8 +563,8 @@ class DualFranka(VecTask):
         self.spoon_positions[env_ids, 0] = -0.35
         self.spoon_positions[env_ids, 1] = 0.505
         self.spoon_positions[env_ids, 2] = 0.29
-        self.spoon_orientations[env_ids, 1] = 0
-        self.spoon_orientations[env_ids, 0:3] = 0
+        self.spoon_orientations[env_ids, 0] = 0.707107
+        self.spoon_orientations[env_ids, 1:3] = 0
         self.spoon_orientations[env_ids, 3] = 0.707107
         self.spoon_angvels[env_ids] = 0
         self.spoon_linvels[env_ids] = 0
@@ -590,8 +588,6 @@ class DualFranka(VecTask):
         self.table_orientations[env_ids, 3] = 0
         self.table_angvels[env_ids] = 0
         self.table_linvels[env_ids] = 0
-
-
 
         # reset root state for spoon and cup in selected envs
         actor_indices = self.global_indices[env_ids, 2:5].flatten()
@@ -651,8 +647,8 @@ class DualFranka(VecTask):
         self.spoon_positions[env_ids, 0] = -0.35
         self.spoon_positions[env_ids, 1] = 0.505
         self.spoon_positions[env_ids, 2] = 0.29
-        self.spoon_orientations[env_ids, 1] = 0
-        self.spoon_orientations[env_ids, 0:3] = 0
+        self.spoon_orientations[env_ids, 0] = 0.707107
+        self.spoon_orientations[env_ids, 1:3] = 0
         self.spoon_orientations[env_ids, 3] = 0.707107
         self.spoon_angvels[env_ids] = 0
         self.spoon_linvels[env_ids] = 0
@@ -715,8 +711,8 @@ class DualFranka(VecTask):
         self.spoon_positions[env_ids, 0] = -0.35
         self.spoon_positions[env_ids, 1] = 0.505
         self.spoon_positions[env_ids, 2] = 0.29
-        self.spoon_orientations[env_ids, 1] = 0
-        self.spoon_orientations[env_ids, 0:3] = 0
+        self.spoon_orientations[env_ids, 0] = 0.707107
+        self.spoon_orientations[env_ids, 1:3] = 0
         self.spoon_orientations[env_ids, 3] = 0.707107
         self.spoon_angvels[env_ids] = 0
         self.spoon_linvels[env_ids] = 0
@@ -763,7 +759,7 @@ class DualFranka(VecTask):
     def post_physics_step(self):  # what do frankas do after compute reward
         self.progress_buf += 1
         # print("progress buffer is ",self.progress_buf)
-        
+
         env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         # print("env_ids", env_ids)
 
