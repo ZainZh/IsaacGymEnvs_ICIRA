@@ -17,6 +17,17 @@ import numpy as np
 import time
 import os
 
+# def load_dataset(dataset_path, replay_buffer):
+#     replay_buffer._observations = dataset['observations']
+#     replay_buffer._next_obs = dataset['next_observations']
+#     replay_buffer._actions = dataset['actions']
+#     # center reward different
+#     replay_buffer._rewards = np.expand_dims(np.squeeze(dataset['rewards']), 1)
+#     replay_buffer._terminals = np.expand_dims(np.squeeze(dataset['terminals']), 1)  
+#     replay_buffer._size = dataset['terminals'].shape[0]
+#     print ('Number of terminals on: ', replay_buffer._terminals.sum())
+#     replay_buffer._top = replay_buffer._size
+
 
 # copied from SACAgent
 class CQLAgent(BaseAlgorithm):
@@ -33,6 +44,7 @@ class CQLAgent(BaseAlgorithm):
         self.init_alpha = config["init_alpha"]
         self.learnable_temperature = config["learnable_temperature"]
         self.replay_buffer_size = config["replay_buffer_size"]
+        self.replay_buffer_path = config["replay_buffer_path"]
         self.num_steps_per_episode = config.get("num_steps_per_episode", 1)
         self.normalize_input = config.get("normalize_input", False)
 
@@ -90,6 +102,9 @@ class CQLAgent(BaseAlgorithm):
                                                                self.env_info['action_space'].shape,
                                                                self.replay_buffer_size,
                                                                self.sac_device)
+        # load dataset here
+        #load_dataset(self.replay_buffer_path, self.replay_buffer)
+
         self.target_entropy_coef = config.get("target_entropy_coef", 0.5)
         self.target_entropy = self.target_entropy_coef * -self.env_info['action_space'].shape[0]
         print("Target entropy", self.target_entropy)
@@ -404,7 +419,8 @@ class CQLAgent(BaseAlgorithm):
 
     def env_reset(self):
         with torch.no_grad():
-            obs = self.vec_env.reset()['obs']
+            obs = self.vec_env.reset()
+        obs = self.preproc_obs(obs)
 
         # obs_to_tensors() in 1.1.3, changed
         if self.is_tensor_obses is None:

@@ -42,6 +42,9 @@ multi_gpu: False
 # disables rendering
 headless: True
 
+# dataset loading path
+data_path: ''
+
 # set default task and default training config based on task
 defaults:
   - task: DualFranka    # set default to our task
