@@ -12,6 +12,8 @@ from isaacgymenvs.utils.reformat import omegaconf_to_dict, print_dict
 from utils.utils import set_np_formatting, set_seed
 import math
 import random
+import json
+from typing import Dict,Tuple,List
 
 ## OmegaConf & Hydra Config
 # Resolvers used in hydra configs (see https://omegaconf.readthedocs.io/en/2.1_branch/usage.html#resolvers)
@@ -75,9 +77,29 @@ def save():
     print("here save!")
     # TODO
 
+def parse_reward_detail(dictobj:Dict):
+    for k,v in dictobj.items():
+        for k1,v1 in v.items():
+            if isinstance(v1,tuple):
+                new_list = list()
+                for obj in v1:
+                    if isinstance(obj,torch.Tensor):
+                        new_list.append(obj.tolist()[0] if obj.shape==1 else obj.tolist())
+                    else:
+                        new_list.append(obj)
+                dictobj[k][k1] = tuple(new_list)
+            elif isinstance(v1,torch.Tensor):
+                dictobj[k][k1] = v1.tolist()[0] if v1.shape==1 else v1.tolist()
+
+    return dictobj
+
 def print_state():
     print('obs-',env.compute_observations())
     print('rew-',env.compute_reward())
+    print('rew_details')
+    print(json.dumps(parse_reward_detail(env.reward_dict), indent=4, sort_keys=False))
+
+    # print reset env_ids
     env_ids = env.reset_buf.nonzero(as_tuple=False).squeeze(-1)
     if env_ids.shape[0] != 0:
         print('trigger reset:',env_ids.numpy())
@@ -133,6 +155,7 @@ class DualFrankaTest(DualFranka):
         cam_target = gymapi.Vec3(*vec[1])
         middle_env = self.envs[self.num_envs // 2 + num_per_row // 2]
         self.gym.viewer_camera_look_at(self.viewer, middle_env, cam_pos, cam_target)
+
     
 
 
