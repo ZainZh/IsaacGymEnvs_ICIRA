@@ -184,7 +184,8 @@ class SACPlayer(BasePlayer):
             float(self.env_info['action_space'].high.max())
         ]
 
-        obs_shape = torch_ext.shape_whc_to_cwh(self.state_shape)
+        # obs_shape = torch_ext.shape_whc_to_cwh(self.state_shape)
+        obs_shape = self.state_shape
         self.normalize_input = False
         config = {
             'obs_dim': self.env_info["observation_space"].shape[0],
@@ -221,4 +222,5 @@ class SACPlayer(BasePlayer):
 
 class CQLPlayer(SACPlayer):
     def __init__(self,params):
-        super().__init__(self,params)
+        self.state_shape = 42
+        super().__init__(params)
