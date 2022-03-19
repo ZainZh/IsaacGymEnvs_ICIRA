@@ -93,11 +93,27 @@ def parse_reward_detail(dictobj:Dict):
 
     return dictobj
 
+def print_detail_clearly(dictobj):
+    print('rew_details')
+    obj = parse_reward_detail(dictobj)
+    for k,v in obj.items():
+        print("\033[1;32m"+str(k)+"\033[0m")
+        if isinstance(v,Dict):
+            findoprint(v)
+        else:
+            print(str(k)+": "+str(v))
+    
+def findoprint(dictobj):
+    for k,v in dictobj.items():
+        if isinstance(v,Dict):
+            findoprint(v)
+        else:
+            print(str(k)+": "+str(v))
+
 def print_state():
     print('obs-',env.compute_observations())
     print('rew-',env.compute_reward())
-    print('rew_details')
-    print(json.dumps(parse_reward_detail(env.reward_dict), indent=4, sort_keys=False))
+    print_detail_clearly(env.reward_dict)
 
     # print reset env_ids
     env_ids = env.reset_buf.nonzero(as_tuple=False).squeeze(-1)
