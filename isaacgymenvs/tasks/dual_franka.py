@@ -523,8 +523,8 @@ class DualFranka(VecTask):
                           / (self.franka_dof_upper_limits - self.franka_dof_lower_limits) - 1.0)
         dof_pos_scaled_1 = (2.0 * (self.franka_dof_pos_1 - self.franka_dof_lower_limits)
                             / (self.franka_dof_upper_limits - self.franka_dof_lower_limits) - 1.0)
-        to_target = self.cup_grasp_pos - self.franka_grasp_pos
-        to_target_1 = self.spoon_grasp_pos - self.franka_grasp_pos_1
+        to_target = self.spoon_grasp_pos - self.franka_grasp_pos
+        to_target_1 = self.cup_grasp_pos - self.franka_grasp_pos_1
         self.obs_buf = torch.cat((dof_pos_scaled, dof_pos_scaled_1,
                                   self.franka_dof_vel * self.dof_vel_scale, to_target,
                                   self.franka_dof_vel_1 * self.dof_vel_scale, to_target_1,), dim=-1)
@@ -748,6 +748,7 @@ class DualFranka(VecTask):
         self.actions = actions.clone().to(self.device)
 
         # compute franka next target
+        # relative control
         targets = self.franka_dof_targets[:, :self.num_franka_dofs] + self.franka_dof_speed_scales * self.dt * self.actions[:, 0:9] * self.action_scale
         self.franka_dof_targets[:, :self.num_franka_dofs] = tensor_clamp(
             targets, self.franka_dof_lower_limits, self.franka_dof_upper_limits)
