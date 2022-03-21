@@ -110,15 +110,22 @@ def findoprint(dictobj):
         else:
             print(str(k)+": "+str(v))
 
-def print_state():
-    print('obs-',env.compute_observations())
-    print('rew-',env.compute_reward())
-    print_detail_clearly(env.reward_dict)
+print_mode = 2
+total_print_mode = 3
+def print_state(if_all=False):
+    if print_mode >= 1 or if_all==True:
+        print('actions', pos_action.numpy())
+        print('obs-',env.compute_observations())
+        print('rew-',env.compute_reward())
+    
+    if print_mode >= 2 or if_all==True:
+        print_detail_clearly(env.reward_dict)
 
     # print reset env_ids
-    env_ids = env.reset_buf.nonzero(as_tuple=False).squeeze(-1)
-    if env_ids.shape[0] != 0:
-        print('trigger reset:',env_ids.numpy())
+    if print_mode >= 1 or if_all==True:
+        env_ids = env.reset_buf.nonzero(as_tuple=False).squeeze(-1)
+        if env_ids.shape[0] != 0:
+            print('trigger reset:',env_ids.numpy())
     
 # camera pos
 cam_switch = 0
@@ -133,6 +140,10 @@ class DualFrankaTest(DualFranka):
     def __init__(self, cfg, sim_device, graphics_device_id, headless,sim_params):
         self.sim_params=sim_params
         super().__init__(cfg, sim_device, graphics_device_id, headless)
+        # copy from line175
+        self.franka_dof_stiffness = torch.tensor([400, 400, 400, 400, 400, 400, 400, 1.0e6, 1.0e6], dtype=torch.float, device=self.device)
+        self.franka_dof_damping = torch.tensor([80, 80, 80, 80, 80, 80, 80, 1.0e2, 1.0e2], dtype=torch.float, device=self.device)
+
 
     def set_viewer(self):
         """Create the viewer."""
@@ -147,7 +158,7 @@ class DualFrankaTest(DualFranka):
             self.gym.subscribe_viewer_keyboard_event(
                 self.viewer, gymapi.KEY_R, "reset")
             self.gym.subscribe_viewer_keyboard_event(
-                self.viewer, gymapi.KEY_P, "if_print_state")
+                self.viewer, gymapi.KEY_P, "change_print_state")
             self.gym.subscribe_viewer_keyboard_event(
                 self.viewer, gymapi.KEY_S, "save")
             self.gym.subscribe_viewer_keyboard_event(
@@ -172,7 +183,20 @@ class DualFrankaTest(DualFranka):
         middle_env = self.envs[self.num_envs // 2 + num_per_row // 2]
         self.gym.viewer_camera_look_at(self.viewer, middle_env, cam_pos, cam_target)
 
-    
+# calculation
+def orientation_error(desired, current):
+    cc = quat_conjugate(current)
+    q_r = quat_mul(desired, cc)
+    return q_r[:, 0:3] * torch.sign(q_r[:, 3]).unsqueeze(-1)    
+
+
+damping = 0.05
+def control_ik(dpose,jacobian):
+    # solve damped least squares
+    j_eef_T = torch.transpose(jacobian, 1, 2)
+    lmbda = torch.eye(6, device=env.device) * (damping ** 2)
+    u = (j_eef_T @ torch.inverse(jacobian @ j_eef_T + lmbda) @ dpose).view(env.num_envs, 7)
+    return u
 
 
 if __name__ == "__main__":
@@ -202,8 +226,12 @@ if __name__ == "__main__":
             headless=False,
             sim_params=sim_params)
 
+    # inital values
     t = 0
-    if_print_state=True
+    left_action = torch.zeros_like(env.franka_dof_state_1[...,0]).squeeze(-1)   # only need [...,0]->position, 1 for velocity
+    right_action = torch.zeros_like(env.franka_dof_state[...,0]).squeeze(-1)
+    pos_action = torch.zeros_like(torch.cat((right_action,left_action), dim=0))
+
     while not env.gym.query_viewer_has_closed(env.viewer):
         
         # Get input actions from the viewer and handle them appropriately
@@ -216,12 +244,14 @@ if __name__ == "__main__":
                 elif evt.action == "save":
                     print_state()
                     save()
-                elif evt.action == "if_print_state":
-                    print("Stop printing")
-                    if_print_state = not if_print_state
+                elif evt.action == "change_print_state":
+                    print("Change print mode")
+                    print_mode += 1
+                    if print_mode >= total_print_mode:
+                        print_mode = 0
                 elif evt.action == "print_once":
                     print("Print once",random.randint(0,100))
-                    print_state()
+                    print_state(if_all=True)
                 elif evt.action == "switch_cam_view":
                     print("Switch view")
                     cam_switch += 1
@@ -232,6 +262,66 @@ if __name__ == "__main__":
         # Step the physics
         env.gym.simulate(env.sim)
         env.gym.fetch_results(env.sim, True)
+        # refresh tensors
+        env.gym.refresh_actor_root_state_tensor(env.sim)
+        env.gym.refresh_dof_state_tensor(env.sim)
+        env.gym.refresh_net_contact_force_tensor(env.sim)
+        env.gym.refresh_rigid_body_state_tensor(env.sim)
+        env.gym.refresh_jacobian_tensors(env.sim)
+
+        ## Calculation here
+        # get jacobian tensor
+        # for fixed-base franka, tensor has shape (num envs, 10, 6, 9)
+        _jacobian = env.gym.acquire_jacobian_tensor(env.sim, "franka")
+        _jacobian_1 = env.gym.acquire_jacobian_tensor(env.sim, "franka1")
+        jacobian_left = gymtorch.wrap_tensor(_jacobian_1)
+        jacobian_right = gymtorch.wrap_tensor(_jacobian)
+
+        # get link index of panda hand, which we will use as end effector
+        # franka_link_dict = env.gym.get_asset_rigid_body_dict(franka_asset)
+        # franka_hand_index = franka_link_dict["panda_hand"]
+        franka_hand_index = 8   # just set to 8 instead
+
+        # jacobian entries corresponding to franka hand
+        j_eef_left = jacobian_left[:, franka_hand_index - 1, :, :7]
+        j_eef_right = jacobian_right[:, franka_hand_index - 1, :, :7]
+
+        left_hand_pos = env.rigid_body_states[:, env.hand_handle_1][:, 0:3]
+        left_goal_pos = env.cup_positions + torch.tensor([0, 0.5, 0],device=env.device)
+        left_hand_rot = env.rigid_body_states[:, env.hand_handle_1][:, 3:7]
+        left_goal_rot = env.cup_orientations
+        
+        right_hand_pos = env.rigid_body_states[:, env.hand_handle][:, 0:3]
+        right_goal_pos = env.spoon_positions + torch.tensor([0, 0.5, 0],device=env.device)
+        right_hand_rot = env.rigid_body_states[:, env.hand_handle][:, 3:7]
+        right_goal_rot = env.spoon_orientations
+
+        # compute position and orientation error
+        left_pos_err = left_goal_pos - left_hand_pos
+        left_orn_err = orientation_error(left_goal_rot, left_hand_rot)
+        left_dpose = torch.cat([left_pos_err, left_orn_err], -1).unsqueeze(-1)
+        right_pos_err = right_goal_pos - right_hand_pos
+        right_orn_err = orientation_error(right_goal_rot, right_hand_rot)
+        right_dpose = torch.cat([right_pos_err, right_orn_err], -1).unsqueeze(-1)
+
+        # left_dof_pos = env.franka_dof_state_1[..., 0].view(env.num_envs, 9, 1)
+        # left_dof_vel = env.franka_dof_state_1[..., 1].view(env.num_envs, 9, 1)
+        # right_dof_pos = env.franka_dof_state[..., 0].view(env.num_envs, 9, 1)
+        # right_dof_vel = env.franka_dof_state_1[..., 1].view(env.num_envs, 9, 1)
+
+        # body ik, relative control
+        left_action[:, :7] = control_ik(left_dpose,j_eef_left)
+        right_action[:, :7] = control_ik(right_dpose,j_eef_right)
+        # gripper actions
+        left_action[:, 7:9] = 0.04
+        right_action[:, 7:9] = 0.04
+        # merge two franka
+        pos_action = torch.cat((right_action,left_action), dim=0)
+
+        # Deploy actions
+        # just comment this line if don't need action
+        env.pre_physics_step(pos_action.view(env.num_envs,-1))
+        
         # Step rendering
         env.gym.step_graphics(env.sim)
         env.gym.draw_viewer(env.viewer, env.sim, False)
@@ -241,7 +331,7 @@ if __name__ == "__main__":
         t += 1
         if t % 50 == 0:
             t = 0
-            if if_print_state:
+            if print_mode != 0:
                 print_state()
     
     print("Done")
