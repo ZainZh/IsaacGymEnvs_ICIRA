@@ -347,7 +347,7 @@ class DualFranka(VecTask):
 
         self.hand_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_link7")
         self.hand_handle_1 = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor_1, "panda_link7")
-        self.table_handle = self.gym.find_actor_rigid_body_handle(env_ptr, table_actor, "box")
+        self.table_handle = self.gym.find_actor_rigid_body_handle(env_ptr, table_actor, "table")
         self.lfinger_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_leftfinger")
         self.rfinger_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_rightfinger")
         self.lfinger_handle_1 = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor_1, "panda_leftfinger")

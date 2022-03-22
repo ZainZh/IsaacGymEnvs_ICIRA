@@ -24,6 +24,7 @@ print_mode = test_config['PRESET'].getint('print_mode',2)
 target_data_path = test_config["SIM"].get('target_data_path', None)
 enable_dof_target = test_config["DEFAULT"].getboolean('enable_dof_target', False)
 control_k = test_config["SIM"].getfloat('control_k', 1.0)
+damping = test_config["SIM"].getfloat('damping', 0.05)
 if target_data_path is None:
     enable_dof_target = False
 
@@ -226,7 +227,6 @@ def orientation_error(desired, current):
     return q_r[:, 0:3] * torch.sign(q_r[:, 3]).unsqueeze(-1)    
 
 
-damping = 0.05
 def control_ik(dpose,jacobian):
     # solve damped least squares
     j_eef_T = torch.transpose(jacobian, 1, 2)
@@ -269,7 +269,8 @@ if __name__ == "__main__":
     pos_action = torch.zeros_like(torch.cat((right_action,left_action), dim=0))
     if enable_dof_target:
         now_stage = 0
-        ik_target_data = load_target_dofs(target_data_path)
+        target_dof_data = load_target_dofs(target_data_path)
+        target_pose = franka_fk(target_dof_data)
 
     while not env.gym.query_viewer_has_closed(env.viewer):
         
