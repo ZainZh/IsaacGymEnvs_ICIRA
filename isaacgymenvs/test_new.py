@@ -91,8 +91,8 @@ def save():
     print("here save!")
     # TODO
 
-def load_target_dofs(filepath):
-    # read dof targets
+def load_target_ee(filepath):
+    # read target ee
     with open(filepath, "r") as f:
         txtdata = f.read()
     import re
@@ -151,7 +151,11 @@ total_print_mode = 3
 def print_state(if_all=False):
     if print_mode >= 1 or if_all==True:
         print('actions', pos_action.numpy())
-        print('franka_dof', gymtorch.wrap_tensor(env.gym.acquire_dof_state_tensor(env.sim))[:,0].view(2,-1))
+        franka_dof = gymtorch.wrap_tensor(env.gym.acquire_dof_state_tensor(env.sim))[:,0].view(2,-1)
+        print('franka_dof', franka_dof)
+        gripper_dof = franka_dof[:,-2:]
+        ee_pose = torch.cat((env.rigid_body_states[:, env.hand_handle][:,0:7],env.rigid_body_states[:, env.hand_handle_1][:,0:7]))
+        print('ee_pose&gripper',torch.cat((ee_pose,gripper_dof), dim=1))
         print('obs-',env.compute_observations())
         print('rew-',env.compute_reward())
     
@@ -269,8 +273,7 @@ if __name__ == "__main__":
     pos_action = torch.zeros_like(torch.cat((right_action,left_action), dim=0))
     if enable_dof_target:
         now_stage = 0
-        target_dof_data = load_target_dofs(target_data_path)
-        target_pose = franka_fk(target_dof_data)
+        target_pose = load_target_ee(target_data_path).to(env.device)
 
     while not env.gym.query_viewer_has_closed(env.viewer):
         
@@ -329,15 +332,18 @@ if __name__ == "__main__":
             j_eef_left = jacobian_left[:, franka_hand_index - 1, :, :7]
             j_eef_right = jacobian_right[:, franka_hand_index - 1, :, :7]
 
+            # decide goal(target)
+            now_target = target_pose[now_stage, ...]
+
             left_hand_pos = env.rigid_body_states[:, env.hand_handle_1][:, 0:3]
-            left_goal_pos = env.cup_positions + torch.tensor([0, 0.5, 0],device=env.device)
+            left_goal_pos = now_target[1, 0:3]
             left_hand_rot = env.rigid_body_states[:, env.hand_handle_1][:, 3:7]
-            left_goal_rot = env.cup_orientations
+            left_goal_rot = now_target[1, 3:7]
             
             right_hand_pos = env.rigid_body_states[:, env.hand_handle][:, 0:3]
-            right_goal_pos = env.spoon_positions + torch.tensor([0, 0.5, 0],device=env.device)
+            right_goal_pos = now_target[0, 0:3]
             right_hand_rot = env.rigid_body_states[:, env.hand_handle][:, 3:7]
-            right_goal_rot = env.spoon_orientations
+            right_goal_rot = now_target[0, 3:7]
 
             # compute position and orientation error
             left_pos_err = left_goal_pos - left_hand_pos
@@ -356,8 +362,8 @@ if __name__ == "__main__":
             left_action[:, :7] = control_k * control_ik(left_dpose,j_eef_left)
             right_action[:, :7] = control_k * control_ik(right_dpose,j_eef_right)
             # gripper actions
-            left_action[:, 7:9] = 0.04
-            right_action[:, 7:9] = 0.04
+            left_action[:, 7:9] = now_target[1, 7:9]
+            right_action[:, 7:9] = now_target[0, 7:9]
             # merge two franka
             pos_action = torch.cat((right_action,left_action), dim=0)
 
