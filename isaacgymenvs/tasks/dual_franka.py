@@ -448,7 +448,7 @@ class DualFranka(VecTask):
         self.gripper_forward_axis_1 = to_torch([0, 0, 1], device=self.device).repeat((self.num_envs, 1))
         self.spoon_inward_axis = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
         self.gripper_up_axis_1 = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
-        self.spoon_up_axis = to_torch([0, 1, 0], device=self.device).repeat((self.num_envs, 1))
+        self.spoon_up_axis = to_torch([0, -1, 0], device=self.device).repeat((self.num_envs, 1))
 
         # params for calculation
         self.franka_grasp_pos = torch.zeros_like(self.franka_local_grasp_pos)
@@ -1017,27 +1017,28 @@ def compute_franka_reward(
 ) -> Tuple[Tensor, Tensor, Dict[str, Union[Dict[str, Tuple[Tensor, float]],
                                            Dict[str, Tensor], Dict[str, Union[Tensor, Tuple[Tensor, float]]]]]]:
     ## 1. distance reward - grasp and object
-    d = torch.norm(franka_grasp_pos - cup_grasp_pos, p=2, dim=-1)
-    dist_reward = 1.0 / (1.0 + d ** 2)
+    d = torch.norm(franka_grasp_pos - spoon_grasp_pos, p=2, dim=-1)
+    dis=franka_grasp_pos - spoon_grasp_pos
+    dist_reward = 2.0 / (1.0 + d ** 2)
     dist_reward *= dist_reward
     dist_reward = torch.where(d <= 0.02, dist_reward * 2, dist_reward)
 
-    d_1 = torch.norm(franka_grasp_pos_1 - spoon_grasp_pos, p=2, dim=-1)
-    dist_reward_1 = 1.0 / (1.0 + d_1 ** 2)
+    d_1 = torch.norm(franka_grasp_pos_1 - cup_grasp_pos, p=2, dim=-1)
+    dist_reward_1 = 2.0 / (1.0 + d_1 ** 2)
     dist_reward_1 *= dist_reward_1
     dist_reward_1 = torch.where(d_1 <= 0.02, dist_reward_1 * 2, dist_reward_1)
 
     ## 2. rotation reward
     # define axis to make sure the alignment
     axis1 = tf_vector(franka_grasp_rot, gripper_forward_axis)  # franka
-    axis2 = tf_vector(cup_grasp_rot, cup_inward_axis)  # [0,0,1]
+    axis2 = tf_vector(spoon_grasp_rot, spoon_up_axis)  # [0,1,0]
     axis3 = tf_vector(franka_grasp_rot, gripper_up_axis)
-    axis4 = tf_vector(cup_grasp_rot, cup_up_axis)  # [0,1,0]
+    axis4 = tf_vector(spoon_grasp_rot, spoon_inward_axis)  # [0,0,1]
 
     axis1_1 = tf_vector(franka_grasp_rot_1, gripper_forward_axis_1)  # franka1
-    axis2_1 = tf_vector(spoon_grasp_rot, spoon_inward_axis)
+    axis2_1 = tf_vector(cup_grasp_rot, cup_inward_axis)
     axis3_1 = tf_vector(franka_grasp_rot_1, gripper_up_axis_1)
-    axis4_1 = tf_vector(spoon_grasp_rot, spoon_up_axis)
+    axis4_1 = tf_vector(cup_grasp_rot, cup_up_axis)
 
     # compute the alignment(reward)
     # alignment of forward axis for gripper
@@ -1054,32 +1055,32 @@ def compute_franka_reward(
     ## 3. around reward
     # bonus if left finger is above the drawer handle and right below
     around_handle_reward = torch.zeros_like(rot_reward)
-    around_handle_reward = torch.where(franka_lfinger_pos[:, 2] < cup_grasp_pos[:, 2],
-                                       torch.where(franka_rfinger_pos[:, 2] > cup_grasp_pos[:, 2],
+    around_handle_reward = torch.where(franka_lfinger_pos[:, 2] > spoon_grasp_pos[:, 2],
+                                       torch.where(franka_rfinger_pos[:, 2] < spoon_grasp_pos[:, 2],
                                                    around_handle_reward + 0.5, around_handle_reward),
                                        around_handle_reward)
     around_handle_reward_1 = torch.zeros_like(rot_reward_1)
-    around_handle_reward_1 = torch.where(franka_lfinger_pos_1[:, 2] < spoon_grasp_pos[:, 2],
-                                         torch.where(franka_rfinger_pos_1[:, 2] > spoon_grasp_pos[:, 2],
+    around_handle_reward_1 = torch.where(franka_lfinger_pos_1[:, 2] >cup_grasp_pos[:, 2],
+                                         torch.where(franka_rfinger_pos_1[:, 2] <cup_grasp_pos[:, 2],
                                                      around_handle_reward_1 + 0.5, around_handle_reward_1),
                                          around_handle_reward_1)
 
     ## 4. finger dist reward
     # reward for distance of each finger from the cup, finger distance=0.08
     finger_dist_reward = torch.zeros_like(rot_reward)
-    lfinger_dist = torch.abs(franka_lfinger_pos[:, 2] - cup_grasp_pos[:, 2])
-    rfinger_dist = torch.abs(franka_rfinger_pos[:, 2] - cup_grasp_pos[:, 2])
-    finger_dist_reward = torch.where(franka_lfinger_pos[:, 2] < cup_grasp_pos[:, 2],
-                                     torch.where(franka_rfinger_pos[:, 2] > cup_grasp_pos[:, 2],
+    lfinger_dist = torch.abs(franka_lfinger_pos[:, 2] - spoon_grasp_pos[:, 2])
+    rfinger_dist = torch.abs(franka_rfinger_pos[:, 2] - spoon_grasp_pos[:, 2])
+    finger_dist_reward = torch.where(franka_lfinger_pos[:, 2] > spoon_grasp_pos[:, 2],
+                                     torch.where(franka_rfinger_pos[:, 2] < spoon_grasp_pos[:, 2],
                                                  50 * (0.08 - lfinger_dist - rfinger_dist), finger_dist_reward),
                                      finger_dist_reward)
 
     # reward for distance of each finger from the spoon
     finger_dist_reward_1 = torch.zeros_like(rot_reward_1)
-    lfinger_dist_1 = torch.abs(franka_lfinger_pos_1[:, 2] - spoon_grasp_pos[:, 2])
-    rfinger_dist_1 = torch.abs(franka_rfinger_pos_1[:, 2] - spoon_grasp_pos[:, 2])
-    finger_dist_reward_1 = torch.where(franka_lfinger_pos_1[:, 2] > spoon_grasp_pos[:, 2],
-                                       torch.where(franka_rfinger_pos_1[:, 2] < spoon_grasp_pos[:, 2],
+    lfinger_dist_1 = torch.abs(franka_lfinger_pos_1[:, 2] - cup_grasp_pos[:, 2])
+    rfinger_dist_1 = torch.abs(franka_rfinger_pos_1[:, 2] - cup_grasp_pos[:, 2])
+    finger_dist_reward_1 = torch.where(franka_lfinger_pos_1[:, 2] > cup_grasp_pos[:, 2],
+                                       torch.where(franka_rfinger_pos_1[:, 2] < cup_grasp_pos[:, 2],
                                                    50 * (0.08 - lfinger_dist_1 - rfinger_dist_1), finger_dist_reward_1),
                                        finger_dist_reward)
 
@@ -1133,18 +1134,18 @@ def compute_franka_reward(
     ## 3.lossen gripper penalty(penalty when cup or spoon is taken up but gripper lossen.)
     rewards=torch.where(cup_positions[:,1]>0.440,torch.where(
         (cup_grasp_pos[:, 2])-franka_lfinger_pos_1[:, 2] >0.025,torch.where(
-            franka_rfinger_pos_1[:, 2]-cup_grasp_pos[:, 2] >0.025,rewards-1,rewards),rewards),rewards)
+            franka_rfinger_pos_1[:, 2]-cup_grasp_pos[:, 2] >0.025,rewards-0.1,rewards),rewards),rewards)
     cup_penalty_lossen=rewards- rewards_step
     rewards_step += cup_penalty_lossen
 
     rewards = torch.where(spoon_positions[:, 1] > 0.495, torch.where(
         (spoon_grasp_pos[:, 2]) - franka_lfinger_pos[:, 2] > 0.005, torch.where(
-            franka_rfinger_pos[:, 2] - spoon_grasp_pos[:, 2] > 0.005, rewards - 1, rewards), rewards), rewards)
+            franka_rfinger_pos[:, 2] - spoon_grasp_pos[:, 2] > 0.005, rewards - 0.1, rewards), rewards), rewards)
     spoon_penalty_lossen = rewards - rewards_step
     rewards_step += spoon_penalty_lossen
 
     ## 4. bonus for take up the spoon properly(franka)
-    rewards = torch.where(spoon_positions[:, 1] > 0.495, rewards + 0.5, rewards)
+    rewards = torch.where(spoon_positions[:, 1] > 0.495, rewards + 1, rewards)
     rewards = torch.where(spoon_positions[:, 1] > 0.595, rewards + around_handle_reward_1, rewards)
     rewards = torch.where(spoon_positions[:, 1] > 0.695, rewards + (2 * around_handle_reward_1), rewards)
     # test args
