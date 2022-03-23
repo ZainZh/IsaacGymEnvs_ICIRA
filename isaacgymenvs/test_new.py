@@ -14,18 +14,23 @@ from utils.utils import set_np_formatting, set_seed
 import math
 import random
 import numpy as np
+import time
+import os
 from typing import Dict,Tuple,List
 
 torch.set_printoptions(precision=4, sci_mode=False)
+file_time = time.strftime("%m-%d %H:%M:%S", time.localtime())
 test_config = configparser.ConfigParser()
 test_config.read('test_config.ini')
 franka_cfg_path = test_config['PRESET'].get('franka_cfg_path', './cfg/config.yaml')
-print_mode = test_config['PRESET'].getint('print_mode',2)
+print_mode = test_config['PRESET'].getint('print_mode',0)
 target_data_path = test_config["SIM"].get('target_data_path', None)
 enable_target_pose = test_config["DEFAULT"].getboolean('enable_dof_target', False)
-control_k = test_config["SIM"].getfloat('control_k', 1.0)
+control_k = test_config["SIM"].getfloat('control_k', 0.6)
 damping = test_config["SIM"].getfloat('damping', 0.05)
-norm_err = test_config["SIM"].getfloat('norm_err', 1e-3)
+norm_err = test_config["SIM"].getfloat('norm_err', 1e-2)
+output_path = test_config['SIM'].get('output_path', './test_save')
+output_name = file_time+'.txt'
 if target_data_path is None:
     enable_target_pose = False
 
@@ -88,9 +93,15 @@ def get_cfg(path):
 
     return cfg
 
-def save():
-    print("here save!")
-    # TODO
+def save(path, name, data):
+    os.makedirs(path, exist_ok=True)
+    file_path = os.path.join(path,name)
+    if not os.path.exists(file_path):
+        os.system(r"touch {}".format(path))
+    with open(file_path, encoding="utf-8",mode="a") as file:  
+        file.write(str(data))
+    print('save success to',name)
+
 
 def load_target_ee(filepath):
     # read target ee
@@ -151,7 +162,6 @@ def findoprint(dictobj):
 total_print_mode = 3
 def print_state(if_all=False):
     if print_mode >= 1 or if_all==True:
-        franka_dof, ee_pose, gripper_dof = get_franka()
         print('actions', pos_action.numpy())
         print('franka_dof', franka_dof)
         print('ee_pose&gripper',torch.cat((ee_pose,gripper_dof), dim=1))
@@ -205,6 +215,8 @@ class DualFrankaTest(DualFranka):
                 self.viewer, gymapi.KEY_T, "print_once")
             self.gym.subscribe_viewer_keyboard_event(
                 self.viewer, gymapi.KEY_C, "switch_cam_view")
+            self.gym.subscribe_viewer_keyboard_event(
+                self.viewer, gymapi.KEY_0, "if_target_track")
 
             # set camera view
             self.cam_view_switch(cam_pos[cam_switch])
@@ -243,6 +255,19 @@ def get_franka():
     ee_pose = torch.cat((env.rigid_body_states[:, env.hand_handle][:,0:7],env.rigid_body_states[:, env.hand_handle_1][:,0:7]))
     return franka_dof, gripper_dof, ee_pose
 
+def reset_env():
+    # need to disable pose override in viewer
+    print('Reset env')
+    env.reset_idx(torch.arange(env.num_envs, device=env.device))
+
+def ready_to_track():
+    global print_mode, now_stage, target_pose, total_stage
+    print_mode = 0
+    now_stage = 0
+    target_pose = load_target_ee(target_data_path).to(env.device)
+    total_stage = target_pose.shape[0]
+    print('Ready to track')
+
 if __name__ == "__main__":
     # parse from default config
     cfg=get_cfg(franka_cfg_path)
@@ -276,23 +301,23 @@ if __name__ == "__main__":
     right_action = torch.zeros_like(env.franka_dof_state[...,0]).squeeze(-1)
     pos_action = torch.zeros_like(torch.cat((right_action,left_action), dim=0))
     if enable_target_pose:
-        print_mode = 0
-        now_stage = 0
-        target_pose = load_target_ee(target_data_path).to(env.device)
-        total_stage = target_pose.shape[0]
+        ready_to_track()
 
     while not env.gym.query_viewer_has_closed(env.viewer):
         
+        franka_dof, gripper_dof, ee_pose = get_franka()
         # Get input actions from the viewer and handle them appropriately
         for evt in env.gym.query_viewer_action_events(env.viewer):
             if evt.value > 0:
                 if evt.action == "reset":
-                    # need to disable pose override in viewer
-                    print('Reset env')
-                    env.reset_idx(torch.arange(env.num_envs, device=env.device))
+                    reset_env()
                 elif evt.action == "save":
-                    print_state()
-                    save()
+                    save_data = torch.cat((ee_pose,gripper_dof), dim=1)
+                    # print dof,pose detail
+                    print('franka_dof', franka_dof)
+                    print('save: ee_pose&gripper',save_data)
+                    # save to file
+                    save(output_path, output_name, save_data)
                 elif evt.action == "change_print_state":
                     print("Change print mode")
                     print_mode += 1
@@ -308,6 +333,14 @@ if __name__ == "__main__":
                     if cam_switch >= len(cam_pos):
                         cam_switch = 0
                     env.cam_view_switch(cam_pos[cam_switch])
+                elif evt.action == "if_target_track":
+                    if enable_target_pose:
+                        print('Stop target tracking')
+                    else:
+                        print('Start target tracking')
+                        ready_to_track()
+                        reset_env()
+                    enable_target_pose = ~enable_target_pose
         
         # Step the physics
         env.gym.simulate(env.sim)
@@ -358,26 +391,27 @@ if __name__ == "__main__":
             right_pos_err = right_goal_pos - right_hand_pos
             right_orn_err = orientation_error(right_goal_rot, right_hand_rot)
             right_dpose = torch.cat([right_pos_err, right_orn_err], -1).unsqueeze(-1)
+            left_grip_err = now_target[:, 1, 7:9] - gripper_dof[1, :]
+            right_grip_err = now_target[:, 0, 7:9] - gripper_dof[0, :]
 
             # if goal then next target
-            e = torch.norm(left_dpose) + torch.norm(right_dpose)
+            e = torch.norm(left_dpose) + torch.norm(right_dpose) \
+                + torch.norm(left_grip_err) + torch.norm(right_grip_err)
             if e < norm_err:
                 now_stage += 1
                 if now_stage == total_stage:
                     print('complete all goals')
                     enable_target_pose = False
-
-            # left_dof_pos = env.franka_dof_state_1[..., 0].view(env.num_envs, 9, 1)
-            # left_dof_vel = env.franka_dof_state_1[..., 1].view(env.num_envs, 9, 1)
-            # right_dof_pos = env.franka_dof_state[..., 0].view(env.num_envs, 9, 1)
-            # right_dof_vel = env.franka_dof_state_1[..., 1].view(env.num_envs, 9, 1)
+                    print('Stop target tracking')
+                else:
+                    print('start next stage',now_stage)
 
             # body ik, relative control
             left_action[:, :7] = control_k * control_ik(left_dpose,j_eef_left)
             right_action[:, :7] = control_k * control_ik(right_dpose,j_eef_right)
             # gripper actions
-            left_action[:, 7:9] = now_target[:, 1, 7:9]
-            right_action[:, 7:9] = now_target[:, 0, 7:9]
+            left_action[:, 7:9] = control_k * left_grip_err
+            right_action[:, 7:9] = control_k * right_grip_err
             # merge two franka
             pos_action = torch.cat((right_action,left_action), dim=0)
 

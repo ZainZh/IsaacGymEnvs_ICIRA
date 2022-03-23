@@ -16,4 +16,5 @@
 | T                 | Print the obs/reward once in terminal.                       |
 | P                 | Turn on/off the print info.                                  |
 | C                 | Switch the view angle                                        |
-| S (TODO)          | Append the obs/reward status in file.                        |
+| S                 | Save the pose status in file.                                |
+| 0                 | Enable/disable target tracking                               |
