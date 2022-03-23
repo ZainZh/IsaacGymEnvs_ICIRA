@@ -22,11 +22,12 @@ test_config.read('test_config.ini')
 franka_cfg_path = test_config['PRESET'].get('franka_cfg_path', './cfg/config.yaml')
 print_mode = test_config['PRESET'].getint('print_mode',2)
 target_data_path = test_config["SIM"].get('target_data_path', None)
-enable_dof_target = test_config["DEFAULT"].getboolean('enable_dof_target', False)
+enable_target_pose = test_config["DEFAULT"].getboolean('enable_dof_target', False)
 control_k = test_config["SIM"].getfloat('control_k', 1.0)
 damping = test_config["SIM"].getfloat('damping', 0.05)
+norm_err = test_config["SIM"].getfloat('norm_err', 1e-3)
 if target_data_path is None:
-    enable_dof_target = False
+    enable_target_pose = False
 
 
 ## OmegaConf & Hydra Config
@@ -111,7 +112,7 @@ def load_target_ee(filepath):
 
     target=np.array(res).astype(float).reshape(-1,2,9)
     
-    return torch.from_numpy(target)
+    return torch.from_numpy(target).float()
 
 def parse_reward_detail(dictobj:Dict):
     for k,v in dictobj.items():
@@ -150,11 +151,9 @@ def findoprint(dictobj):
 total_print_mode = 3
 def print_state(if_all=False):
     if print_mode >= 1 or if_all==True:
+        franka_dof, ee_pose, gripper_dof = get_franka()
         print('actions', pos_action.numpy())
-        franka_dof = gymtorch.wrap_tensor(env.gym.acquire_dof_state_tensor(env.sim))[:,0].view(2,-1)
         print('franka_dof', franka_dof)
-        gripper_dof = franka_dof[:,-2:]
-        ee_pose = torch.cat((env.rigid_body_states[:, env.hand_handle][:,0:7],env.rigid_body_states[:, env.hand_handle_1][:,0:7]))
         print('ee_pose&gripper',torch.cat((ee_pose,gripper_dof), dim=1))
         print('obs-',env.compute_observations())
         print('rew-',env.compute_reward())
@@ -238,6 +237,11 @@ def control_ik(dpose,jacobian):
     u = (j_eef_T @ torch.inverse(jacobian @ j_eef_T + lmbda) @ dpose).view(env.num_envs, 7)
     return u
 
+def get_franka():
+    franka_dof = gymtorch.wrap_tensor(env.gym.acquire_dof_state_tensor(env.sim))[:,0].view(2,-1)
+    gripper_dof = franka_dof[:,-2:]
+    ee_pose = torch.cat((env.rigid_body_states[:, env.hand_handle][:,0:7],env.rigid_body_states[:, env.hand_handle_1][:,0:7]))
+    return franka_dof, gripper_dof, ee_pose
 
 if __name__ == "__main__":
     # parse from default config
@@ -271,9 +275,11 @@ if __name__ == "__main__":
     left_action = torch.zeros_like(env.franka_dof_state_1[...,0]).squeeze(-1)   # only need [...,0]->position, 1 for velocity
     right_action = torch.zeros_like(env.franka_dof_state[...,0]).squeeze(-1)
     pos_action = torch.zeros_like(torch.cat((right_action,left_action), dim=0))
-    if enable_dof_target:
+    if enable_target_pose:
+        print_mode = 0
         now_stage = 0
         target_pose = load_target_ee(target_data_path).to(env.device)
+        total_stage = target_pose.shape[0]
 
     while not env.gym.query_viewer_has_closed(env.viewer):
         
@@ -307,7 +313,7 @@ if __name__ == "__main__":
         env.gym.simulate(env.sim)
         env.gym.fetch_results(env.sim, True)
 
-        if enable_dof_target:
+        if enable_target_pose:
             # refresh tensors
             env.gym.refresh_actor_root_state_tensor(env.sim)
             env.gym.refresh_dof_state_tensor(env.sim)
@@ -333,17 +339,17 @@ if __name__ == "__main__":
             j_eef_right = jacobian_right[:, franka_hand_index - 1, :, :7]
 
             # decide goal(target)
-            now_target = target_pose[now_stage, ...]
+            now_target = target_pose[now_stage, ...].unsqueeze(0).repeat(env.num_envs,1,1)
 
             left_hand_pos = env.rigid_body_states[:, env.hand_handle_1][:, 0:3]
-            left_goal_pos = now_target[1, 0:3]
+            left_goal_pos = now_target[:,1, 0:3]
             left_hand_rot = env.rigid_body_states[:, env.hand_handle_1][:, 3:7]
-            left_goal_rot = now_target[1, 3:7]
+            left_goal_rot = now_target[:,1, 3:7]
             
             right_hand_pos = env.rigid_body_states[:, env.hand_handle][:, 0:3]
-            right_goal_pos = now_target[0, 0:3]
+            right_goal_pos = now_target[:,0, 0:3]
             right_hand_rot = env.rigid_body_states[:, env.hand_handle][:, 3:7]
-            right_goal_rot = now_target[0, 3:7]
+            right_goal_rot = now_target[:,0, 3:7]
 
             # compute position and orientation error
             left_pos_err = left_goal_pos - left_hand_pos
@@ -352,6 +358,14 @@ if __name__ == "__main__":
             right_pos_err = right_goal_pos - right_hand_pos
             right_orn_err = orientation_error(right_goal_rot, right_hand_rot)
             right_dpose = torch.cat([right_pos_err, right_orn_err], -1).unsqueeze(-1)
+
+            # if goal then next target
+            e = torch.norm(left_dpose) + torch.norm(right_dpose)
+            if e < norm_err:
+                now_stage += 1
+                if now_stage == total_stage:
+                    print('complete all goals')
+                    enable_target_pose = False
 
             # left_dof_pos = env.franka_dof_state_1[..., 0].view(env.num_envs, 9, 1)
             # left_dof_vel = env.franka_dof_state_1[..., 1].view(env.num_envs, 9, 1)
@@ -362,8 +376,8 @@ if __name__ == "__main__":
             left_action[:, :7] = control_k * control_ik(left_dpose,j_eef_left)
             right_action[:, :7] = control_k * control_ik(right_dpose,j_eef_right)
             # gripper actions
-            left_action[:, 7:9] = now_target[1, 7:9]
-            right_action[:, 7:9] = now_target[0, 7:9]
+            left_action[:, 7:9] = now_target[:, 1, 7:9]
+            right_action[:, 7:9] = now_target[:, 0, 7:9]
             # merge two franka
             pos_action = torch.cat((right_action,left_action), dim=0)
 
