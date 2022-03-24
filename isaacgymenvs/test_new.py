@@ -94,6 +94,7 @@ def get_cfg(path):
     return cfg
 
 def save(path, name, data):
+    # save pose to do ik
     os.makedirs(path, exist_ok=True)
     file_path = os.path.join(path,name)
     if not os.path.exists(file_path):
@@ -102,6 +103,9 @@ def save(path, name, data):
         file.write(str(data))
     print('save success to',name)
 
+def save_dataset(dataset, obs, action, nextobs):
+    # save (obs,act,nextobs,) (rew,done)
+    pass
 
 def load_target_ee(filepath):
     # read target ee
@@ -312,6 +316,12 @@ if __name__ == "__main__":
                 if evt.action == "reset":
                     reset_env()
                 elif evt.action == "save":
+                    env.gym.refresh_actor_root_state_tensor(env.sim)
+                    env.gym.refresh_dof_state_tensor(env.sim)
+                    env.gym.refresh_net_contact_force_tensor(env.sim)
+                    env.gym.refresh_rigid_body_state_tensor(env.sim)
+                    env.gym.refresh_jacobian_tensors(env.sim)
+                    franka_dof, gripper_dof, ee_pose = get_franka()
                     save_data = torch.cat((ee_pose,gripper_dof), dim=1)
                     # print dof,pose detail
                     print('franka_dof', franka_dof)
@@ -423,7 +433,10 @@ if __name__ == "__main__":
         env.gym.step_graphics(env.sim)
         env.gym.draw_viewer(env.viewer, env.sim, False)
         env.gym.sync_frame_time(env.sim)
-        
+
+        # TODO: here calculate done
+        # calculate_done()
+
         # print obs/reward
         t += 1
         if t % 50 == 0:
