@@ -19,11 +19,12 @@ import os
 from typing import Dict,Tuple,List
 
 torch.set_printoptions(precision=4, sci_mode=False)
-file_time = time.strftime("%m-%d %H:%M:%S", time.localtime())
+file_time = time.strftime("%m-%d %H_%M_%S", time.localtime())
 test_config = configparser.ConfigParser()
 test_config.read('test_config.ini')
 franka_cfg_path = test_config['PRESET'].get('franka_cfg_path', './cfg/config.yaml')
 print_mode = test_config['PRESET'].getint('print_mode',0)
+debug_mode = test_config['PRESET'].getint('debug_mode',0)
 target_data_path = test_config["SIM"].get('target_data_path', None)
 enable_target_pose = test_config["DEFAULT"].getboolean('enable_dof_target', False)
 left_control_k = test_config["SIM"].getfloat('left_control_k', 0.6)
@@ -111,10 +112,6 @@ def save(path, name, data):
         file.write(str(data))
     print('save success to',name)
 
-def save_dataset(dataset, obs, action, nextobs):
-    # save (obs,act,nextobs,) (rew,done)
-    pass
-
 def load_target_ee(filepath):
     # read target ee
     with open(filepath, "r") as f:
@@ -157,7 +154,7 @@ def print_detail_clearly(dictobj):
     print('rew_details')
     obj = parse_reward_detail(dictobj)
     for k,v in obj.items():
-        print("\033[1;32m"+str(k)+"\033[0m")
+        print_highlight(k)
         if isinstance(v,Dict):
             findoprint(v)
         else:
@@ -170,6 +167,11 @@ def findoprint(dictobj):
         else:
             print(str(k)+": "+str(v))
 
+def print_highlight(*args):
+    msg = ''
+    for k in args:
+        msg += str(k)+' '
+    print("\033[1;32m"+msg+"\033[0m")
 
 total_print_mode = 3
 def print_state(if_all=False):
@@ -190,7 +192,7 @@ def print_state(if_all=False):
 def check_reset():
     env_ids = env.reset_buf.nonzero(as_tuple=False).squeeze(-1)
     if env_ids.shape[0] != 0:
-        print('trigger reset:',env_ids.numpy())
+        print_highlight('trigger reset:',env_ids.numpy())
         return True
     return False
     
@@ -230,6 +232,8 @@ class DualFrankaTest(DualFranka):
                 self.viewer, gymapi.KEY_C, "switch_cam_view")
             self.gym.subscribe_viewer_keyboard_event(
                 self.viewer, gymapi.KEY_0, "if_target_track")
+            self.gym.subscribe_viewer_keyboard_event(
+                self.viewer, gymapi.KEY_D, "change_debug")
 
             # set camera view
             self.cam_view_switch(cam_pos[cam_switch])
@@ -335,17 +339,14 @@ def reset_env():
     env.reset_idx(torch.arange(env.num_envs, device=env.device))
 
 def ready_to_track():
-    global print_mode, now_stage, target_pose, total_stage, writer, step
+    global print_mode, now_stage, target_pose, total_stage, writer, step, reset_flag, track_time
+    reset_flag = False
     step = 0
     print_mode = 0
     now_stage = 0
     target_pose = load_target_ee(target_data_path).to(env.device)
     total_stage = target_pose.shape[0]
-    if write_hdf5data:
-        # init writer
-        os.makedirs(output_hdf5_path, exist_ok=True)
-        path = os.path.join(output_hdf5_path,output_hdf5_name)
-        writer = HDF5DatasetWriter(outputPath=path, bufSize=1000)
+    track_time = time.time()
     print('Ready to track')
 
 
@@ -380,12 +381,18 @@ if __name__ == "__main__":
             sim_params=sim_params)
 
     # inital values
+    reset_flag = False
     step = 0
     left_action = torch.zeros_like(env.franka_dof_state_1[...,0]).squeeze(-1)   # only need [...,0]->position, 1 for velocity
     right_action = torch.zeros_like(env.franka_dof_state[...,0]).squeeze(-1)
     pos_action = torch.zeros_like(torch.cat((right_action,left_action), dim=0))
     if enable_target_pose:
         ready_to_track()
+    if write_hdf5data:
+        # init writer once
+        os.makedirs(output_hdf5_path, exist_ok=True)
+        path = os.path.join(output_hdf5_path,output_hdf5_name)
+        writer = HDF5DatasetWriter(outputPath=path, bufSize=1000)
 
     while not env.gym.query_viewer_has_closed(env.viewer):
         
@@ -431,6 +438,13 @@ if __name__ == "__main__":
                         reset_env()
                         ready_to_track()
                     enable_target_pose = ~enable_target_pose
+                elif evt.action == "change_debug":
+                    if debug_mode == 0:
+                        debug_mode = 1
+                        print('Enable debug mode')
+                    else:
+                        debug_mode = 0
+                        print('Disable debug mode')
         
         # Step the physics
         env.gym.simulate(env.sim)
@@ -451,7 +465,7 @@ if __name__ == "__main__":
                 next_obs = env.obs_buf.clone().view(-1,42).numpy()
                 action = pos_action.clone().view(-1,18).numpy()
                 # TODO: here calculate done
-                done = np.array([0], dtype='i8')
+                done = np.array([[0]], dtype='i8')
                 if step > 0:
                     # append last stage to writer
                     writer.add(obs, action, rew, next_obs, done)
@@ -505,12 +519,16 @@ if __name__ == "__main__":
             e_gripper = torch.norm(left_grip_err) + torch.norm(right_grip_err)
             if e < norm_err and e_gripper < gripper_err:
                 now_stage += 1
+                now_time = time.time()
                 if now_stage == total_stage:
-                    print('complete all goals')
+                    print('complete all goals',now_time-track_time,'s')
                     enable_target_pose = False
                     print('Stop target tracking')
+                    if write_hdf5data:
+                        writer.flush()
+                        print('now total steps saved:', writer.idx)
                 else:
-                    print('start next stage',now_stage,'  now step',step)
+                    print_highlight('Stage',now_stage,'Step',step, round(now_time-track_time,4),'s')
 
             # body ik, relative control
             left_action[:, :7] = left_control_k * control_ik(left_dpose,j_eef_left)
@@ -524,9 +542,19 @@ if __name__ == "__main__":
             # Deploy actions
             env.pre_physics_step(pos_action.view(env.num_envs,-1))
 
-            # always check if trigger reset
-            if check_reset():
-                print('\rnow franka dof:',franka_dof)
+            # check if trigger reset
+            if not reset_flag:
+                if check_reset():
+                    reset_flag = True
+                    print('now franka dof:',franka_dof)
+
+            ## debug print
+            if debug_mode and step % 80 == 0:
+                torch.set_printoptions(precision=4, sci_mode=True)
+                print('d err', torch.norm(left_dpose), torch.norm(right_dpose))
+                print('grip err', left_grip_err, right_grip_err)
+                print('e', e, e_gripper)
+                torch.set_printoptions(precision=4, sci_mode=False)
         
         # Step rendering
         env.gym.step_graphics(env.sim)
