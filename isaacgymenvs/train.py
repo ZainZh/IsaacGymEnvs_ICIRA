@@ -62,6 +62,8 @@ def launch_rlg_hydra(cfg: DictConfig):
     # ensure checkpoints can be specified as relative paths
     if cfg.checkpoint:
         cfg.checkpoint = to_absolute_path(cfg.checkpoint)
+    if cfg.dataset:
+        cfg.dataset = to_absolute_path(cfg.dataset)
 
     cfg_dict = omegaconf_to_dict(cfg)
     print_dict(cfg_dict)
@@ -109,8 +111,9 @@ def launch_rlg_hydra(cfg: DictConfig):
     runner.run({
         'train': not cfg.test,  # decide train or play in cfg
         'play': cfg.test,
-        'checkpoint': cfg.checkpoint,  # checkpoint arg, need test
+        'checkpoint': cfg.checkpoint,  # checkpoint arg
         'sigma': cfg.train.params.config.sigma,  # torch_runner line 26
+        'dataset': cfg.dataset,
     })
 
 

@@ -43,7 +43,7 @@ multi_gpu: False
 headless: True
 
 # dataset loading path
-data_path: ''
+dataset: ''
 
 # set default task and default training config based on task
 defaults:

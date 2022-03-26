@@ -270,7 +270,7 @@ class HDF5DatasetWriter():
         self.idx = 0   # 用来进行计数
 
     
-    def add(self, action, obs, next_obs, reward, done):
+    def add(self, obs, action, reward, next_obs, done):
         self.buffer["actions"].extend(action)
         self.buffer["observations"].extend(obs)
         self.buffer["next_observations"].extend(next_obs)
@@ -448,17 +448,17 @@ if __name__ == "__main__":
             if write_hdf5data:
                 env.compute_observations()
                 # save after get next_obs
-                next_obs = env.obs_buf.clone().numpy()
-                action = pos_action.clone().numpy()
+                next_obs = env.obs_buf.clone().view(-1,42).numpy()
+                action = pos_action.clone().view(-1,18).numpy()
                 # TODO: here calculate done
                 done = np.array([0], dtype='i8')
                 if step > 0:
                     # append last stage to writer
-                    writer.add(action, obs, next_obs, rew, done)
+                    writer.add(obs, action, rew, next_obs, done)
                 # next round
                 obs = next_obs.copy()
                 env.compute_reward()
-                rew = env.rew_buf.clone().numpy()
+                rew = env.rew_buf.clone().view(-1,1).numpy()
 
             ## Calculation here
             # get jacobian tensor

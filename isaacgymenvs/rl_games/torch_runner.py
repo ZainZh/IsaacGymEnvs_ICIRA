@@ -2,6 +2,7 @@ import numpy as np
 import copy
 import torch
 import yaml
+import os
 
 from rl_games import envs
 from rl_games.common import object_factory
@@ -20,6 +21,11 @@ from rl_games.algos_torch import cql_agent
 def _restore(agent, args):
     if args['checkpoint'] is not None and args['checkpoint']!='':
         agent.restore(args['checkpoint'])
+    else:
+        # no restore but model exists
+        basepath = agent.nn_dir+agent.experment_name+'.pth'
+        if os.path.exists(basepath):
+            raise Exception('pth exists!', basepath)
 
 def _override_sigma(agent, args):
     if args['sigma'] is not None:
@@ -30,6 +36,11 @@ def _override_sigma(agent, args):
                     net.sigma.fill_(float(args['sigma']))
             else:
                 print('Print cannot set new sigma because fixed_sigma is False')
+
+def _load_hdf5(agent, args):
+    if args['dataset'] is not None and args['dataset']!='':
+        agent.load_hdf5(args['dataset'])
+
 class Runner:
     def __init__(self, algo_observer=None):
         self.algo_factory = object_factory.ObjectFactory()
@@ -77,6 +88,7 @@ class Runner:
         agent = self.algo_factory.create(self.algo_name, base_name='run', params=self.params)
         _restore(agent, args)
         _override_sigma(agent, args)
+        _load_hdf5(agent, args)
         agent.train()
 
     def run_play(self, args):

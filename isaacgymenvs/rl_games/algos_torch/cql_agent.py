@@ -1,7 +1,5 @@
 from rl_games.algos_torch import torch_ext
-
 from rl_games.algos_torch.running_mean_std import RunningMeanStd
-
 from rl_games.common import vecenv
 from rl_games.common import schedulers
 from rl_games.common import experience
@@ -16,18 +14,6 @@ import torch.nn.functional as F
 import numpy as np
 import time
 import os
-
-# def load_dataset(dataset_path, replay_buffer):
-#     replay_buffer._observations = dataset['observations']
-#     replay_buffer._next_obs = dataset['next_observations']
-#     replay_buffer._actions = dataset['actions']
-#     # center reward different
-#     replay_buffer._rewards = np.expand_dims(np.squeeze(dataset['rewards']), 1)
-#     replay_buffer._terminals = np.expand_dims(np.squeeze(dataset['terminals']), 1)  
-#     replay_buffer._size = dataset['terminals'].shape[0]
-#     print ('Number of terminals on: ', replay_buffer._terminals.sum())
-#     replay_buffer._top = replay_buffer._size
-
 
 # copied from SACAgent
 class CQLAgent(BaseAlgorithm):
@@ -102,8 +88,6 @@ class CQLAgent(BaseAlgorithm):
                                                                self.env_info['action_space'].shape,
                                                                self.replay_buffer_size,
                                                                self.sac_device)
-        # load dataset here
-        #load_dataset(self.replay_buffer_path, self.replay_buffer)
 
         self.target_entropy_coef = config.get("target_entropy_coef", 0.5)
         self.target_entropy = self.target_entropy_coef * -self.env_info['action_space'].shape[0]
@@ -181,6 +165,7 @@ class CQLAgent(BaseAlgorithm):
         # allows us to specify a folder where all experiments will reside
         self.train_dir = config.get('train_dir', 'runs')
         # a folder inside of train_dir containing everything related to a particular experiment
+        file_time = datetime.now().strftime("%m%d-%H-%M-%S")
         self.experiment_name = config.get('name')
         self.experiment_dir = os.path.join(self.train_dir, self.experiment_name)
         self.nn_dir = os.path.join(self.experiment_dir, 'nn')
@@ -188,8 +173,8 @@ class CQLAgent(BaseAlgorithm):
         os.makedirs(self.experiment_dir, exist_ok=True)
         os.makedirs(self.nn_dir, exist_ok=True)
 
-        self.writer = SummaryWriter(self.experiment_dir + '/summaries/' + datetime.now().strftime("%m%d-%H-%M-%S"))
-        print("Run Directory:", self.experiment_dir + '/summaries/' + datetime.now().strftime("%m%d-%H-%M-%S"))
+        self.writer = SummaryWriter(self.experiment_dir + '/summaries/' + file_time)
+        print("Run Directory:", self.experiment_dir + '/summaries/' + file_time)
 
         self.is_tensor_obses = None
         self.is_rnn = False
@@ -251,6 +236,7 @@ class CQLAgent(BaseAlgorithm):
         self.actor_optimizer.load_state_dict(weights['actor_optimizer'])
         self.critic_optimizer.load_state_dict(weights['critic_optimizer'])
         self.log_alpha_optimizer.load_state_dict(weights['log_alpha_optimizer'])
+        self.alpha_prime_optimizer.load_state_dict(weights['alpha_prime_optimizer'])
 
     def restore(self, fn):
         checkpoint = torch_ext.load_checkpoint(fn)
@@ -673,3 +659,14 @@ class CQLAgent(BaseAlgorithm):
         preds_q1 = preds_q1.view(obs.shape[0], num_repeat, 1)
         preds_q2 = preds_q2.view(obs.shape[0], num_repeat, 1)
         return preds_q1, preds_q2
+    
+    def load_hdf5(self,dataset_path):
+        import h5py
+        _dataset = h5py.File(dataset_path,'r')
+        _obs = _dataset['observations']
+        _actions = _dataset['actions']
+        _rewards = _dataset['rewards']
+        _next_obs = _dataset['next_observations']
+        _dones = _dataset['dones']
+        self.replay_buffer.add(_obs, _actions, _rewards, _next_obs, _dones)
+        print('hdf5 loaded, now idx',self.replay_buffer.idx)
