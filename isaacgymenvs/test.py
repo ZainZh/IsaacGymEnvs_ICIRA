@@ -26,7 +26,7 @@ franka_cfg_path = test_config['PRESET'].get('franka_cfg_path', './cfg/config.yam
 print_mode = test_config['PRESET'].getint('print_mode',0)
 debug_mode = test_config['PRESET'].getint('debug_mode',0)
 target_data_path = test_config["SIM"].get('target_data_path', None)
-enable_target_pose = test_config["DEFAULT"].getboolean('enable_dof_target', False)
+auto_track_pose = test_config["DEFAULT"].getboolean('auto_track_pose', False)
 left_control_k = test_config["SIM"].getfloat('left_control_k', 0.6)
 right_control_k = test_config["SIM"].getfloat('right_control_k', 0.6)
 gripper_control_k = test_config["SIM"].getfloat('gripper_control_k', 0.6)
@@ -38,8 +38,9 @@ output_name = file_time+'.txt'
 write_hdf5data = test_config["DEFAULT"].getboolean('write_hdf5data', False)
 output_hdf5_path = os.path.join(output_path,'hdf5')
 output_hdf5_name = file_time+'.hdf5'
+manual_drive_k = test_config["SIM"].getfloat('manual_drive_k', 0.1)
 if target_data_path is None:
-    enable_target_pose = False
+    auto_track_pose = False
 if write_hdf5data:
     import h5py
 
@@ -234,6 +235,21 @@ class DualFrankaTest(DualFranka):
                 self.viewer, gymapi.KEY_0, "if_target_track")
             self.gym.subscribe_viewer_keyboard_event(
                 self.viewer, gymapi.KEY_D, "change_debug")
+            # ik ee drive
+            self.gym.subscribe_viewer_keyboard_event(
+                self.viewer, gymapi.KEY_LEFT_SHIFT, "switch_franka")
+            self.gym.subscribe_viewer_keyboard_event(
+                self.viewer, gymapi.KEY_UP, "drive_xminus")
+            self.gym.subscribe_viewer_keyboard_event(
+                self.viewer, gymapi.KEY_DOWN, "drive_xplus")
+            self.gym.subscribe_viewer_keyboard_event(
+                self.viewer, gymapi.KEY_LEFT, "drive_zplus")
+            self.gym.subscribe_viewer_keyboard_event(
+                self.viewer, gymapi.KEY_RIGHT, "drive_zminus")
+            self.gym.subscribe_viewer_keyboard_event(
+                self.viewer, gymapi.KEY_LEFT_BRACKET, "drive_yplus")
+            self.gym.subscribe_viewer_keyboard_event(
+                self.viewer, gymapi.KEY_RIGHT_BRACKET, "drive_yminus")
 
             # set camera view
             self.cam_view_switch(cam_pos[cam_switch])
@@ -327,6 +343,13 @@ def control_ik(dpose,jacobian):
     u = (j_eef_T @ torch.inverse(jacobian @ j_eef_T + lmbda) @ dpose).view(env.num_envs, 7)
     return u
 
+def ee_position_drive(franka, dist:list):
+    global manual_drive, now_target
+    manual_drive |= 0b10
+    now_target[:, 0,:7] = env.rigid_body_states[:, env.hand_handle][:,:7]
+    now_target[:, 1,:7] = env.rigid_body_states[:, env.hand_handle_1][:,:7]
+    now_target[:, franka,0:3] += torch.tensor(dist, dtype=torch.float, device=env.device)
+
 def get_franka():
     franka_dof = gymtorch.wrap_tensor(env.gym.acquire_dof_state_tensor(env.sim))[:,0].view(2,-1)
     gripper_dof = franka_dof[:,-2:]
@@ -381,12 +404,14 @@ if __name__ == "__main__":
             sim_params=sim_params)
 
     # inital values
+    manual_drive = 0b00
     reset_flag = False
     step = 0
+    now_target = torch.zeros((env.num_envs,2,9), dtype=torch.float, device=env.device)
     left_action = torch.zeros_like(env.franka_dof_state_1[...,0]).squeeze(-1)   # only need [...,0]->position, 1 for velocity
     right_action = torch.zeros_like(env.franka_dof_state[...,0]).squeeze(-1)
     pos_action = torch.zeros_like(torch.cat((right_action,left_action), dim=0))
-    if enable_target_pose:
+    if auto_track_pose:
         ready_to_track()
     if write_hdf5data:
         # init writer once
@@ -431,13 +456,13 @@ if __name__ == "__main__":
                         cam_switch = 0
                     env.cam_view_switch(cam_pos[cam_switch])
                 elif evt.action == "if_target_track":
-                    if enable_target_pose:
+                    if auto_track_pose:
                         print('Disable target tracking')
                     else:
                         print('Enable target tracking')
                         reset_env()
                         ready_to_track()
-                    enable_target_pose = ~enable_target_pose
+                    auto_track_pose = ~auto_track_pose
                 elif evt.action == "change_debug":
                     if debug_mode == 0:
                         debug_mode = 1
@@ -445,12 +470,31 @@ if __name__ == "__main__":
                     else:
                         debug_mode = 0
                         print('Disable debug mode')
+                elif evt.action == "switch_franka":
+                    if manual_drive&1:
+                        manual_drive &= 0b10
+                        print('Drive right franka')
+                    else:
+                        manual_drive |= 0b01
+                        print('Drive left franka')
+                elif evt.action == "drive_xminus":
+                    ee_position_drive(manual_drive&0b01, dist=[-manual_drive_k, 0, 0])
+                elif evt.action == "drive_xplus":
+                    ee_position_drive(manual_drive&0b01, dist=[manual_drive_k, 0, 0])
+                elif evt.action == "drive_yminus":
+                    ee_position_drive(manual_drive&0b01, dist=[0, -manual_drive_k, 0])
+                elif evt.action == "drive_yplus":
+                    ee_position_drive(manual_drive&0b01, dist=[0, manual_drive_k, 0])
+                elif evt.action == "drive_zminus":
+                    ee_position_drive(manual_drive&0b01, dist=[0, 0, -manual_drive_k])
+                elif evt.action == "drive_zplus":
+                    ee_position_drive(manual_drive&0b01, dist=[0, 0, manual_drive_k])
         
         # Step the physics
         env.gym.simulate(env.sim)
         env.gym.fetch_results(env.sim, True)
 
-        if enable_target_pose:
+        if auto_track_pose or manual_drive&0b10:
 
             # refresh tensors
             env.gym.refresh_actor_root_state_tensor(env.sim)
@@ -459,7 +503,7 @@ if __name__ == "__main__":
             env.gym.refresh_rigid_body_state_tensor(env.sim)
             env.gym.refresh_jacobian_tensors(env.sim)
 
-            if write_hdf5data:
+            if write_hdf5data and auto_track_pose:
                 env.compute_observations()
                 # save after get next_obs
                 next_obs = env.obs_buf.clone().view(-1,42).numpy()
@@ -492,7 +536,8 @@ if __name__ == "__main__":
             j_eef_right = jacobian_right[:, franka_hand_index - 1, :, :7]
 
             # decide goal(target)
-            now_target = target_pose[now_stage, ...].unsqueeze(0).repeat(env.num_envs,1,1)
+            if auto_track_pose:
+                now_target = target_pose[now_stage, ...].unsqueeze(0).repeat(env.num_envs,1,1)
 
             left_hand_pos = env.rigid_body_states[:, env.hand_handle_1][:, 0:3]
             left_goal_pos = now_target[:,1, 0:3]
@@ -517,12 +562,12 @@ if __name__ == "__main__":
             # if goal then next target
             e = torch.norm(left_dpose) + torch.norm(right_dpose)
             e_gripper = torch.norm(left_grip_err) + torch.norm(right_grip_err)
-            if e < norm_err and e_gripper < gripper_err:
+            if e < norm_err and e_gripper < gripper_err and auto_track_pose:
                 now_stage += 1
                 now_time = time.time()
                 if now_stage == total_stage:
                     print('complete all goals',now_time-track_time,'s')
-                    enable_target_pose = False
+                    auto_track_pose = False
                     print('Stop target tracking')
                     if write_hdf5data:
                         writer.flush()
@@ -566,6 +611,8 @@ if __name__ == "__main__":
         if step % 50 == 0:
             if print_mode != 0:
                 print_state()
+        
+        manual_drive &= 0b01
     
     print("Done")
     if write_hdf5data:

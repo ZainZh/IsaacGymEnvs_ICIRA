@@ -2,7 +2,7 @@
 
 Complete [https://github.com/wzqwwq/IsaacGymEnvs](https://github.com/wzqwwq/IsaacGymEnvs) 
 
-## INSTALLATION
+# INSTALLATION
 
 1. The essential package [rl_games](https://github.com/Denys88/rl_games) use the newest version v1.3.2, have to download the package manually.
 
@@ -20,9 +20,7 @@ Complete [https://github.com/wzqwwq/IsaacGymEnvs](https://github.com/wzqwwq/Isaa
 
 Add `cql_agent.py` to do CQL.
 
-
-
-### RUN
+# RUN
 
 #### Train
 
@@ -36,9 +34,7 @@ python train.py num_envs=4096
 python train.py test=True headless=False checkpoint='runs/DualFrankaCQL/nn/model.pth'
 ```
 
-
-
-## Run the DualFranka test program
+# Run the DualFranka test program
 
 1. Place `test_new.py` under the same folder with `train.py`, should be `/IsaacGymEnvs/isaacgymenvs`
 
@@ -54,13 +50,16 @@ python train.py test=True headless=False checkpoint='runs/DualFrankaCQL/nn/model
 
 ### Comments
 
-| Keyboard shortcut | Description                                                  |
-| :---------------- | ------------------------------------------------------------ |
-| R                 | Reset the environment. Need to disable pose override in the viewer first. |
-| T                 | Print the obs/reward once in terminal.                       |
-| P                 | Turn on/off the print info.                                  |
-| C                 | Switch the view angle                                        |
-| S                 | Save the pose status in file.                                |
-| 0                 | Enable/disable target tracking                               |
-| D                 | Enable/disable debug info                                    |
+| Keyboard shortcut       | Description                                                  |
+| :---------------------- | ------------------------------------------------------------ |
+| `R`                     | Reset the environment. Need to disable pose override in the viewer first. |
+| `T`                     | Print the obs/reward once in terminal.                       |
+| `P`                     | Turn on/off the print info.                                  |
+| `C`                     | Switch the view angle                                        |
+| `S`                     | Save the pose status in file.                                |
+| `0`                     | Enable/disable target tracking                               |
+| `D`                     | Enable/disable debug info                                    |
+| `UP, DOWN, LEFT, RIGHT` | Drive franka position manually in `xz` plane                 |
+| `[`, `]`                | Drive franka position manually in `y` axis                   |
+| `LEFT_SHIFT`            | Switch driving between left/right Franka                     |
 
