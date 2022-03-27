@@ -33,13 +33,13 @@ params:
 
     log_std_bounds: [-5, 2]   # default 
 
-  load_checkpoint: ${if:${...checkpoint},True,False} # flag which sets whether to load the checkpoint
+  # load_checkpoint: ${if:${...checkpoint},True,False} # flag which sets whether to load the checkpoint
   # load_path: ${...checkpoint} # seem useless, path to the checkpoint to load
 
   config:
     name: ${resolve_default:DualFrankaCQL,${....experiment}}
     full_experiment_name: ${.name}
-
+    load_checkpoint: ${if:${....checkpoint},True,False}
     # base_init
     # env_config: 
     # env_info: 

@@ -541,7 +541,7 @@ class CQLAgent(BaseAlgorithm):
                critic1_losses, critic2_losses, min_qf1_losses, min_qf2_losses, std_q1s, std_q2s, alpha_prime_losses
 
     def train_epoch(self):
-        if self.epoch_num < self.num_seed_steps:
+        if self.epoch_num < self.num_seed_steps and not self.config['load_checkpoint']:
             step_time, play_time, total_update_time, total_time, actor_losses, entropies, alphas, alpha_losses, \
             critic1_losses, critic2_losses, min_qf1_losses, min_qf2_losses, std_q1s, std_q2s, alpha_prime_losses \
                 = self.play_steps(random_exploration=True)
