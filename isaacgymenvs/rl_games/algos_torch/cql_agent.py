@@ -208,6 +208,8 @@ class CQLAgent(BaseAlgorithm):
         state['actor_optimizer'] = self.actor_optimizer.state_dict()
         state['critic_optimizer'] = self.critic_optimizer.state_dict()
         state['log_alpha_optimizer'] = self.log_alpha_optimizer.state_dict()
+        if self.with_lagrange:
+            state['alpha_prime_optimizer'] =self.alpha_prime_optimizer.state_dict()
 
         return state
 
@@ -236,7 +238,8 @@ class CQLAgent(BaseAlgorithm):
         self.actor_optimizer.load_state_dict(weights['actor_optimizer'])
         self.critic_optimizer.load_state_dict(weights['critic_optimizer'])
         self.log_alpha_optimizer.load_state_dict(weights['log_alpha_optimizer'])
-        self.alpha_prime_optimizer.load_state_dict(weights['alpha_prime_optimizer'])
+        if self.with_lagrange:
+            self.alpha_prime_optimizer.load_state_dict(weights['alpha_prime_optimizer'])
 
     def restore(self, fn):
         checkpoint = torch_ext.load_checkpoint(fn)
@@ -318,6 +321,8 @@ class CQLAgent(BaseAlgorithm):
             alpha_prime_loss = (-min_qf1_loss - min_qf2_loss) * 0.5
             alpha_prime_loss.backward(retain_graph=True)
             self.alpha_prime_optimizer.step()
+        else:
+            alpha_prime_loss = torch.zeros_like(std_q2, requires_grad=False)
 
         critic1_loss = critic1_loss + min_qf1_loss
         critic2_loss = critic2_loss + min_qf2_loss
@@ -328,7 +333,6 @@ class CQLAgent(BaseAlgorithm):
         critic_loss.backward()
         self.critic_optimizer.step()
 
-        # TODO: alpha_prime_loss init
         return critic_loss.detach(), critic1_loss.detach(), critic2_loss.detach(), min_qf1_loss.detach(), \
                min_qf2_loss.detach(), std_q1.detach(), std_q2.detach(), alpha_prime_loss.detach()
 
