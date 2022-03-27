@@ -3,45 +3,164 @@
      Commit Version: 1.6.0-1-g15f4949  Build Version: 1.6.7594.29634
      For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
 <robot
-  name="cup">
+  name="cup3">
   <link
     name="base_link">
     <inertial>
       <origin
-        xyz="-2.3631E-35 0.037704 5.3494E-19"
+        xyz="4.1217E-18 0.042982 -5.1149E-19"
         rpy="0 0 0" />
       <mass
-        value="0.35723" />
+        value="0.1035" />
       <inertia
-        ixx="0.00029697"
-        ixy="1.5195E-36"
-        ixz="1.7927E-37"
-        iyy="0.00013074"
-        iyz="6.3521E-21"
-        izz="0.00029697" />
+        ixx="0.00010674"
+        ixy="-5.0169E-21"
+        ixz="3.2439E-22"
+        iyy="4.5186E-05"
+        iyz="0"
+        izz="0.00010674" />
     </inertial>
     <visual>
       <origin
         xyz="0 0 0"
         rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="package://cup/meshes/base_link.STL" />
+        <!--mesh
+          filename="package://cup3/meshes/base_link.STL" /-->
+          <box size="0.05 0.01 0.05"/>
       </geometry>
       <material
         name="">
         <color
-          rgba="0.89804 0.91765 0.92941 1" />
+          rgba="1 1 1 1" />
       </material>
     </visual>
-    <collision>
+
+    <visual>
       <origin
-        xyz="0 0 0"
+        xyz="0.024 0.055 0"
         rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="package://cup/meshes/base_link.STL" />
+          <box size="0.002 0.1 0.05"/>
       </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+
+     <visual>
+          <origin
+            xyz="-0.024 0.055 0"
+            rpy="0 0 0" />
+          <geometry>
+              <box size="0.002 0.1 0.05"/>
+          </geometry>
+          <material
+            name="">
+            <color
+              rgba="1 1 1 1" />
+          </material>
+    </visual>
+
+    <visual>
+      <origin
+        xyz="0 0.055 -0.024"
+        rpy="0 0 0" />
+      <geometry>
+          <box size="0.046 0.1 0.002"/>
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+
+     <visual>
+          <origin
+            xyz="0 0.055 0.024"
+            rpy="0 0 0" />
+          <geometry>
+              <box size="0.046 0.1 0.002"/>
+          </geometry>
+          <material
+            name="">
+            <color
+              rgba="1 1 1 1" />
+          </material>
+    </visual>
+
+
+    <!--collision-->
+
+     <collision>
+          <origin
+            xyz="0 0 0"
+            rpy="0 0 0" />
+          <geometry>
+            <!--mesh
+              filename="package://cup3/meshes/base_link.STL" /-->
+              <box size="0.05 0.005 0.05"/>
+          </geometry>
     </collision>
+
+    <collision>
+      <origin
+        xyz="0.024 0.055 0"
+        rpy="0 0 0" />
+      <geometry>
+          <box size="0.002 0.1 0.05"/>
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </collision>
+
+     <collision>
+          <origin
+            xyz="-0.024 0.055 0"
+            rpy="0 0 0" />
+          <geometry>
+              <box size="0.002 0.1 0.05"/>
+          </geometry>
+          <material
+            name="">
+            <color
+              rgba="1 1 1 1" />
+          </material>
+    </collision>
+
+     <collision>
+      <origin
+        xyz="0 0.055 -0.024"
+        rpy="0 0 0" />
+      <geometry>
+          <box size="0.046 0.1 0.002"/>
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </collision>
+
+     <collision>
+          <origin
+            xyz="0 0.055 0.024"
+            rpy="0 0 0" />
+          <geometry>
+              <box size="0.046 0.1 0.002"/>
+          </geometry>
+          <material
+            name="">
+            <color
+              rgba="1 1 1 1" />
+          </material>
+    </collision>
+
   </link>
 </robot>
