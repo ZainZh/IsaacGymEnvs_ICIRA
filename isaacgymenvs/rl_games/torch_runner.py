@@ -23,7 +23,7 @@ def _restore(agent, args):
         agent.restore(args['checkpoint'])
     else:
         # no restore but model exists
-        basepath = agent.nn_dir+agent.experment_name+'.pth'
+        basepath = agent.nn_dir+agent.experiment_name+'.pth'
         if os.path.exists(basepath):
             raise Exception('pth exists!', basepath)
 
