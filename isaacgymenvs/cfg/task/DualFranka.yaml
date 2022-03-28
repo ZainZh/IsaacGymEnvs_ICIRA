@@ -2,6 +2,7 @@
 name: DualFranka
 
 physics_engine: ${..physics_engine}
+rl_device: ${..rl_device}
 
 # if given, will override the device setting in gym. 
 env:
