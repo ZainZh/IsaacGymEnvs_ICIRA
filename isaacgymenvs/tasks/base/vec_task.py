@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA Corporation
+# Copyright (c) 2018-2022, NVIDIA Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -117,6 +117,13 @@ class Env(ABC):
         """Reset the environment.
         Returns:
             Observation dictionary
+        """
+
+    @abc.abstractmethod
+    def reset_idx(self, env_ids: torch.Tensor):
+        """Reset environments having the provided indices.
+        Args:
+            env_ids: environments to reset
         """
 
     @property
@@ -248,24 +255,6 @@ class VecTask(Env):
             self.num_envs, device=self.device, dtype=torch.long)
         self.extras = {}
 
-    #
-    def set_sim_params_up_axis(self, sim_params: gymapi.SimParams, axis: str) -> int:
-        """Set gravity based on up axis and return axis index.
-
-        Args:
-            sim_params: sim params to modify the axis for.
-            axis: axis to set sim params for.
-        Returns:
-            axis index for up axis.
-        """
-        if axis == 'z':
-            sim_params.up_axis = gymapi.UP_AXIS_Z
-            sim_params.gravity.x = 0
-            sim_params.gravity.y = 0
-            sim_params.gravity.z = -9.81
-            return 2
-        return 1
-
     def create_sim(self, compute_device: int, graphics_device: int, physics_engine, sim_params: gymapi.SimParams):
         """Create an Isaac Gym sim object.
 
@@ -357,15 +346,36 @@ class VecTask(Env):
 
         return actions
 
-    def reset(self) -> torch.Tensor:
-        """Reset the environment.
+    def reset_idx(self, env_idx):
+        """Reset environment with indces in env_idx. 
+        Should be implemented in an environment class inherited from VecTask.
+        """  
+        pass
+
+    def reset(self):
+        """Is called only once when environment starts to provide the first observations.
+        Doesn't calculate observations. Actual reset and observation calculation need to be implemented by user.
         Returns:
             Observation dictionary
         """
         zero_actions = self.zero_actions()
+        self.obs_dict["obs"] = torch.clamp(self.obs_buf, -self.clip_obs, self.clip_obs).to(self.rl_device)
 
-        # step the simulator
+        # asymmetric actor-critic
+        if self.num_states > 0:
+            self.obs_dict["states"] = self.get_state()
         self.step(zero_actions)
+
+        return self.obs_dict
+
+    def reset_done(self):
+        """Reset the environment.
+        Returns:
+            Observation dictionary, indices of environments being reset
+        """
+        done_env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
+        if len(done_env_ids) > 0:
+            self.reset_idx(done_env_ids)
 
         self.obs_dict["obs"] = torch.clamp(self.obs_buf, -self.clip_obs, self.clip_obs).to(self.rl_device)
 
@@ -373,7 +383,7 @@ class VecTask(Env):
         if self.num_states > 0:
             self.obs_dict["states"] = self.get_state()
 
-        return self.obs_dict
+        return self.obs_dict, done_env_ids
 
     def render(self):
         """Draw the frame to the viewer, and check for keyboard events."""
