@@ -28,3 +28,5 @@ runs/
 .idea
 outputs/
 *.hydra*
+*.DS_Store
+*test_save*

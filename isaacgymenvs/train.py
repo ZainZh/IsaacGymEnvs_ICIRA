@@ -55,19 +55,21 @@ from isaacgymenvs.learning import amp_network_builder
 ## OmegaConf & Hydra Config
 
 # Resolvers used in hydra configs (see https://omegaconf.readthedocs.io/en/2.1_branch/usage.html#resolvers)
-OmegaConf.register_new_resolver('eq', lambda x, y: x.lower()==y.lower())
+OmegaConf.register_new_resolver('eq', lambda x, y: x.lower() == y.lower())
 OmegaConf.register_new_resolver('contains', lambda x, y: x.lower() in y.lower())
 OmegaConf.register_new_resolver('if', lambda pred, a, b: a if pred else b)
 # allows us to resolve default arguments which are copied in multiple places in the config. used primarily for
 # num_ensv
-OmegaConf.register_new_resolver('resolve_default', lambda default, arg: default if arg=='' else arg)
+OmegaConf.register_new_resolver('resolve_default', lambda default, arg: default if arg == '' else arg)
+
 
 @hydra.main(config_name="config", config_path="./cfg")
 def launch_rlg_hydra(cfg: DictConfig):
-
     # ensure checkpoints can be specified as relative paths
     if cfg.checkpoint:
         cfg.checkpoint = to_absolute_path(cfg.checkpoint)
+    if cfg.dataset:
+        cfg.dataset = to_absolute_path(cfg.dataset)
 
     cfg_dict = omegaconf_to_dict(cfg)
     print_dict(cfg_dict)
@@ -101,10 +103,10 @@ def launch_rlg_hydra(cfg: DictConfig):
     # register new AMP network builder and agent
     def build_runner(algo_observer):
         runner = Runner(algo_observer)
-        runner.algo_factory.register_builder('amp_continuous', lambda **kwargs : amp_continuous.AMPAgent(**kwargs))
-        runner.player_factory.register_builder('amp_continuous', lambda **kwargs : amp_players.AMPPlayerContinuous(**kwargs))
-        runner.model_builder.model_factory.register_builder('continuous_amp', lambda network, **kwargs : amp_models.ModelAMPContinuous(network))  
-        runner.model_builder.network_factory.register_builder('amp', lambda **kwargs : amp_network_builder.AMPBuilder())
+        # runner.algo_factory.register_builder('amp_continuous', lambda **kwargs : amp_continuous.AMPAgent(**kwargs))
+        # runner.player_factory.register_builder('amp_continuous', lambda **kwargs : amp_players.AMPPlayerContinuous(**kwargs))
+        # runner.model_builder.model_factory.register_builder('continuous_amp', lambda network, **kwargs : amp_models.ModelAMPContinuous(network))  
+        # runner.model_builder.network_factory.register_builder('amp', lambda **kwargs : amp_network_builder.AMPBuilder())
 
         return runner
 
@@ -123,9 +125,13 @@ def launch_rlg_hydra(cfg: DictConfig):
         f.write(OmegaConf.to_yaml(cfg))
 
     runner.run({
-        'train': not cfg.test,
+        'train': not cfg.test,  # decide train or play in cfg
         'play': cfg.test,
+        'checkpoint': cfg.checkpoint,  # checkpoint arg
+        'sigma': cfg.train.params.config.sigma,  # torch_runner line 26
+        'dataset': cfg.dataset,
     })
+
 
 if __name__ == "__main__":
     launch_rlg_hydra()

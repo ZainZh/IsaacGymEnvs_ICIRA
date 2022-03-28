@@ -40,12 +40,16 @@ checkpoint: ''
 multi_gpu: False
 
 # disables rendering
-headless: False
+headless: True
+
+# dataset loading path
+dataset: ''
 
 # set default task and default training config based on task
 defaults:
-  - task: Ant
-  - train: ${task}PPO
+  - task: DualFranka    # set default to our task
+  #- train: ${task}PPO
+  - train: ${task}CQL   # if use CQL need to use this suffix
   - hydra/job_logging: disabled
 
 # set the directory where the output files get saved
