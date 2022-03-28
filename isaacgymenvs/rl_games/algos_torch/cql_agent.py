@@ -145,7 +145,6 @@ class CQLAgent(BaseAlgorithm):
 
         self.network = config['network']  # build in load_networks
         self.rewards_shaper = config['reward_shaper']
-        print('self.rewards_shaper', self.rewards_shaper)  # print to test
         self.num_agents = self.env_info.get('agents', 1)
         self.obs_shape = self.observation_space.shape
 
@@ -591,7 +590,7 @@ class CQLAgent(BaseAlgorithm):
             self.writer.add_scalar('performance/step_inference_time', play_time, frame)
             self.writer.add_scalar('performance/step_time', step_time, frame)
 
-            if self.epoch_num >= self.num_seed_steps:
+            if self.epoch_num >= self.num_seed_steps or self.config['load_checkpoint']:
                 self.writer.add_scalar('losses/a_loss', torch_ext.mean_list(actor_losses).item(), frame)
                 self.writer.add_scalar('losses/c1_loss', torch_ext.mean_list(critic1_losses).item(), frame)
                 self.writer.add_scalar('losses/c2_loss', torch_ext.mean_list(critic2_losses).item(), frame)
@@ -667,10 +666,10 @@ class CQLAgent(BaseAlgorithm):
     def load_hdf5(self,dataset_path):
         import h5py
         _dataset = h5py.File(dataset_path,'r')
-        _obs = _dataset['observations']
-        _actions = _dataset['actions']
-        _rewards = _dataset['rewards']
-        _next_obs = _dataset['next_observations']
-        _dones = _dataset['dones']
+        _obs = torch.tensor(np.array(_dataset['observations']), dtype=torch.float, device=self.device)
+        _actions = torch.tensor(np.array(_dataset['actions']), dtype=torch.float, device=self.device)
+        _rewards = torch.tensor(np.array(_dataset['rewards']), dtype=torch.float, device=self.device)
+        _next_obs = torch.tensor(np.array(_dataset['next_observations']), dtype=torch.float, device=self.device)
+        _dones = torch.tensor(np.array(_dataset['dones']), dtype=torch.float, device=self.device)
         self.replay_buffer.add(_obs, _actions, _rewards, _next_obs, _dones)
-        print('hdf5 loaded, now idx',self.replay_buffer.idx)
+        print('hdf5 loaded from', dataset_path ,'now idx', self.replay_buffer.idx)
