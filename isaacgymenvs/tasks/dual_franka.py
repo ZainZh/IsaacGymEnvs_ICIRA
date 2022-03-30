@@ -83,9 +83,9 @@ class DualFranka(VecTask):
 
         # create some wrapper tensors for different slices
         # set default pos (seven links and left and right hand)
-        self.franka_default_dof_pos = to_torch([0.3269, 0.2712, 0.0, -1.0166, 0.0297, 1.5775, 0.832, 0.04, 0.04],
+        self.franka_default_dof_pos = to_torch([0.3863, 0.5062, -0.1184, -0.6105, 0.023, 1.6737, 0.9197, 0.04, 0.04],
                                                device=self.device)
-        self.franka_default_dof_pos_1 = to_torch([-0.4457, -0.0542, 0.0, -1.7401, 0.0, 2.7568, 0.6835, 0.04, 0.04],
+        self.franka_default_dof_pos_1 = to_torch([-0.5349, 0, 0.1401, -1.7951, 0.0334, 3.2965, 0.6484, 0.04, 0.04],
                                                  device=self.device)
         self.franka_default_dof_pos_2 = to_torch([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                                  device=self.device)
@@ -276,7 +276,7 @@ class DualFranka(VecTask):
 
         spoon_pose = gymapi.Transform()
         spoon_pose.p.x = table_pose.p.x - 0.29
-        spoon_pose.p.y = 0.495
+        spoon_pose.p.y = 0.5
         spoon_pose.p.z = 0.29
         spoon_pose.r = gymapi.Quat(0, 0, 0, 1.0)
 
@@ -284,7 +284,7 @@ class DualFranka(VecTask):
         shelf_pose.p.x = table_pose.p.x - 0.3
         shelf_pose.p.y = 0.4
         shelf_pose.p.z = 0.29
-        shelf_pose.r = gymapi.Quat(-0.707107, 0.0, 0.0, 0.707107)
+        shelf_pose.r = gymapi.Quat(0, 0.0, 0.0, 0.707107)
 
         # compute aggregate size
         num_franka_bodies = self.gym.get_asset_rigid_body_count(franka_asset)
@@ -440,15 +440,15 @@ class DualFranka(VecTask):
 
         # set axis
         # need look details
-        self.gripper_forward_axis = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
+        self.gripper_forward_axis = to_torch([0, 0, 1], device=self.device).repeat((self.num_envs, 1))
         self.cup_inward_axis = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
-        self.gripper_up_axis = to_torch([0, 0, -1], device=self.device).repeat((self.num_envs, 1))
+        self.gripper_up_axis = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
         self.cup_up_axis = to_torch([0, 1, 0], device=self.device).repeat((self.num_envs, 1))
 
         self.gripper_forward_axis_1 = to_torch([0, 0, 1], device=self.device).repeat((self.num_envs, 1))
         self.spoon_inward_axis = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
         self.gripper_up_axis_1 = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
-        self.spoon_up_axis = to_torch([0, 1, 0], device=self.device).repeat((self.num_envs, 1))
+        self.spoon_up_axis = to_torch([0, -1, 0], device=self.device).repeat((self.num_envs, 1))
 
         # params for calculation
         self.franka_grasp_pos = torch.zeros_like(self.franka_local_grasp_pos)
@@ -552,7 +552,7 @@ class DualFranka(VecTask):
         # reset franka
         # self.root_states[env_ids] = self.saved_root_tensor[env_ids]
         pos = tensor_clamp(
-            self.franka_default_dof_pos.unsqueeze(0) + 0.25 * (
+            self.franka_default_dof_pos.unsqueeze(0) + 0.1 * (
                         torch.rand((len(env_ids), self.num_franka_dofs), device=self.device) - 0.5),
             self.franka_dof_lower_limits, self.franka_dof_upper_limits)
         # print("pos is ", pos)
@@ -563,7 +563,7 @@ class DualFranka(VecTask):
 
         # reset franka1
         pos_1 = tensor_clamp(
-            self.franka_default_dof_pos_1.unsqueeze(0) + 0.25 * (
+            self.franka_default_dof_pos_1.unsqueeze(0) + 0.1 * (
                         torch.rand((len(env_ids), self.num_franka_dofs_1), device=self.device) - 0.5),
             self.franka_dof_lower_limits, self.franka_dof_upper_limits)
         self.franka_dof_pos_1[env_ids, :] = pos_1
@@ -581,7 +581,7 @@ class DualFranka(VecTask):
 
         # reset spoon
         self.spoon_positions[env_ids, 0] = -0.29
-        self.spoon_positions[env_ids, 1] = 0.525
+        self.spoon_positions[env_ids, 1] = 0.5
         self.spoon_positions[env_ids, 2] = 0.29
         self.spoon_orientations[env_ids, 0] = 0.0
         self.spoon_orientations[env_ids, 1] = 0.0
@@ -611,7 +611,7 @@ class DualFranka(VecTask):
         self.table_linvels[env_ids] = 0.0
 
         # reset root state for spoon and cup in selected envs
-        actor_indices = self.global_indices[env_ids, 2:5].flatten()
+        actor_indices = self.global_indices[env_ids, 2:4].flatten()
 
         actor_indices_32 = actor_indices.to(torch.int32)
 
@@ -695,7 +695,7 @@ class DualFranka(VecTask):
         self.table_angvels[env_ids] = 0.0
         self.table_linvels[env_ids] = 0.0
         # reset root state for spoon and cup in selected envs
-        actor_indices = self.global_indices[env_ids, 2:5].flatten()
+        actor_indices = self.global_indices[env_ids, 2:4].flatten()
 
         actor_indices_32 = actor_indices.to(torch.int32)
 
@@ -779,7 +779,7 @@ class DualFranka(VecTask):
         self.table_angvels[env_ids] = 0.0
         self.table_linvels[env_ids] = 0.0
         # reset root state for spoon and cup in selected envs
-        actor_indices = self.global_indices[env_ids, 2:5].flatten()
+        actor_indices = self.global_indices[env_ids, 2:4].flatten()
 
         actor_indices_32 = actor_indices.to(torch.int32)
 
@@ -1031,9 +1031,9 @@ def compute_franka_reward(
     ## 2. rotation reward
     # define axis to make sure the alignment
     axis1 = tf_vector(franka_grasp_rot, gripper_forward_axis)  # franka
-    axis2 = tf_vector(spoon_grasp_rot, spoon_inward_axis)  # [0,0,1]
+    axis2 = tf_vector(spoon_grasp_rot, spoon_up_axis)  # [0,1,0]
     axis3 = tf_vector(franka_grasp_rot, gripper_up_axis)
-    axis4 = tf_vector(spoon_grasp_rot, spoon_up_axis)  # [0,1,0]
+    axis4 = tf_vector(spoon_grasp_rot, spoon_inward_axis)  # [0,0,1]
 
     axis1_1 = tf_vector(franka_grasp_rot_1, gripper_forward_axis_1)  # franka1
     axis2_1 = tf_vector(cup_grasp_rot, cup_inward_axis)

@@ -46,10 +46,10 @@ from rl_games.torch_runner import Runner
 
 import yaml
 
-from isaacgymenvs.learning import amp_continuous
-from isaacgymenvs.learning import amp_players
-from isaacgymenvs.learning import amp_models
-from isaacgymenvs.learning import amp_network_builder
+# from isaacgymenvs.learning import amp_continuous
+# from isaacgymenvs.learning import amp_players
+# from isaacgymenvs.learning import amp_models
+# from isaacgymenvs.learning import amp_network_builder
 
 
 ## OmegaConf & Hydra Config

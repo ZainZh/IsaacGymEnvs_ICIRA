@@ -22,11 +22,45 @@
     </inertial>
     <visual>
       <origin
-        xyz="0 0 0"
+        xyz="0 0.0079 0 "
         rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="package://shelf/meshes/base_link.STL" />
+        <!--mesh
+          filename="package://shelf/meshes/base_link.STL" /-->
+           <box size="0.24 0.0158 0.167 "/>
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+
+     <visual>
+      <origin
+        xyz="0.047375 0.05742 0"
+        rpy="0 0 0" />
+      <geometry>
+        <!--mesh
+          filename="package://shelf/mesh
+          es/base_link.STL" /-->
+           <box size="0.011 0.08324 0.11"/>
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+
+     <visual>
+      <origin
+        xyz="-0.047375 0.05742 0 "
+        rpy="0 0 0" />
+      <geometry>
+        <!--mesh
+          filename="package://shelf/meshes/base_link.STL" /-->
+         <box size="0.011 0.08324 0.11"/>
       </geometry>
       <material
         name="">
@@ -36,33 +70,35 @@
     </visual>
 
 
+
+
     <!--collision-->
 
 
     <collision>
       <origin
-        xyz="0 0 0.0079"
+        xyz="0 0.0079 0 "
         rpy="0 0 0" />
       <geometry>
-        <box size="0.24 0.167 0.0158"/>
+         <box size="0.24 0.0158 0.167 "/>
       </geometry>
     </collision>
 
     <collision>
       <origin
-        xyz="0.047375 0 0.05742"
+        xyz="0.047375 0.05742 0"
         rpy="0 0 0" />
       <geometry>
-        <box size="0.011 0.11 0.07534"/>
+          <box size="0.011 0.08324 0.11"/>
       </geometry>
     </collision>
 
     <collision>
       <origin
-        xyz="-0.047375 0 0.05742"
+        xyz="-0.047375 0.05742 0 "
         rpy="0 0 0" />
       <geometry>
-        <box size="0.011 0.11 0.07534"/>
+        <box size="0.011 0.08324 0.11"/>
       </geometry>
     </collision>
   </link>
