@@ -440,15 +440,15 @@ class DualFranka(VecTask):
 
         # set axis
         # need look details
-        self.gripper_forward_axis = to_torch([0, 0, 1], device=self.device).repeat((self.num_envs, 1))
+        self.gripper_forward_axis = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
         self.cup_inward_axis = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
-        self.gripper_up_axis = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
+        self.gripper_up_axis = to_torch([0, 0, -1], device=self.device).repeat((self.num_envs, 1))
         self.cup_up_axis = to_torch([0, 1, 0], device=self.device).repeat((self.num_envs, 1))
 
         self.gripper_forward_axis_1 = to_torch([0, 0, 1], device=self.device).repeat((self.num_envs, 1))
         self.spoon_inward_axis = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
         self.gripper_up_axis_1 = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
-        self.spoon_up_axis = to_torch([0, -1, 0], device=self.device).repeat((self.num_envs, 1))
+        self.spoon_up_axis = to_torch([0, 1, 0], device=self.device).repeat((self.num_envs, 1))
 
         # params for calculation
         self.franka_grasp_pos = torch.zeros_like(self.franka_local_grasp_pos)
@@ -1111,9 +1111,9 @@ def compute_franka_reward(
     rewards_step = rewards.clone().detach()
     ## II. reward bonus
     # 1. bonus for take up the cup properly(franka1)
-    rewards = torch.where(cup_positions[:, 1] > 0.44, rewards + 0.5, rewards)
-    rewards = torch.where(cup_positions[:, 1] > 0.5, rewards + around_handle_reward, rewards)
-    rewards = torch.where(cup_positions[:, 1] > 0.6, rewards + (2 * around_handle_reward), rewards)
+    rewards = torch.where(cup_positions[:, 1] > 0.445, rewards + 1.5, rewards)
+    rewards = torch.where(cup_positions[:, 1] > 0.5, rewards + 1.5*around_handle_reward, rewards)
+    rewards = torch.where(cup_positions[:, 1] > 0.6, rewards + (2.5* around_handle_reward), rewards)
     # test args
     take_cup_bonus = rewards - rewards_step
     rewards_step += take_cup_bonus
@@ -1132,22 +1132,22 @@ def compute_franka_reward(
     rewards_step += collision_penalty_bonus
 
     ## 3.lossen gripper penalty(penalty when cup or spoon is taken up but gripper lossen.)
-    rewards=torch.where(cup_positions[:,1]>0.440,torch.where(
+    rewards=torch.where(cup_positions[:,1]>0.445,torch.where(
         (cup_grasp_pos[:, 2])-franka_lfinger_pos_1[:, 2] >0.025,torch.where(
             franka_rfinger_pos_1[:, 2]-cup_grasp_pos[:, 2] >0.025,rewards-0.1,rewards),rewards),rewards)
     cup_penalty_lossen=rewards- rewards_step
     rewards_step += cup_penalty_lossen
 
-    rewards = torch.where(spoon_positions[:, 1] > 0.495, torch.where(
+    rewards = torch.where(spoon_positions[:, 1] > 0.5, torch.where(
         (spoon_grasp_pos[:, 2]) - franka_lfinger_pos[:, 2] > 0.005, torch.where(
             franka_rfinger_pos[:, 2] - spoon_grasp_pos[:, 2] > 0.005, rewards - 0.1, rewards), rewards), rewards)
     spoon_penalty_lossen = rewards - rewards_step
     rewards_step += spoon_penalty_lossen
 
     ## 4. bonus for take up the spoon properly(franka)
-    rewards = torch.where(spoon_positions[:, 1] > 0.495, rewards + 1, rewards)
-    rewards = torch.where(spoon_positions[:, 1] > 0.595, rewards + around_handle_reward_1, rewards)
-    rewards = torch.where(spoon_positions[:, 1] > 0.695, rewards + (2 * around_handle_reward_1), rewards)
+    rewards = torch.where(spoon_positions[:, 1] > 0.5, rewards + 1.5, rewards)
+    rewards = torch.where(spoon_positions[:, 1] > 0.595, rewards + 1.5*around_handle_reward_1, rewards)
+    rewards = torch.where(spoon_positions[:, 1] > 0.695, rewards + (2.5 * around_handle_reward_1), rewards)
     # test args
     take_spoon_bonus = rewards - rewards_step
     rewards_step += take_spoon_bonus
