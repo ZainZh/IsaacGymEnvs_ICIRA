@@ -352,18 +352,14 @@ def control_ik(dpose,jacobian):
 def ee_position_drive(franka, dist:list):
     global manual_drive, now_target
     manual_drive |= 0b10
-    now_target[:, 0,:7] = env.rigid_body_states[:, env.hand_handle][:,:7]
-    now_target[:, 1,:7] = env.rigid_body_states[:, env.hand_handle_1][:,:7]
-    # now_target[:, :, :7] = ee_pose.view(-1,2,7)[...,:7]
+    env.franka_dof_targets[:,:18] = franka_dof.flatten()
+    now_target[:, :, :7] = ee_pose.view(-1,2,7)[...,:7]
     now_target[:, :, -2:] = gripper_dof
     now_target[:, franka,0:3] += torch.tensor(dist, dtype=torch.float, device=env.device)
 
 def get_franka():
-    franka_dof = gymtorch.wrap_tensor(env.gym.acquire_dof_state_tensor(env.sim))[:,0].view(2,-1)
+    franka_dof = env.dof_state[:,0].view(2,-1)
     gripper_dof = franka_dof[:,-2:]
-    # rigid_body_tensor = env.gym.acquire_rigid_body_state_tensor(env.sim)
-    # rigid_body_states = gymtorch.wrap_tensor(rigid_body_tensor).view(env.num_envs, -1, 13)
-    # ee_pose = torch.cat((rigid_body_states[:, env.hand_handle][:,0:7],rigid_body_states[:, env.hand_handle_1][:,0:7]))
     ee_pose = torch.cat((env.rigid_body_states[:, env.hand_handle][:,0:7],env.rigid_body_states[:, env.hand_handle_1][:,0:7]))
     return franka_dof, gripper_dof, ee_pose
 
@@ -626,8 +622,6 @@ if __name__ == "__main__":
                 print('grip err:', left_grip_err, right_grip_err)
                 print('e:', e, e_gripper, 'relative e:',relative_err)
                 torch.set_printoptions(precision=4, sci_mode=False)
-        # else:
-        #     env.pre_physics_step(zero_action.view(env.num_envs,-1))
         
         
         # Step rendering

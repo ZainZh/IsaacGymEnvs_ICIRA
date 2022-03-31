@@ -152,7 +152,7 @@ class DualFranka(VecTask):
         asset_options.flip_visual_attachments = True
         asset_options.fix_base_link = True
         asset_options.collapse_fixed_joints = True
-        asset_options.disable_gravity = False
+        asset_options.disable_gravity = True
         asset_options.armature = 0.01
         asset_options.default_dof_drive_mode = gymapi.DOF_MODE_POS
         asset_options.use_mesh_materials = True
