@@ -39,6 +39,7 @@ write_hdf5data = test_config["DEFAULT"].getboolean('write_hdf5data', False)
 output_hdf5_path = os.path.join(output_path,'hdf5')
 output_hdf5_name = file_time+'.hdf5'
 manual_drive_k = test_config["SIM"].getfloat('manual_drive_k', 0.1)
+auto_error = test_config["SIM"].getfloat('auto_error', 1e-2)
 if target_data_path is None:
     auto_track_pose = False
 if write_hdf5data:
@@ -234,6 +235,8 @@ class DualFrankaTest(DualFranka):
             self.gym.subscribe_viewer_keyboard_event(
                 self.viewer, gymapi.KEY_0, "if_target_track")
             self.gym.subscribe_viewer_keyboard_event(
+                self.viewer, gymapi.KEY_N, "force_next_stage")
+            self.gym.subscribe_viewer_keyboard_event(
                 self.viewer, gymapi.KEY_D, "change_debug")
             # ik ee drive
             self.gym.subscribe_viewer_keyboard_event(
@@ -254,9 +257,12 @@ class DualFrankaTest(DualFranka):
             # set camera view
             self.cam_view_switch(cam_pos[cam_switch])
     
-    def compute_reward(self):
+    def compute_reward(self, action=None):
         # no action penalty in test
-        self.actions=torch.zeros(self.cfg["env"]["numActions"]).to(self.device)
+        if action is None:
+            self.actions=torch.zeros(self.cfg["env"]["numActions"]).to(self.device)
+        else:
+            self.actions=action
         super().compute_reward()
         return self.rew_buf
     
@@ -348,11 +354,16 @@ def ee_position_drive(franka, dist:list):
     manual_drive |= 0b10
     now_target[:, 0,:7] = env.rigid_body_states[:, env.hand_handle][:,:7]
     now_target[:, 1,:7] = env.rigid_body_states[:, env.hand_handle_1][:,:7]
+    # now_target[:, :, :7] = ee_pose.view(-1,2,7)[...,:7]
+    now_target[:, :, -2:] = gripper_dof
     now_target[:, franka,0:3] += torch.tensor(dist, dtype=torch.float, device=env.device)
 
 def get_franka():
     franka_dof = gymtorch.wrap_tensor(env.gym.acquire_dof_state_tensor(env.sim))[:,0].view(2,-1)
     gripper_dof = franka_dof[:,-2:]
+    # rigid_body_tensor = env.gym.acquire_rigid_body_state_tensor(env.sim)
+    # rigid_body_states = gymtorch.wrap_tensor(rigid_body_tensor).view(env.num_envs, -1, 13)
+    # ee_pose = torch.cat((rigid_body_states[:, env.hand_handle][:,0:7],rigid_body_states[:, env.hand_handle_1][:,0:7]))
     ee_pose = torch.cat((env.rigid_body_states[:, env.hand_handle][:,0:7],env.rigid_body_states[:, env.hand_handle_1][:,0:7]))
     return franka_dof, gripper_dof, ee_pose
 
@@ -362,15 +373,19 @@ def reset_env():
     env.reset_idx(torch.arange(env.num_envs, device=env.device))
 
 def ready_to_track():
-    global print_mode, now_stage, target_pose, total_stage, writer, step, reset_flag, track_time
+    global print_mode, now_stage, target_pose, total_stage, writer, step, reset_flag, track_time, prev_err, relative_err
+    # global values
+    prev_err = torch.ones((1,), dtype=torch.float, device=env.device)
+    relative_err = prev_err.clone()
     reset_flag = False
     step = 0
+    # reset track values
     print_mode = 0
     now_stage = 0
     target_pose = load_target_ee(target_data_path).to(env.device)
     total_stage = target_pose.shape[0]
     track_time = time.time()
-    print('Ready to track')
+    print('Start tracking, stage 0')
 
 
 
@@ -403,14 +418,17 @@ if __name__ == "__main__":
             headless=False,
             sim_params=sim_params)
 
-    # inital values
+    # inital global values
     manual_drive = 0b00
+    prev_err = torch.ones((1,), dtype=torch.float, device=env.device)
+    relative_err = prev_err.clone()
     reset_flag = False
     step = 0
     now_target = torch.zeros((env.num_envs,2,9), dtype=torch.float, device=env.device)
     left_action = torch.zeros_like(env.franka_dof_state_1[...,0]).squeeze(-1)   # only need [...,0]->position, 1 for velocity
     right_action = torch.zeros_like(env.franka_dof_state[...,0]).squeeze(-1)
     pos_action = torch.zeros_like(torch.cat((right_action,left_action), dim=0))
+    zero_action = torch.zeros_like(pos_action)
     if auto_track_pose:
         ready_to_track()
     if write_hdf5data:
@@ -463,6 +481,12 @@ if __name__ == "__main__":
                         reset_env()
                         ready_to_track()
                     auto_track_pose = ~auto_track_pose
+                elif evt.action == "force_next_stage":
+                    if auto_track_pose and now_stage < total_stage-1:
+                        now_stage += 1
+                        print('Force jump to next stage', now_stage)
+                    else:
+                        print('Empty key')
                 elif evt.action == "change_debug":
                     if debug_mode == 0:
                         debug_mode = 1
@@ -493,15 +517,15 @@ if __name__ == "__main__":
         # Step the physics
         env.gym.simulate(env.sim)
         env.gym.fetch_results(env.sim, True)
+        
+        # refresh tensors
+        env.gym.refresh_actor_root_state_tensor(env.sim)
+        env.gym.refresh_dof_state_tensor(env.sim)
+        env.gym.refresh_net_contact_force_tensor(env.sim)
+        env.gym.refresh_rigid_body_state_tensor(env.sim)
+        env.gym.refresh_jacobian_tensors(env.sim)
 
         if auto_track_pose or manual_drive&0b10:
-
-            # refresh tensors
-            env.gym.refresh_actor_root_state_tensor(env.sim)
-            env.gym.refresh_dof_state_tensor(env.sim)
-            env.gym.refresh_net_contact_force_tensor(env.sim)
-            env.gym.refresh_rigid_body_state_tensor(env.sim)
-            env.gym.refresh_jacobian_tensors(env.sim)
 
             if write_hdf5data and auto_track_pose:
                 env.compute_observations()
@@ -515,7 +539,7 @@ if __name__ == "__main__":
                     writer.add(obs, action, rew, next_obs, done)
                 # next round
                 obs = next_obs.copy()
-                env.compute_reward()
+                env.compute_reward(action=None)
                 rew = env.rew_buf.clone().view(-1,1).numpy()
 
             ## Calculation here
@@ -561,11 +585,13 @@ if __name__ == "__main__":
 
             # if goal then next target
             e = torch.norm(left_dpose) + torch.norm(right_dpose)
+            relative_err = torch.norm(e-prev_err)
+            prev_err = e.clone()
             e_gripper = torch.norm(left_grip_err) + torch.norm(right_grip_err)
-            if e < norm_err and e_gripper < gripper_err and auto_track_pose:
+            if (e < norm_err or relative_err < auto_error) and (e_gripper < gripper_err and auto_track_pose):
                 now_stage += 1
                 now_time = time.time()
-                if now_stage == total_stage:
+                if now_stage >= total_stage:
                     print('complete all goals',now_time-track_time,'s')
                     auto_track_pose = False
                     print('Stop target tracking')
@@ -594,12 +620,15 @@ if __name__ == "__main__":
                     print('now franka dof:',franka_dof)
 
             ## debug print
-            if debug_mode and step % 80 == 0:
+            if debug_mode and step % 70 == 0:
                 torch.set_printoptions(precision=4, sci_mode=True)
-                print('d err', torch.norm(left_dpose), torch.norm(right_dpose))
-                print('grip err', left_grip_err, right_grip_err)
-                print('e', e, e_gripper)
+                print('d err:', torch.norm(left_dpose), torch.norm(right_dpose))
+                print('grip err:', left_grip_err, right_grip_err)
+                print('e:', e, e_gripper, 'relative e:',relative_err)
                 torch.set_printoptions(precision=4, sci_mode=False)
+        # else:
+        #     env.pre_physics_step(zero_action.view(env.num_envs,-1))
+        
         
         # Step rendering
         env.gym.step_graphics(env.sim)
@@ -608,7 +637,7 @@ if __name__ == "__main__":
 
         # print obs/reward
         step += 1
-        if step % 50 == 0:
+        if step % 70 == 0:
             if print_mode != 0:
                 print_state()
         

@@ -58,6 +58,7 @@ python train.py test=True headless=False checkpoint='runs/DualFrankaCQL/nn/model
 | `C`                     | Switch the view angle                                        |
 | `S`                     | Save the pose status in file.                                |
 | `0`                     | Enable/disable target tracking                               |
+| `N`                     | Force jump to next stage in auto tracking                    |
 | `D`                     | Enable/disable debug info                                    |
 | `UP, DOWN, LEFT, RIGHT` | Drive franka position manually in `xz` plane                 |
 | `[`, `]`                | Drive franka position manually in `y` axis                   |
