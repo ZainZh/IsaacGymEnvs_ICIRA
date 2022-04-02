@@ -1,4 +1,3 @@
-
 from isaacgym import gymapi
 from isaacgym import gymutil
 from isaacgym import gymtorch
@@ -16,15 +15,15 @@ import random
 import numpy as np
 import time
 import os
-from typing import Dict,Tuple,List
+from typing import Dict, Tuple, List
 
 torch.set_printoptions(precision=4, sci_mode=False)
 file_time = time.strftime("%m-%d %H_%M_%S", time.localtime())
 test_config = configparser.ConfigParser()
 test_config.read('test_config.ini')
 franka_cfg_path = test_config['PRESET'].get('franka_cfg_path', './cfg/config.yaml')
-print_mode = test_config['PRESET'].getint('print_mode',0)
-debug_mode = test_config['PRESET'].getint('debug_mode',0)
+print_mode = test_config['PRESET'].getint('print_mode', 0)
+debug_mode = test_config['PRESET'].getint('debug_mode', 0)
 target_data_path = test_config["SIM"].get('target_data_path', None)
 auto_track_pose = test_config["DEFAULT"].getboolean('auto_track_pose', False)
 left_control_k = test_config["SIM"].getfloat('left_control_k', 0.6)
@@ -34,10 +33,10 @@ damping = test_config["SIM"].getfloat('damping', 0.05)
 norm_err = test_config["SIM"].getfloat('norm_err', 1e-2)
 gripper_err = test_config["SIM"].getfloat('gripper_err', 1e-2)
 output_path = test_config['SIM'].get('output_path', './test_save')
-output_name = file_time+'.txt'
+output_name = file_time + '.txt'
 write_hdf5data = test_config["DEFAULT"].getboolean('write_hdf5data', False)
-output_hdf5_path = os.path.join(output_path,'hdf5')
-output_hdf5_name = file_time+'.hdf5'
+output_hdf5_path = os.path.join(output_path, 'hdf5')
+output_hdf5_name = file_time + '.hdf5'
 manual_drive_k = test_config["SIM"].getfloat('manual_drive_k', 0.1)
 auto_error = test_config["SIM"].getfloat('auto_error', 1e-2)
 if target_data_path is None:
@@ -45,44 +44,49 @@ if target_data_path is None:
 if write_hdf5data:
     import h5py
 
-
 ## OmegaConf & Hydra Config
 # Resolvers used in hydra configs (see https://omegaconf.readthedocs.io/en/2.1_branch/usage.html#resolvers)
-OmegaConf.register_new_resolver('eq', lambda x, y: x.lower()==y.lower())
+OmegaConf.register_new_resolver('eq', lambda x, y: x.lower() == y.lower())
 OmegaConf.register_new_resolver('contains', lambda x, y: x.lower() in y.lower())
 OmegaConf.register_new_resolver('if', lambda pred, a, b: a if pred else b)
 # allows us to resolve default arguments which are copied in multiple places in the config. used primarily for num_ensv
-OmegaConf.register_new_resolver('resolve_default', lambda default, arg: default if arg=='' else arg)
+OmegaConf.register_new_resolver('resolve_default', lambda default, arg: default if arg == '' else arg)
 
 # global test args
 args = gymutil.parse_arguments(description="Franka Tensor OSC Example",
-                                custom_parameters=[
-                                    {"name": "--num_envs", "type": int, "default": 1, "help": "Number of environments to create"},
-                                    {"name": "--pos_control", "type": gymutil.parse_bool, "const": True, "default": True, "help": "Trace circular path in XZ plane"},
-                                    {"name": "--orn_control", "type": gymutil.parse_bool, "const": True, "default": False, "help": "Send random orientation commands"}])
+                               custom_parameters=[
+                                   {"name": "--num_envs", "type": int, "default": 1,
+                                    "help": "Number of environments to create"},
+                                   {"name": "--pos_control", "type": gymutil.parse_bool, "const": True, "default": True,
+                                    "help": "Trace circular path in XZ plane"},
+                                   {"name": "--orn_control", "type": gymutil.parse_bool, "const": True,
+                                    "default": False, "help": "Send random orientation commands"}])
+
+
 # self define functions
-def myparser(args,cfg_path):
-    temp=OmegaConf.load(cfg_path)
-    args=vars(args)
-    res=list()
-    for key,value in args.items():
+def myparser(args, cfg_path):
+    temp = OmegaConf.load(cfg_path)
+    args = vars(args)
+    res = list()
+    for key, value in args.items():
         if key not in temp.keys():
             pass
         else:
             if key == 'physics_engine':
                 res.append('physics_engine=physx')
             else:
-                res.append(str(key)+'='+str(value))
-    res.append('pipeline=None')     # force pipeline=None 
-    res.append('task=DualFranka')     
+                res.append(str(key) + '=' + str(value))
+    res.append('pipeline=None')  # force pipeline=None
+    res.append('task=DualFranka')
     return res
+
 
 def get_cfg(path):
     # override
-    res=myparser(args,path)
+    res = myparser(args, path)
     from hydra import compose, initialize
     initialize(config_path="cfg")
-    cfg = compose(config_name="config",overrides=res)
+    cfg = compose(config_name="config", overrides=res)
 
     # ensure checkpoints can be specified as relative paths
     if cfg.checkpoint:
@@ -98,31 +102,33 @@ def get_cfg(path):
     cfg.seed = set_seed(cfg.seed, torch_deterministic=cfg.torch_deterministic)
 
     # add all other args that do not override
-    cfg=dict(cfg)
+    cfg = dict(cfg)
     cfg.update(vars(args))
     cfg = argparse.Namespace(**cfg)
 
     return cfg
 
+
 def save(path, name, data):
     # save pose to do ik
     os.makedirs(path, exist_ok=True)
-    file_path = os.path.join(path,name)
+    file_path = os.path.join(path, name)
     if not os.path.exists(file_path):
         os.system(r"touch {}".format(path))
-    with open(file_path, encoding="utf-8",mode="a") as file:  
+    with open(file_path, encoding="utf-8", mode="a") as file:
         file.write(str(data))
-    print('save success to',name)
+    print('save success to', name)
+
 
 def load_target_ee(filepath):
     # read target ee
     with open(filepath, "r") as f:
         txtdata = f.read()
     import re
-    x=txtdata.split("]")
-    res=[]
+    x = txtdata.split("]")
+    res = []
     for i in x:
-        tmp=re.findall(r"-?\d+\.?\d*", i)
+        tmp = re.findall(r"-?\d+\.?\d*", i)
         if len(tmp) == 9:
             res.append(tmp)
         elif len(tmp) == 0:
@@ -132,84 +138,94 @@ def load_target_ee(filepath):
     if len(res) % 2:
         raise Exception('data format error')
 
-    target=np.array(res).astype(float).reshape(-1,2,9)
-    
+    target = np.array(res).astype(float).reshape(-1, 2, 9)
+
     return torch.from_numpy(target).float()
 
-def parse_reward_detail(dictobj:Dict):
-    for k,v in dictobj.items():
-        for k1,v1 in v.items():
-            if isinstance(v1,tuple):
+
+def parse_reward_detail(dictobj: Dict):
+    for k, v in dictobj.items():
+        for k1, v1 in v.items():
+            if isinstance(v1, tuple):
                 new_list = list()
                 for obj in v1:
-                    if isinstance(obj,torch.Tensor):
-                        new_list.append(obj.tolist()[0] if obj.shape==1 else obj.tolist())
+                    if isinstance(obj, torch.Tensor):
+                        new_list.append(obj.tolist()[0] if obj.shape == 1 else obj.tolist())
                     else:
                         new_list.append(obj)
                 dictobj[k][k1] = tuple(new_list)
-            elif isinstance(v1,torch.Tensor):
-                dictobj[k][k1] = v1.tolist()[0] if v1.shape==1 else v1.tolist()
+            elif isinstance(v1, torch.Tensor):
+                dictobj[k][k1] = v1.tolist()[0] if v1.shape == 1 else v1.tolist()
 
     return dictobj
+
 
 def print_detail_clearly(dictobj):
     print('rew_details')
     obj = parse_reward_detail(dictobj)
-    for k,v in obj.items():
+    for k, v in obj.items():
         print_highlight(k)
-        if isinstance(v,Dict):
+        if isinstance(v, Dict):
             findoprint(v)
         else:
-            print(str(k)+": "+str(v))
-    
+            print(str(k) + ": " + str(v))
+
+
 def findoprint(dictobj):
-    for k,v in dictobj.items():
-        if isinstance(v,Dict):
+    for k, v in dictobj.items():
+        if isinstance(v, Dict):
             findoprint(v)
         else:
-            print(str(k)+": "+str(v))
+            print(str(k) + ": " + str(v))
+
 
 def print_highlight(*args):
     msg = ''
     for k in args:
-        msg += str(k)+' '
-    print("\033[1;32m"+msg+"\033[0m")
+        msg += str(k) + ' '
+    print("\033[1;32m" + msg + "\033[0m")
+
 
 total_print_mode = 3
+
+
 def print_state(if_all=False):
-    if print_mode >= 1 or if_all==True:
+    if print_mode >= 1 or if_all == True:
         print('actions', pos_action.numpy())
         print('franka_dof', franka_dof)
-        print('ee_pose&gripper',torch.cat((ee_pose,gripper_dof), dim=1))
-        print('obs-',env.compute_observations())
-        print('rew-',env.compute_reward())
-    
-    if print_mode >= 2 or if_all==True:
+        print('ee_pose&gripper', torch.cat((ee_pose, gripper_dof), dim=1))
+        print('obs-', env.compute_observations())
+        print('rew-', env.compute_reward())
+
+    if print_mode >= 2 or if_all == True:
         print_detail_clearly(env.reward_dict)
 
     # print reset env_ids
-    if print_mode >= 1 or if_all==True:
+    if print_mode >= 1 or if_all == True:
         check_reset()
-        
+
+
 def check_reset():
     env_ids = env.reset_buf.nonzero(as_tuple=False).squeeze(-1)
     if env_ids.shape[0] != 0:
-        print_highlight('trigger reset:',env_ids.numpy())
+        print_highlight('trigger reset:', env_ids.numpy())
         return True
     return False
-    
+
+
 # camera pos
 cam_switch = 0
 cam_pos = [
-    [[0.66, 0.75, 1.20],[-2.80, -0.83, -3.14]], # from RF
-    [[0.66, 0.75, -1.20],[-2.80, -0.83, 3.14]], # from LF
-    [[-1.77, 0.81, -0.17],[3.14, -0.80, -0.7]], # from behind
+    [[0.66, 0.75, 1.20], [-2.80, -0.83, -3.14]],  # from RF
+    [[0.66, 0.75, -1.20], [-2.80, -0.83, 3.14]],  # from LF
+    [[-1.77, 0.81, -0.17], [3.14, -0.80, -0.7]],  # from behind
 ]
+
 
 # DualFranka class for test
 class DualFrankaTest(DualFranka):
-    def __init__(self, cfg, sim_device, graphics_device_id, headless,sim_params):
-        self.sim_params=sim_params
+    def __init__(self, cfg, sim_device, graphics_device_id, headless, sim_params):
+        self.sim_params = sim_params
         super().__init__(cfg, sim_device, graphics_device_id, headless)
 
     def set_viewer(self):
@@ -256,23 +272,24 @@ class DualFrankaTest(DualFranka):
 
             # set camera view
             self.cam_view_switch(cam_pos[cam_switch])
-    
+
     def compute_reward(self, action=None):
         # no action penalty in test
         if action is None:
-            self.actions=torch.zeros(self.cfg["env"]["numActions"]).to(self.device)
+            self.actions = torch.zeros(self.cfg["env"]["numActions"]).to(self.device)
         else:
-            self.actions=action
+            self.actions = action
         super().compute_reward()
         return self.rew_buf
-    
-    def cam_view_switch(self,vec):
+
+    def cam_view_switch(self, vec):
         # Point camera at middle env
         num_per_row = int(math.sqrt(self.num_envs))
         cam_pos = gymapi.Vec3(*vec[0])
         cam_target = gymapi.Vec3(*vec[1])
         middle_env = self.envs[self.num_envs // 2 + num_per_row // 2]
         self.gym.viewer_camera_look_at(self.viewer, middle_env, cam_pos, cam_target)
+
 
 class HDF5DatasetWriter():
     def __init__(self, outputPath, bufSize=1000, maxSize=None):
@@ -282,27 +299,27 @@ class HDF5DatasetWriter():
 
         # 构建两种数据，一种用来存储图像特征一种用来存储标签
         self.db = h5py.File(outputPath, "w")
-        self.actions = self.db.create_dataset('actions', (1,18), maxshape=(maxSize, 18),dtype="float")
-        self.observations = self.db.create_dataset('observations', (1,42), maxshape=(maxSize, 42), dtype="float")
-        self.next_observations = self.db.create_dataset('next_observations', (1,42), maxshape=(maxSize, 42), dtype="float")
-        self.rewards = self.db.create_dataset('rewards', (1,1), maxshape=(maxSize, 1), dtype="float")
-        self.dones = self.db.create_dataset("dones", (1,1), maxshape=(maxSize, 1), dtype="i8")
+        self.actions = self.db.create_dataset('actions', (1, 18), maxshape=(maxSize, 18), dtype="float")
+        self.observations = self.db.create_dataset('observations', (1, 42), maxshape=(maxSize, 42), dtype="float")
+        self.next_observations = self.db.create_dataset('next_observations', (1, 42), maxshape=(maxSize, 42),
+                                                        dtype="float")
+        self.rewards = self.db.create_dataset('rewards', (1, 1), maxshape=(maxSize, 1), dtype="float")
+        self.dones = self.db.create_dataset("dones", (1, 1), maxshape=(maxSize, 1), dtype="i8")
 
         # 设置buffer大小，并初始化buffer
         self.bufSize = bufSize
         self.buffer = {"actions": [], "observations": [],
                        "next_observations": [], "rewards": [],
                        "dones": [], }
-        self.idx = 0   # 用来进行计数
+        self.idx = 0  # 用来进行计数
 
-    
     def add(self, obs, action, reward, next_obs, done):
         self.buffer["actions"].extend(action)
         self.buffer["observations"].extend(obs)
         self.buffer["next_observations"].extend(next_obs)
         self.buffer["rewards"].extend(reward)
         self.buffer["dones"].extend(done)
-        
+
         # 查看是否需要将缓冲区的数据添加到磁盘中
         if len(self.buffer["actions"]) >= self.bufSize:
             self.flush()
@@ -311,11 +328,11 @@ class HDF5DatasetWriter():
         # 将buffer中的内容写入磁盘之后重置buffer
         i = self.idx + len(self.buffer["actions"])
         if i >= len(self.actions):
-            self.actions.resize((i,18))
-            self.observations.resize((i,42))
-            self.next_observations.resize((i,42))
-            self.rewards.resize((i,1))
-            self.dones.resize((i,1))
+            self.actions.resize((i, 18))
+            self.observations.resize((i, 42))
+            self.next_observations.resize((i, 42))
+            self.rewards.resize((i, 1))
+            self.dones.resize((i, 1))
         self.actions[self.idx:i] = self.buffer["actions"]
         self.observations[self.idx:i] = self.buffer["observations"]
         self.next_observations[self.idx:i] = self.buffer["next_observations"]
@@ -329,33 +346,35 @@ class HDF5DatasetWriter():
     def close(self):
         if len(self.buffer["actions"]) > 0:  # 查看是否缓冲区中还有数据
             self.flush()
-        print('total length:',len(self.actions))
+        print('total length:', len(self.actions))
         self.db.close()
         print('hdf5 save success')
-
 
 
 # calculation
 def orientation_error(desired, current):
     cc = quat_conjugate(current)
     q_r = quat_mul(desired, cc)
-    return q_r[:, 0:3] * torch.sign(q_r[:, 3]).unsqueeze(-1)    
+    return q_r[:, 0:3] * torch.sign(q_r[:, 3]).unsqueeze(-1)
 
 
-def control_ik(dpose,jacobian):
+def control_ik(dpose, jacobian):
     # solve damped least squares
     j_eef_T = torch.transpose(jacobian, 1, 2)
     lmbda = torch.eye(6, device=env.device) * (damping ** 2)
     u = (j_eef_T @ torch.inverse(jacobian @ j_eef_T + lmbda) @ dpose).view(env.num_envs, 7)
     return u
 
-def ee_position_drive(franka, dist:list):
+
+def ee_position_drive(franka, dist: list):
     global manual_drive, now_target
     manual_drive |= 0b10
     env.franka_dof_targets[:,:18] = franka_dof.flatten()
     now_target[:, :, :7] = ee_pose.view(-1,2,7)[...,:7]
     now_target[:, :, -2:] = gripper_dof
-    now_target[:, franka,0:3] += torch.tensor(dist, dtype=torch.float, device=env.device)
+    now_target[:, franka, 0:3] += torch.tensor(dist, dtype=torch.float, device=env.device)
+    # env.gym.set_rigid_body_state_tensor(env.sim, gymtorch.unwrap_tensor(now_target))
+
 
 def get_franka():
     franka_dof = env.dof_state[:,0].view(2,-1)
@@ -363,10 +382,12 @@ def get_franka():
     ee_pose = torch.cat((env.rigid_body_states[:, env.hand_handle][:,0:7],env.rigid_body_states[:, env.hand_handle_1][:,0:7]))
     return franka_dof, gripper_dof, ee_pose
 
+
 def reset_env():
     # need to disable pose override in viewer
     print('Reset env')
     env.reset_idx(torch.arange(env.num_envs, device=env.device))
+
 
 def ready_to_track():
     global print_mode, now_stage, target_pose, total_stage, writer, step, reset_flag, track_time, prev_err, relative_err
@@ -384,12 +405,9 @@ def ready_to_track():
     print('Start tracking, stage 0')
 
 
-
-
-
 if __name__ == "__main__":
     # parse from default config
-    cfg=get_cfg(franka_cfg_path)
+    cfg = get_cfg(franka_cfg_path)
 
     sim_params = gymapi.SimParams()
     sim_params.up_axis = gymapi.UP_AXIS_Y
@@ -408,11 +426,11 @@ if __name__ == "__main__":
 
     sim_params.use_gpu_pipeline = False
 
-    env=DualFrankaTest(cfg=omegaconf_to_dict(cfg.task),
-            sim_device=cfg.sim_device,
-            graphics_device_id=cfg.graphics_device_id,
-            headless=False,
-            sim_params=sim_params)
+    env = DualFrankaTest(cfg=omegaconf_to_dict(cfg.task),
+                         sim_device=cfg.sim_device,
+                         graphics_device_id=cfg.graphics_device_id,
+                         headless=False,
+                         sim_params=sim_params)
 
     # inital global values
     manual_drive = 0b00
@@ -420,21 +438,22 @@ if __name__ == "__main__":
     relative_err = prev_err.clone()
     reset_flag = False
     step = 0
-    now_target = torch.zeros((env.num_envs,2,9), dtype=torch.float, device=env.device)
-    left_action = torch.zeros_like(env.franka_dof_state_1[...,0]).squeeze(-1)   # only need [...,0]->position, 1 for velocity
-    right_action = torch.zeros_like(env.franka_dof_state[...,0]).squeeze(-1)
-    pos_action = torch.zeros_like(torch.cat((right_action,left_action), dim=0))
+    now_target = torch.zeros((env.num_envs, 2, 9), dtype=torch.float, device=env.device)
+    left_action = torch.zeros_like(env.franka_dof_state_1[..., 0]).squeeze(
+        -1)  # only need [...,0]->position, 1 for velocity
+    right_action = torch.zeros_like(env.franka_dof_state[..., 0]).squeeze(-1)
+    pos_action = torch.zeros_like(torch.cat((right_action, left_action), dim=0))
     zero_action = torch.zeros_like(pos_action)
     if auto_track_pose:
         ready_to_track()
     if write_hdf5data:
         # init writer once
         os.makedirs(output_hdf5_path, exist_ok=True)
-        path = os.path.join(output_hdf5_path,output_hdf5_name)
+        path = os.path.join(output_hdf5_path, output_hdf5_name)
         writer = HDF5DatasetWriter(outputPath=path, bufSize=1000)
 
     while not env.gym.query_viewer_has_closed(env.viewer):
-        
+
         franka_dof, gripper_dof, ee_pose = get_franka()
         # Get input actions from the viewer and handle them appropriately
         for evt in env.gym.query_viewer_action_events(env.viewer):
@@ -448,10 +467,10 @@ if __name__ == "__main__":
                     env.gym.refresh_rigid_body_state_tensor(env.sim)
                     env.gym.refresh_jacobian_tensors(env.sim)
                     franka_dof, gripper_dof, ee_pose = get_franka()
-                    save_data = torch.cat((ee_pose,gripper_dof), dim=1)
+                    save_data = torch.cat((ee_pose, gripper_dof), dim=1)
                     # print dof,pose detail
                     print('franka_dof', franka_dof)
-                    print('save: ee_pose&gripper',save_data)
+                    print('save: ee_pose&gripper', save_data)
                     # save to file
                     save(output_path, output_name, save_data)
                 elif evt.action == "change_print_state":
@@ -461,7 +480,7 @@ if __name__ == "__main__":
                         print("Stop printing")
                         print_mode = 0
                 elif evt.action == "print_once":
-                    print("Print once",random.randint(0,100))
+                    print("Print once", random.randint(0, 100))
                     print_state(if_all=True)
                 elif evt.action == "switch_cam_view":
                     print("Switch view")
@@ -478,7 +497,7 @@ if __name__ == "__main__":
                         ready_to_track()
                     auto_track_pose = ~auto_track_pose
                 elif evt.action == "force_next_stage":
-                    if auto_track_pose and now_stage < total_stage-1:
+                    if auto_track_pose and now_stage < total_stage - 1:
                         now_stage += 1
                         print('Force jump to next stage', now_stage)
                     else:
@@ -491,29 +510,29 @@ if __name__ == "__main__":
                         debug_mode = 0
                         print('Disable debug mode')
                 elif evt.action == "switch_franka":
-                    if manual_drive&1:
+                    if manual_drive & 1:
                         manual_drive &= 0b10
                         print('Drive right franka')
                     else:
                         manual_drive |= 0b01
                         print('Drive left franka')
                 elif evt.action == "drive_xminus":
-                    ee_position_drive(manual_drive&0b01, dist=[-manual_drive_k, 0, 0])
+                    ee_position_drive(manual_drive & 0b01, dist=[-manual_drive_k, 0, 0])
                 elif evt.action == "drive_xplus":
-                    ee_position_drive(manual_drive&0b01, dist=[manual_drive_k, 0, 0])
+                    ee_position_drive(manual_drive & 0b01, dist=[manual_drive_k, 0, 0])
                 elif evt.action == "drive_yminus":
-                    ee_position_drive(manual_drive&0b01, dist=[0, -manual_drive_k, 0])
+                    ee_position_drive(manual_drive & 0b01, dist=[0, -manual_drive_k, 0])
                 elif evt.action == "drive_yplus":
-                    ee_position_drive(manual_drive&0b01, dist=[0, manual_drive_k, 0])
+                    ee_position_drive(manual_drive & 0b01, dist=[0, manual_drive_k, 0])
                 elif evt.action == "drive_zminus":
-                    ee_position_drive(manual_drive&0b01, dist=[0, 0, -manual_drive_k])
+                    ee_position_drive(manual_drive & 0b01, dist=[0, 0, -manual_drive_k])
                 elif evt.action == "drive_zplus":
-                    ee_position_drive(manual_drive&0b01, dist=[0, 0, manual_drive_k])
-        
+                    ee_position_drive(manual_drive & 0b01, dist=[0, 0, manual_drive_k])
+
         # Step the physics
         env.gym.simulate(env.sim)
         env.gym.fetch_results(env.sim, True)
-        
+
         # refresh tensors
         env.gym.refresh_actor_root_state_tensor(env.sim)
         env.gym.refresh_dof_state_tensor(env.sim)
@@ -521,13 +540,13 @@ if __name__ == "__main__":
         env.gym.refresh_rigid_body_state_tensor(env.sim)
         env.gym.refresh_jacobian_tensors(env.sim)
 
-        if auto_track_pose or manual_drive&0b10:
+        if auto_track_pose or manual_drive & 0b10:
 
             if write_hdf5data and auto_track_pose:
                 env.compute_observations()
                 # save after get next_obs
-                next_obs = env.obs_buf.clone().view(-1,42).numpy()
-                action = pos_action.clone().view(-1,18).numpy()
+                next_obs = env.obs_buf.clone().view(-1, 42).numpy()
+                action = pos_action.clone().view(-1, 18).numpy()
                 # TODO: here calculate done
                 done = np.array([[0]], dtype='i8')
                 if step > 0:
@@ -536,7 +555,7 @@ if __name__ == "__main__":
                 # next round
                 obs = next_obs.copy()
                 env.compute_reward(action=None)
-                rew = env.rew_buf.clone().view(-1,1).numpy()
+                rew = env.rew_buf.clone().view(-1, 1).numpy()
 
             ## Calculation here
             # get jacobian tensor
@@ -549,25 +568,27 @@ if __name__ == "__main__":
             # get link index of panda hand, which we will use as end effector
             # franka_link_dict = env.gym.get_asset_rigid_body_dict(franka_asset)
             # franka_hand_index = franka_link_dict["panda_hand"]
-            franka_hand_index = 8   # just set to 8 instead
+            franka_hand_index = 8  # just set to 8 instead
 
             # jacobian entries corresponding to franka hand
             j_eef_left = jacobian_left[:, franka_hand_index - 1, :, :7]
             j_eef_right = jacobian_right[:, franka_hand_index - 1, :, :7]
+            # print('j_eef_left: {}'.format(j_eef_left))
+            # print('j_eef_right: {}'.format(j_eef_right))
 
             # decide goal(target)
             if auto_track_pose:
-                now_target = target_pose[now_stage, ...].unsqueeze(0).repeat(env.num_envs,1,1)
+                now_target = target_pose[now_stage, ...].unsqueeze(0).repeat(env.num_envs, 1, 1)
 
             left_hand_pos = env.rigid_body_states[:, env.hand_handle_1][:, 0:3]
-            left_goal_pos = now_target[:,1, 0:3]
+            left_goal_pos = now_target[:, 1, 0:3]
             left_hand_rot = env.rigid_body_states[:, env.hand_handle_1][:, 3:7]
-            left_goal_rot = now_target[:,1, 3:7]
-            
+            left_goal_rot = now_target[:, 1, 3:7]
+
             right_hand_pos = env.rigid_body_states[:, env.hand_handle][:, 0:3]
-            right_goal_pos = now_target[:,0, 0:3]
+            right_goal_pos = now_target[:, 0, 0:3]
             right_hand_rot = env.rigid_body_states[:, env.hand_handle][:, 3:7]
-            right_goal_rot = now_target[:,0, 3:7]
+            right_goal_rot = now_target[:, 0, 3:7]
 
             # compute position and orientation error
             left_pos_err = left_goal_pos - left_hand_pos
@@ -581,39 +602,40 @@ if __name__ == "__main__":
 
             # if goal then next target
             e = torch.norm(left_dpose) + torch.norm(right_dpose)
-            relative_err = torch.norm(e-prev_err)
+            relative_err = torch.norm(e - prev_err)
             prev_err = e.clone()
             e_gripper = torch.norm(left_grip_err) + torch.norm(right_grip_err)
             if (e < norm_err or relative_err < auto_error) and (e_gripper < gripper_err and auto_track_pose):
                 now_stage += 1
                 now_time = time.time()
                 if now_stage >= total_stage:
-                    print('complete all goals',now_time-track_time,'s')
+                    print('complete all goals', now_time - track_time, 's')
                     auto_track_pose = False
                     print('Stop target tracking')
                     if write_hdf5data:
                         writer.flush()
                         print('now total steps saved:', writer.idx)
                 else:
-                    print_highlight('Stage',now_stage,'Step',step, round(now_time-track_time,4),'s')
+                    print_highlight('Stage', now_stage, 'Step', step, round(now_time - track_time, 4), 's')
 
             # body ik, relative control
-            left_action[:, :7] = left_control_k * control_ik(left_dpose,j_eef_left)
-            right_action[:, :7] = right_control_k * control_ik(right_dpose,j_eef_right)
+            left_action[:, :7] = left_control_k * control_ik(left_dpose, j_eef_left)
+            right_action[:, :7] = right_control_k * control_ik(right_dpose, j_eef_right)
             # gripper actions
             left_action[:, 7:9] = gripper_control_k * left_grip_err
             right_action[:, 7:9] = gripper_control_k * right_grip_err
             # merge two franka
-            pos_action = torch.cat((right_action,left_action), dim=0)
+            pos_action = torch.cat((right_action, left_action), dim=0)
+            # print(pos_action)
 
             # Deploy actions
-            env.pre_physics_step(pos_action.view(env.num_envs,-1))
+            env.pre_physics_step(pos_action.view(env.num_envs, -1))
 
             # check if trigger reset
             if not reset_flag:
                 if check_reset():
                     reset_flag = True
-                    print('now franka dof:',franka_dof)
+                    print('now franka dof:', franka_dof)
 
             ## debug print
             if debug_mode and step % 70 == 0:
@@ -634,12 +656,11 @@ if __name__ == "__main__":
         if step % 70 == 0:
             if print_mode != 0:
                 print_state()
-        
+
         manual_drive &= 0b01
-    
+
     print("Done")
     if write_hdf5data:
         writer.close()
     env.gym.destroy_viewer(env.viewer)
     env.gym.destroy_sim(env.sim)
-
