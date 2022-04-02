@@ -265,7 +265,7 @@ class DualFranka(VecTask):
 
         cup_pose.p.y = 0.44
         cup_pose.p.z = -0.29
-        cup_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)
+        cup_pose.r = gymapi.Quat(0.0, -0.287, 0.0, 0.95793058)
 
         box_pose = gymapi.Transform()
         box_pose.p.x = table_pose.p.x - 0.3
@@ -575,7 +575,8 @@ class DualFranka(VecTask):
         self.cup_positions[env_ids, 1] = 0.44
         self.cup_positions[env_ids, 2] = -0.29
         self.cup_orientations[env_ids, 0:3] = 0.0
-        self.cup_orientations[env_ids, 3] = 1.0
+        self.cup_orientations[env_ids, 1] = -0.287
+        self.cup_orientations[env_ids, 3] = 0.95793058
         self.cup_linvels[env_ids] = 0.0
         self.cup_angvels[env_ids] = 0.0
 
@@ -660,7 +661,8 @@ class DualFranka(VecTask):
         self.cup_positions[env_ids, 1] = 0.44
         self.cup_positions[env_ids, 2] = -0.29
         self.cup_orientations[env_ids, 0:3] = 0.0
-        self.cup_orientations[env_ids, 3] = 1.0
+        self.cup_orientations[env_ids, 1] = -0.287
+        self.cup_orientations[env_ids, 3] = 0.95793058
         self.cup_linvels[env_ids] = 0.0
         self.cup_angvels[env_ids] = 0.0
 
@@ -744,7 +746,8 @@ class DualFranka(VecTask):
         self.cup_positions[env_ids, 1] = 0.44
         self.cup_positions[env_ids, 2] = -0.29
         self.cup_orientations[env_ids, 0:3] = 0.0
-        self.cup_orientations[env_ids, 3] = 1.0
+        self.cup_orientations[env_ids, 1] = -0.287
+        self.cup_orientations[env_ids, 3] = 0.95793058
         self.cup_linvels[env_ids] = 0.0
         self.cup_angvels[env_ids] = 0.0
 
