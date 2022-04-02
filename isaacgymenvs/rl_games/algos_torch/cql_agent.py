@@ -241,7 +241,7 @@ class CQLAgent(BaseAlgorithm):
             self.alpha_prime_optimizer.load_state_dict(weights['alpha_prime_optimizer'])
 
     def restore(self, fn):
-        checkpoint = torch_ext.load_checkpoint(fn)
+        checkpoint = torch_ext.load_checkpoint(fn, map_location=self.device)
         self.set_full_state_weights(checkpoint)
 
     def get_masked_action_values(self, obs, action_masks):
@@ -642,6 +642,12 @@ class CQLAgent(BaseAlgorithm):
                     print('MAX EPOCHS NUM!')
                     return self.last_mean_rewards, self.epoch_num
                 update_time = 0
+
+                if self.epoch_num % 200 == 0 and self.epoch_num > 10:
+                    self.save(
+                        self.nn_dir + '/backup/' + self.config['name'] + 'ep=' + str(self.epoch_num) + 'rew=' + str(
+                            mean_rewards))
+                    print('model backup save')
 
     # copy from CQL
     def _get_policy_actions(self, obs, num_actions, network=None):

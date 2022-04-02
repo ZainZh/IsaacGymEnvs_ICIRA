@@ -65,16 +65,16 @@ def safe_filesystem_op(func, *args, **kwargs):
 def safe_save(state, filename):
     return safe_filesystem_op(torch.save, state, filename)
 
-def safe_load(filename):
-    return safe_filesystem_op(torch.load, filename)
+def safe_load(filename,*args):
+    return safe_filesystem_op(torch.load, filename,*args)
 
 def save_checkpoint(filename, state):
     print("=> saving checkpoint '{}'".format(filename + '.pth'))
     safe_save(state, filename + '.pth')
 
-def load_checkpoint(filename):
+def load_checkpoint(filename,*args):
     print("=> loading checkpoint '{}'".format(filename))
-    state = safe_load(filename)
+    state = safe_load(filename,*args)
     return state
 
 def parameterized_truncated_normal(uniform, mu, sigma, a, b):
