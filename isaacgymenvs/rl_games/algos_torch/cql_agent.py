@@ -15,15 +15,18 @@ import numpy as np
 import time
 import os
 
+
 # copied from SACAgent
 class CQLAgent(BaseAlgorithm):
     def __init__(self, base_name, params):
         self.config = config = params['config']
+        print('----------------------------------')
         print(config)
+        print('----------------------------------')
         # TODO: Get obs shape and self.network
         self.load_networks(params)
         self.base_init(base_name, config)
-        self.num_seed_steps = config["num_seed_steps"]
+        self.num_seed_steps = config["num_seed_steps"]  # random explore
         self.gamma = config["gamma"]
         self.critic_tau = config["critic_tau"]
         self.batch_size = config["batch_size"]
@@ -31,12 +34,14 @@ class CQLAgent(BaseAlgorithm):
         self.learnable_temperature = config["learnable_temperature"]
         self.replay_buffer_size = config["replay_buffer_size"]
         self.replay_buffer_path = config["replay_buffer_path"]
-        self.num_steps_per_episode = config.get("num_steps_per_episode", 1)
+        self.num_steps_per_episode = config.get("num_steps_per_episode", 1000)
         self.normalize_input = config.get("normalize_input", False)
 
         self.max_env_steps = config.get("max_env_steps", 1000)  # temporary, in future we will use other approach
 
-        print('batch_size,num_actor,num_agent', self.batch_size, self.num_actors, self.num_agents)
+        print('explore_steps: {}, batch_size: {}, num_actor: {}, num_agent: {}'.format(self.num_seed_steps,
+                                                                                       self.batch_size, self.num_actors,
+                                                                                       self.num_agents))
 
         self.num_frames_per_epoch = self.num_actors * self.num_steps_per_episode
 
@@ -61,8 +66,6 @@ class CQLAgent(BaseAlgorithm):
         }
         self.model = self.network.build(net_config)
         self.model.to(self.sac_device)
-
-        print("Number of Agents", self.num_actors, "Batch Size", self.batch_size)
 
         self.actor_optimizer = torch.optim.Adam(self.model.sac_network.actor.parameters(),
                                                 lr=self.config['actor_lr'],
@@ -122,10 +125,9 @@ class CQLAgent(BaseAlgorithm):
             self.env_info = self.vec_env.get_env_info()
 
         self.sac_device = config.get('device', 'cuda:0')
-        # temporary:
         self.ppo_device = self.sac_device
-        print('Env info:')
-        print(self.env_info)
+        # temporary:
+        print('Env info: {}'.format(self.env_info))
 
         # self.rewards_shaper = config['reward_shaper']
         self.observation_space = self.env_info['observation_space']
@@ -136,7 +138,8 @@ class CQLAgent(BaseAlgorithm):
         self.c_loss = nn.MSELoss()
         # self.c2_loss = nn.SmoothL1Loss()
 
-        self.save_best_after = config.get('save_best_after', 200)
+        self.save_best_after = config.get('save_best_after', 500)
+        print('save_best_after: {}'.format(self.save_best_after))
         self.print_stats = config.get('print_stats', True)
         self.rnn_states = None
         self.name = base_name
@@ -171,6 +174,8 @@ class CQLAgent(BaseAlgorithm):
         os.makedirs(self.train_dir, exist_ok=True)
         os.makedirs(self.experiment_dir, exist_ok=True)
         os.makedirs(self.nn_dir, exist_ok=True)
+        self.checkpoint_dir = os.path.join(self.nn_dir, file_time)
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
 
         self.writer = SummaryWriter(self.experiment_dir + '/summaries/' + file_time)
         print("Run Directory:", self.experiment_dir + '/summaries/' + file_time)
@@ -208,7 +213,7 @@ class CQLAgent(BaseAlgorithm):
         state['critic_optimizer'] = self.critic_optimizer.state_dict()
         state['log_alpha_optimizer'] = self.log_alpha_optimizer.state_dict()
         if self.with_lagrange:
-            state['alpha_prime_optimizer'] =self.alpha_prime_optimizer.state_dict()
+            state['alpha_prime_optimizer'] = self.alpha_prime_optimizer.state_dict()
 
         return state
 
@@ -560,7 +565,7 @@ class CQLAgent(BaseAlgorithm):
         # rep_count = 0
         self.frame = 0
         self.obs = self.env_reset()
-        print('Start training')  # add hint
+        print('\033[1;33mStart training\033[0m')  # add hint
 
         while True:
             self.epoch_num += 1
@@ -576,7 +581,6 @@ class CQLAgent(BaseAlgorithm):
             curr_frames = self.num_frames_per_epoch
             self.frame += curr_frames
             frame = self.frame  # TODO: Fix frame
-            # print(frame)
 
             if self.print_stats:
                 fps_step = curr_frames / scaled_play_time
@@ -610,13 +614,14 @@ class CQLAgent(BaseAlgorithm):
 
             self.writer.add_scalar('info/epochs', self.epoch_num, frame)
             self.algo_observer.after_print_stats(frame, self.epoch_num, total_time)
-            # print('Current rewards: {}'.format(self.current_rewards))
 
             if self.game_rewards.current_size > 0:
-                print('Current length: {}'.format(self.current_lengths))
-                print('Current rewards: {}'.format(self.current_rewards/self.current_lengths))
                 mean_rewards = self.game_rewards.get_mean()
                 mean_lengths = self.game_lengths.get_mean()
+
+                print('current length: {}'.format(self.current_lengths))
+                print('current rewards: {}'.format(self.current_rewards / self.current_lengths))
+                print('mean_rewards: {}'.format(mean_rewards))
 
                 self.writer.add_scalar('rewards/step', mean_rewards, frame)
                 self.writer.add_scalar('rewards/iter', mean_rewards, self.epoch_num)
@@ -628,25 +633,24 @@ class CQLAgent(BaseAlgorithm):
                 if mean_rewards > self.last_mean_rewards and self.epoch_num >= self.save_best_after:
                     print('saving next best rewards: ', mean_rewards)
                     self.last_mean_rewards = mean_rewards
-                    self.save(self.nn_dir + '/' + self.config['name'])
-                    if self.last_mean_rewards > self.config.get('score_to_win', float('inf')):
-                        print('Network won!')
-                        self.save(self.nn_dir + '/' + self.config['name'] + 'ep=' + str(self.epoch_num) + 'rew=' + str(
-                            mean_rewards))
-                        return self.last_mean_rewards, self.epoch_num
+                    self.save(
+                        os.path.join(self.checkpoint_dir, 'ep_' + str(self.epoch_num) + '_rew_' + str(mean_rewards)))
+                    # if self.last_mean_rewards > self.config.get('score_to_win', float('inf')):  #
+                    #     print('Network won!')
+                    #     self.save(os.path.join(self.checkpoint_dir,
+                    #                            'won_ep=' + str(self.epoch_num) + '_rew=' + str(mean_rewards)))
+                    #     return self.last_mean_rewards, self.epoch_num
 
                 if self.epoch_num > self.max_epochs:
-                    self.save(
-                        self.nn_dir + '/' + 'last_' + self.config['name'] + 'ep=' + str(self.epoch_num) + 'rew=' + str(
-                            mean_rewards))
+                    self.save(os.path.join(self.checkpoint_dir,
+                                           'last_ep_' + str(self.epoch_num) + '_rew_' + str(mean_rewards)))
                     print('MAX EPOCHS NUM!')
                     return self.last_mean_rewards, self.epoch_num
                 update_time = 0
 
-                if self.epoch_num % 200 == 0 and self.epoch_num > 10:
+                if self.epoch_num % 100 == 0:
                     self.save(
-                        self.nn_dir + '/backup/' + self.config['name'] + 'ep=' + str(self.epoch_num) + 'rew=' + str(
-                            mean_rewards))
+                        os.path.join(self.checkpoint_dir, 'ep_' + str(self.epoch_num) + '_rew_' + str(mean_rewards)))
                     print('model backup save')
 
     # copy from CQL
@@ -668,14 +672,14 @@ class CQLAgent(BaseAlgorithm):
         preds_q1 = preds_q1.view(obs.shape[0], num_repeat, 1)
         preds_q2 = preds_q2.view(obs.shape[0], num_repeat, 1)
         return preds_q1, preds_q2
-    
-    def load_hdf5(self,dataset_path):
+
+    def load_hdf5(self, dataset_path):
         import h5py
-        _dataset = h5py.File(dataset_path,'r')
+        _dataset = h5py.File(dataset_path, 'r')
         _obs = torch.tensor(np.array(_dataset['observations']), dtype=torch.float, device=self.device)
         _actions = torch.tensor(np.array(_dataset['actions']), dtype=torch.float, device=self.device)
         _rewards = torch.tensor(np.array(_dataset['rewards']), dtype=torch.float, device=self.device)
         _next_obs = torch.tensor(np.array(_dataset['next_observations']), dtype=torch.float, device=self.device)
         _dones = torch.tensor(np.array(_dataset['dones']), dtype=torch.float, device=self.device)
         self.replay_buffer.add(_obs, _actions, _rewards, _next_obs, _dones)
-        print('hdf5 loaded from', dataset_path ,'now idx', self.replay_buffer.idx)
+        print('hdf5 loaded from', dataset_path, 'now idx', self.replay_buffer.idx)

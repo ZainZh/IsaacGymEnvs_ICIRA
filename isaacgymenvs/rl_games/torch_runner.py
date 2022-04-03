@@ -84,7 +84,7 @@ class Runner:
         self.load_config(params=copy.deepcopy(self.default_config))
 
     def run_train(self, args):
-        print('Started to train')
+        print('\033[1;33mStarted to train\033[0m')
         agent = self.algo_factory.create(self.algo_name, base_name='run', params=self.params)
         _restore(agent, args)
         _override_sigma(agent, args)

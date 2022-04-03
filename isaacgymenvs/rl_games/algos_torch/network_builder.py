@@ -860,13 +860,13 @@ class SACBuilder(NetworkBuilder):
                 'd2rl' : self.is_d2rl,
                 'norm_only_first_layer' : self.norm_only_first_layer
             }
-            print("Building Actor")
+            print('\033[1;33mBuilding Actor\033[0m')
             self.actor = self._build_actor(2*action_dim, self.log_std_bounds, **actor_mlp_args)
             
             if self.separate:
-                print("Building Critic")
+                print("\033[1;33mBuilding Critic\033[0m")
                 self.critic = self._build_critic(1, **critic_mlp_args)
-                print("Building Critic Target")
+                print("\033[1;33mBuilding Critic Target\033[0m")
                 self.critic_target = self._build_critic(1, **critic_mlp_args)
                 self.critic_target.load_state_dict(self.critic.state_dict())  
 
