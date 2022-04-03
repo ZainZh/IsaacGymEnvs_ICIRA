@@ -87,15 +87,17 @@ class Runner:
         print('\033[1;33mStarted to train\033[0m')
         agent = self.algo_factory.create(self.algo_name, base_name='run', params=self.params)
         _restore(agent, args)
-        _override_sigma(agent, args)
-        _load_hdf5(agent, args)
+        if self.algo_name == 'cql':
+            _override_sigma(agent, args)
+            _load_hdf5(agent, args)
         agent.train()
 
     def run_play(self, args):
         print('Started to play')
         player = self.create_player()
-        _restore(player, args)
-        _override_sigma(player, args)
+        if self.algo_name == 'cql':
+            _restore(player, args)
+            _override_sigma(player, args)
         player.run()
 
     def create_player(self):
