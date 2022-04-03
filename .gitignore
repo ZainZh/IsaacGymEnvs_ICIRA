@@ -30,3 +30,6 @@ outputs/
 *.hydra*
 *.DS_Store
 *test_save*
+isaacgymenvs/new1.py
+
+isaacgymenvs/README_skylark.md

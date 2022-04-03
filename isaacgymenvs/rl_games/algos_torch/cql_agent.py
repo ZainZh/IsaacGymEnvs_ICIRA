@@ -452,7 +452,6 @@ class CQLAgent(BaseAlgorithm):
     def play_steps(self, random_exploration=False):
         total_time_start = time.time()
         total_update_time = 0
-        total_time = 0
         step_time = 0.0
         actor_losses = []
         entropies = []
@@ -478,7 +477,6 @@ class CQLAgent(BaseAlgorithm):
                     action = self.act(obs.float(), self.env_info["action_space"].shape, sample=True)
 
             step_start = time.time()
-
             with torch.no_grad():
                 next_obs, rewards, dones, infos = self.env_step(action)
             step_end = time.time()
@@ -486,31 +484,29 @@ class CQLAgent(BaseAlgorithm):
             self.current_rewards += rewards
             self.current_lengths += 1
 
-            total_time += step_end - step_start
-
             step_time += (step_end - step_start)
 
             all_done_indices = dones.nonzero(as_tuple=False)
             done_indices = all_done_indices[::self.num_agents]
-            self.game_rewards.update(self.current_rewards[done_indices])
+            self.game_rewards.update(self.current_rewards[done_indices])  # update game rewards if have done in envs
             self.game_lengths.update(self.current_lengths[done_indices])
 
             not_dones = 1.0 - dones.float()
 
-            self.algo_observer.process_infos(infos, done_indices)
+            self.algo_observer.process_infos(infos, done_indices)  # Log infos for envs which are done
 
             no_timeouts = self.current_lengths != self.max_env_steps
             dones = dones * no_timeouts
 
-            self.current_rewards = self.current_rewards * not_dones
-            self.current_lengths = self.current_lengths * not_dones
+            self.current_rewards = self.current_rewards * not_dones  # if done, reset the corresponding current_rewards
+            self.current_lengths = self.current_lengths * not_dones  # if done, reset the corresponding current_lengths
 
             if isinstance(obs, dict):
                 obs = obs['obs']
             if isinstance(next_obs, dict):
                 next_obs = next_obs['obs']
 
-            rewards = self.rewards_shaper(rewards)
+            rewards = self.rewards_shaper(rewards)  # scale_value
 
             self.replay_buffer.add(obs, action, torch.unsqueeze(rewards, 1), next_obs, torch.unsqueeze(dones, 1))
 
@@ -545,11 +541,11 @@ class CQLAgent(BaseAlgorithm):
                critic1_losses, critic2_losses, min_qf1_losses, min_qf2_losses, std_q1s, std_q2s, alpha_prime_losses
 
     def train_epoch(self):
-        if self.epoch_num < self.num_seed_steps and not self.config['load_checkpoint']:
+        if self.epoch_num < self.num_seed_steps and not self.config['load_checkpoint']:  # Random explore
             step_time, play_time, total_update_time, total_time, actor_losses, entropies, alphas, alpha_losses, \
             critic1_losses, critic2_losses, min_qf1_losses, min_qf2_losses, std_q1s, std_q2s, alpha_prime_losses \
                 = self.play_steps(random_exploration=True)
-        else:
+        else:  # RL training
             step_time, play_time, total_update_time, total_time, actor_losses, entropies, alphas, alpha_losses, \
             critic1_losses, critic2_losses, min_qf1_losses, min_qf2_losses, std_q1s, std_q2s, alpha_prime_losses \
                 = self.play_steps(random_exploration=False)
@@ -630,6 +626,7 @@ class CQLAgent(BaseAlgorithm):
                 self.writer.add_scalar('episode_lengths/iter', mean_lengths, self.epoch_num)
                 self.writer.add_scalar('episode_lengths/time', mean_lengths, total_time)
 
+                # <editor-fold desc="Checkpoint">
                 if mean_rewards > self.last_mean_rewards and self.epoch_num >= self.save_best_after:
                     print('saving next best rewards: ', mean_rewards)
                     self.last_mean_rewards = mean_rewards
@@ -652,6 +649,7 @@ class CQLAgent(BaseAlgorithm):
                     self.save(
                         os.path.join(self.checkpoint_dir, 'ep_' + str(self.epoch_num) + '_rew_' + str(mean_rewards)))
                     print('model backup save')
+                # </editor-fold>
 
     # copy from CQL
     def _get_policy_actions(self, obs, num_actions, network=None):
