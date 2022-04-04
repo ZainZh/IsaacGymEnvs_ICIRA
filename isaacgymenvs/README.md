@@ -60,6 +60,8 @@ python train.py test=True headless=False checkpoint='runs/DualFrankaCQL/nn/model
 | `0`                     | Enable/disable target tracking                               |
 | `N`                     | Force jump to next stage in auto tracking                    |
 | `D`                     | Enable/disable debug info                                    |
+| `V`                     | Check task stage in certain obs                              |
+| `9`                     | Pause tracking                                               |
 | `UP, DOWN, LEFT, RIGHT` | Drive franka position manually in `xz` plane                 |
 | `[`, `]`                | Drive franka position manually in `y` axis                   |
 | `LEFT_SHIFT`            | Switch driving between left/right Franka                     |

@@ -196,15 +196,14 @@ def print_state(if_all=False):
         print('ee_pose&gripper', torch.cat((ee_pose, gripper_dof), dim=1))
         print('obs-', env.compute_observations())
         print('rew-', env.compute_reward())
-
-    if print_mode >= 2 or if_all == True:
-        print_detail_clearly(env.reward_dict)
+    
+    # if print_mode >= 2 or if_all==True:
+    #     print_detail_clearly(env.reward_dict)
 
     # print reset env_ids
     if print_mode >= 1 or if_all == True:
         check_reset()
-
-
+        
 def check_reset():
     env_ids = env.reset_buf.nonzero(as_tuple=False).squeeze(-1)
     if env_ids.shape[0] != 0:
@@ -254,6 +253,10 @@ class DualFrankaTest(DualFranka):
                 self.viewer, gymapi.KEY_N, "force_next_stage")
             self.gym.subscribe_viewer_keyboard_event(
                 self.viewer, gymapi.KEY_D, "change_debug")
+            self.gym.subscribe_viewer_keyboard_event(
+                self.viewer, gymapi.KEY_V, "check_task_stage")
+            self.gym.subscribe_viewer_keyboard_event(
+                self.viewer, gymapi.KEY_9, "pause_tracking")
             # ik ee drive
             self.gym.subscribe_viewer_keyboard_event(
                 self.viewer, gymapi.KEY_LEFT_SHIFT, "switch_franka")
@@ -289,6 +292,63 @@ class DualFrankaTest(DualFranka):
         cam_target = gymapi.Vec3(*vec[1])
         middle_env = self.envs[self.num_envs // 2 + num_per_row // 2]
         self.gym.viewer_camera_look_at(self.viewer, middle_env, cam_pos, cam_target)
+
+    def judge_now_stage(self, debug=False):
+        # pre compute
+        self.compute_observations()
+        # object base link pose
+        table_pose = self.rigid_body_states[:, self.table_handle][:, 0:3]
+        cup_pos = self.rigid_body_states[:, self.cup_handle][:, 0:3]
+        cup_rot = self.rigid_body_states[:, self.cup_handle][:, 3:7]
+        spoon_pos = self.rigid_body_states[:, self.spoon_handle][:, 0:3]
+        spoon_rot = self.rigid_body_states[:, self.spoon_handle][:, 3:7]
+        # grasp pose
+        cup_grasp_pos = self.cup_grasp_pos
+        cup_grasp_rot = self.cup_grasp_rot
+        spoon_grasp_pos = self.spoon_grasp_pos
+        spoon_grasp_rot = self.spoon_grasp_rot
+        # franka grasp point
+        right_franka_grasp_pos = self.franka_grasp_pos
+        right_franka_grasp_rot = self.franka_grasp_rot
+        left_franka_grasp_pos = self.franka_grasp_pos_1
+        left_franka_grasp_rot = self.franka_grasp_rot_1
+
+        axis0 = tf_vector(cup_rot, left_franka_grasp_pos-cup_grasp_pos)
+        pre_stage_1 = [torch.abs(spoon_grasp_pos - right_franka_grasp_pos)[:, 1] < 0.01,  # y in spoon thickness
+                        torch.gt(torch.tensor([0.025, 0.05, 0.025]), axis0).all(), # in cup volume(cupsize 0.05*0.05*0.1)
+                        # torch.sqrt((left_franka_grasp_pos[:, 0]-cup_grasp_pos[:, 0])**2 \
+                        #     + (left_franka_grasp_pos[:, 2]-cup_grasp_pos[:, 2])**2) < 0.025, # < cup_width/2
+                    ]
+
+        stage_1 = [spoon_pos[:,1]-0.4 > 0.15,    # spoon_y - table_height > x  (shelf height ignored)
+                    torch.norm(spoon_grasp_pos-right_franka_grasp_pos) < 0.05,  # keep in hand
+                    cup_pos[:,1]-0.4 > 0.1,    
+                    torch.norm(cup_grasp_pos-left_franka_grasp_pos) < 0.05,
+                    ]
+
+        cup_up_axis = torch.tensor([0.0, 1.0, 0.0])     # cup stand: cup-y
+        spoon_stand_axis = torch.tensor([1.0, 0.0, 0.0])    # spoon ready for stir: spoon-x
+        axis1 = tf_vector(cup_rot, cup_up_axis)     
+        axis2 = tf_vector(spoon_rot, spoon_stand_axis)
+        dot1 = torch.bmm(axis1.view(env.num_envs, 1, 3), axis2.view(env.num_envs, 3, 1)).squeeze(-1).squeeze(-1)   
+        axis3 = tf_vector(cup_rot, spoon_pos-cup_pos)   # relative spoon pos in cup plane
+
+        stage_2 = [ torch.acos(dot1) /3.1415*180 < 30,  # spoon-x should align with cup-y(<30deg)
+                    # torch.gt(torch.tensor([0.025, 0.025]),axis3[:, [0,2]]).all() , 
+                    #     axis3[:, 1]-0.15/2 -0.1 > 0, # spoon tip higher than cup height(spoon_base_y-half_spoon_len-cup_height>0)
+                    ]
+
+        stage_3 = [
+                    torch.acos(dot1) /3.1415*180 <30,
+                    torch.gt(torch.tensor([0.025, 0.025]),axis3[:, [0,2]]).all() , 
+                        axis3[:, 1]-0.15/2 - 0.1 < 0,   # spoon tip in cup
+                ]
+        if debug:
+            print("pre_stage_1", pre_stage_1)
+            print("stage_1", stage_1)
+            print("stage_2", stage_2)
+            print("stage_3", stage_3)
+        return [all(pre_stage_1), all(stage_1), all(stage_2), all(stage_3),]
 
 
 class HDF5DatasetWriter():
@@ -390,13 +450,15 @@ def reset_env():
 
 
 def ready_to_track():
-    global print_mode, now_stage, target_pose, total_stage, writer, step, reset_flag, track_time, prev_err, relative_err
+    global print_mode, now_stage, target_pose, total_stage, writer, step, reset_flag, track_time, prev_err, relative_err, task_stage, prev_task_stage
     # global values
     prev_err = torch.ones((1,), dtype=torch.float, device=env.device)
     relative_err = prev_err.clone()
     reset_flag = False
     step = 0
     # reset track values
+    task_stage = 0
+    prev_task_stage = 0
     print_mode = 0
     now_stage = 0
     target_pose = load_target_ee(target_data_path).to(env.device)
@@ -516,6 +578,21 @@ if __name__ == "__main__":
                     else:
                         manual_drive |= 0b01
                         print('Drive left franka')
+                elif evt.action == "check_task_stage":
+                    print_highlight('check task stage:')
+                    env.judge_now_stage(debug=True)
+                elif evt.action == "pause_tracking":
+                    try:
+                        if now_stage < total_stage:
+                            if auto_track_pose:
+                                print('Pause tracking')
+                            else:
+                                print('Resume tracking')
+                            auto_track_pose = ~auto_track_pose
+                        else:
+                            print("Empty key")
+                    except:
+                        print("Empty key")
                 elif evt.action == "drive_xminus":
                     ee_position_drive(manual_drive & 0b01, dist=[-manual_drive_k, 0, 0])
                 elif evt.action == "drive_xplus":
@@ -631,11 +708,25 @@ if __name__ == "__main__":
             # Deploy actions
             env.pre_physics_step(pos_action.view(env.num_envs, -1))
 
+            # calculation
+            env.compute_observations()
+            env.compute_reward()
+            
             # check if trigger reset
             if not reset_flag:
                 if check_reset():
                     reset_flag = True
                     print('now franka dof:', franka_dof)
+
+            # check now stage if in auto tracking
+            if auto_track_pose:
+                task_stage = 0
+                for index,s in enumerate(env.judge_now_stage(), start=1):
+                    if s == True:
+                        task_stage = index
+                if task_stage != prev_task_stage:
+                    print_highlight("now task stage: {}".format(task_stage))
+                    prev_task_stage = task_stage
 
             ## debug print
             if debug_mode and step % 70 == 0:

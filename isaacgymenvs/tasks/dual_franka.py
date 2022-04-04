@@ -374,7 +374,7 @@ class DualFranka(VecTask):
         finger_pose.r = lfinger_pose.r
 
         hand_pose_inv = hand_pose.inverse()
-        grasp_pose_axis = 1
+        grasp_pose_axis = 2     # forward axis = z
         franka_local_grasp_pose = hand_pose_inv * finger_pose
         franka_local_grasp_pose.p += gymapi.Vec3(*get_axis_params(0.04, grasp_pose_axis))
 
@@ -399,7 +399,7 @@ class DualFranka(VecTask):
         finger_pose_1.r = lfinger_pose_1.r
 
         hand_pose_inv_1 = hand_pose_1.inverse()
-        grasp_pose_axis_1 = 1
+        grasp_pose_axis_1 = 2
         franka_local_grasp_pose_1 = hand_pose_inv_1 * finger_pose_1
         franka_local_grasp_pose_1.p += gymapi.Vec3(*get_axis_params(0.04, grasp_pose_axis_1))
 
@@ -414,7 +414,7 @@ class DualFranka(VecTask):
         cup_local_grasp_pose = gymapi.Transform()
 
         cup_local_grasp_pose.p.x = 0
-        cup_local_grasp_pose.p.y = 0.01
+        cup_local_grasp_pose.p.y = 0.05     # half of the cup height
         cup_local_grasp_pose.p.z = 0
         cup_local_grasp_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1)
 
@@ -429,7 +429,7 @@ class DualFranka(VecTask):
         spoon_local_grasp_pose.p.x = 0
         spoon_local_grasp_pose.p.y = 0.005
         spoon_local_grasp_pose.p.z = 0
-        spoon_local_grasp_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 0.707107)  # TODO: check
+        spoon_local_grasp_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)  # TODO: check
 
         self.spoon_local_grasp_pos = to_torch([spoon_local_grasp_pose.p.x, spoon_local_grasp_pose.p.y,
                                                spoon_local_grasp_pose.p.z], device=self.device).repeat(
