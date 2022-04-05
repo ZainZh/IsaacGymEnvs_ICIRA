@@ -161,7 +161,6 @@ def parse_reward_detail(dictobj: Dict):
 
 
 def print_detail_clearly(dictobj):
-    print('rew_details')
     obj = parse_reward_detail(dictobj)
     for k, v in obj.items():
         print_highlight(k)
@@ -197,8 +196,8 @@ def print_state(if_all=False):
         print('obs-', env.compute_observations())
         print('rew-', env.compute_reward())
     
-    # if print_mode >= 2 or if_all==True:
-    #     print_detail_clearly(env.reward_dict)
+    if print_mode >= 2 or if_all==True:
+        print_detail_clearly(env.reward_dict)
 
     # print reset env_ids
     if print_mode >= 1 or if_all == True:
@@ -313,7 +312,7 @@ class DualFrankaTest(DualFranka):
         left_franka_grasp_pos = self.franka_grasp_pos_1
         left_franka_grasp_rot = self.franka_grasp_rot_1
 
-        axis0 = tf_vector(cup_rot, left_franka_grasp_pos-cup_grasp_pos)
+        axis0 = quat_rotate_inverse(cup_rot, left_franka_grasp_pos-cup_grasp_pos)
         pre_stage_1 = [torch.abs(spoon_grasp_pos - right_franka_grasp_pos)[:, 1] < 0.01,  # y in spoon thickness
                         torch.gt(torch.tensor([0.025, 0.05, 0.025]), axis0).all(), # in cup volume(cupsize 0.05*0.05*0.1)
                         # torch.sqrt((left_franka_grasp_pos[:, 0]-cup_grasp_pos[:, 0])**2 \
@@ -331,7 +330,7 @@ class DualFrankaTest(DualFranka):
         axis1 = tf_vector(cup_rot, cup_up_axis)     
         axis2 = tf_vector(spoon_rot, spoon_stand_axis)
         dot1 = torch.bmm(axis1.view(env.num_envs, 1, 3), axis2.view(env.num_envs, 3, 1)).squeeze(-1).squeeze(-1)   
-        axis3 = tf_vector(cup_rot, spoon_pos-cup_pos)   # relative spoon pos in cup plane
+        axis3 = quat_rotate_inverse(cup_rot, spoon_pos-cup_pos)   # relative spoon pos in cup
 
         stage_2 = [ torch.acos(dot1) /3.1415*180 < 30,  # spoon-x should align with cup-y(<30deg)
                     # torch.gt(torch.tensor([0.025, 0.025]),axis3[:, [0,2]]).all() , 
@@ -631,7 +630,6 @@ if __name__ == "__main__":
                     writer.add(obs, action, rew, next_obs, done)
                 # next round
                 obs = next_obs.copy()
-                env.compute_reward(action=None)
                 rew = env.rew_buf.clone().view(-1, 1).numpy()
 
             ## Calculation here
@@ -710,7 +708,10 @@ if __name__ == "__main__":
 
             # calculation
             env.compute_observations()
-            env.compute_reward()
+            if auto_track_pose:
+                env.compute_reward(action=pos_action.view(env.num_envs, -1))
+            else:
+                env.compute_reward(action=None)
             
             # check if trigger reset
             if not reset_flag:
