@@ -1195,13 +1195,14 @@ def compute_franka_reward(
     # <editor-fold desc="Reset">
     # if reset buf equal to 1, reset this environment
     # reset if cup and spoon is taken up (max) or max length reached
-    reset_buf = torch.where(cup_positions[:, 1] > 0.6, torch.ones_like(reset_buf), reset_buf)  # taken up to 0.3 m
-    reset_buf = torch.where(spoon_positions[:, 1] > 0.695, torch.ones_like(reset_buf), reset_buf)  # taken up to 0.3 m
-    reset_buf = torch.where(cup_positions[:, 1] < 0.439, torch.ones_like(reset_buf),
+    # TODO: may need further refinement
+    reset_buf = torch.where(cup_positions[:, 1] > 0.78, torch.ones_like(reset_buf), reset_buf)  # taken up too high
+    reset_buf = torch.where(spoon_positions[:, 1] > 1.1, torch.ones_like(reset_buf), reset_buf) 
+    reset_buf = torch.where(cup_positions[:, 1] < 0.3, torch.ones_like(reset_buf),
                             reset_buf)  # cup fall to table or ground
-    reset_buf = torch.where(dot_cup_reverse * 180 / torch.pi > 90, torch.ones_like(reset_buf),
+    reset_buf = torch.where(torch.acos(dot_cup_reverse) * 180 / torch.pi > 90, torch.ones_like(reset_buf),
                             reset_buf)  # cup fall direction
-    reset_buf = torch.where(spoon_positions[:, 1] < 0.49, torch.ones_like(reset_buf),
+    reset_buf = torch.where(spoon_positions[:, 1] < 0.41, torch.ones_like(reset_buf),
                             reset_buf)  # spoon fall to table or ground
 
     # cup fall to table
