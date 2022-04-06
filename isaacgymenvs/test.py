@@ -116,7 +116,7 @@ def save(path, name, data):
     if not os.path.exists(file_path):
         os.system(r"touch {}".format(path))
     with open(file_path, encoding="utf-8", mode="a") as file:
-        file.write(str(data))
+        file.write(str(data) + '\n')
     print('save success to', name)
 
 
