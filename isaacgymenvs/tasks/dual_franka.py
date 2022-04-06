@@ -26,7 +26,7 @@ class DualFranka(VecTask):
         self.dist_reward_scale = self.cfg["env"]["distRewardScale"]
         self.rot_reward_scale = self.cfg["env"]["rotRewardScale"]
         self.around_handle_reward_scale = self.cfg["env"]["aroundHandleRewardScale"]
-        self.open_reward_scale = self.cfg["env"]["openRewardScale"]
+        # self.open_reward_scale = self.cfg["env"]["openRewardScale"]
         self.finger_dist_reward_scale = self.cfg["env"]["fingerDistRewardScale"]
         self.action_penalty_scale = self.cfg["env"]["actionPenaltyScale"]
         self.num_agents = self.cfg["env"]["numAgents"]
@@ -1031,7 +1031,7 @@ def compute_franka_reward(
     d_1 = torch.norm(franka_grasp_pos_1 - cup_grasp_pos, p=2, dim=-1)
     dist_reward_1 = 2.0 / (1.0 + d_1 ** 2)
     dist_reward_1 *= dist_reward_1
-    dist_reward_1 = torch.where(d_1 <= 0.02, dist_reward_1 * 2, dist_reward_1)
+    dist_reward_1 = torch.where(d_1 <= 0.06, dist_reward_1 * 2, dist_reward_1)
     # </editor-fold>
 
     # <editor-fold desc="2. rotation reward">
@@ -1095,7 +1095,7 @@ def compute_franka_reward(
     rfinger_dist_1 = quat_rotate_inverse(cup_grasp_rot,franka_rfinger_pos_1 - cup_grasp_pos)[:, 2]
     finger_dist_reward_1 = torch.where(lfinger_dist_1 > 0,
                                        torch.where(rfinger_dist_1 < 0,
-                                                   50 * (0.08 - torch.abs(lfinger_dist_1) - torch.abs(rfinger_dist_1)),
+                                                   50 * (0.08 - 0.2 * (torch.abs(lfinger_dist_1) - torch.abs(rfinger_dist_1)) ),
                                                    finger_dist_reward_1),
                                        finger_dist_reward)
     # </editor-fold>
