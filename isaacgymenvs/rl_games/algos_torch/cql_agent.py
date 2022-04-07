@@ -617,7 +617,7 @@ class CQLAgent(BaseAlgorithm):
 
                 print('current length: {}'.format(self.current_lengths))
                 print('current rewards: {}'.format(self.current_rewards / self.current_lengths))
-                print('mean_rewards: {}'.format(mean_rewards))
+                print('mean_rewards: {}, mean_length: {}'.format(mean_rewards, mean_lengths))
 
                 self.writer.add_scalar('rewards/step', mean_rewards, frame)
                 self.writer.add_scalar('rewards/iter', mean_rewards, self.epoch_num)
