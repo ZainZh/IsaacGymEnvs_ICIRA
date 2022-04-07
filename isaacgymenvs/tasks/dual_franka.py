@@ -47,7 +47,7 @@ class DualFranka(VecTask):
         # num_obs = 42
         # num_acts = 18
         actors_per_env = 7
-        self.cfg["env"]["numObservations"] = 42
+        self.cfg["env"]["numObservations"] = 56
         self.cfg["env"]["numActions"] = 18
         super().__init__(config=self.cfg, sim_device=sim_device, graphics_device_id=graphics_device_id,
                          headless=headless)
@@ -374,7 +374,8 @@ class DualFranka(VecTask):
         finger_pose.r = lfinger_pose.r
 
         hand_pose_inv = hand_pose.inverse()
-        grasp_pose_axis = 2     # forward axis = z
+
+        grasp_pose_axis = 2    # forward axis = z
         franka_local_grasp_pose = hand_pose_inv * finger_pose
         franka_local_grasp_pose.p += gymapi.Vec3(*get_axis_params(0.04, grasp_pose_axis))
 
@@ -399,6 +400,7 @@ class DualFranka(VecTask):
         finger_pose_1.r = lfinger_pose_1.r
 
         hand_pose_inv_1 = hand_pose_1.inverse()
+
         grasp_pose_axis_1 = 2
         franka_local_grasp_pose_1 = hand_pose_inv_1 * finger_pose_1
         franka_local_grasp_pose_1.p += gymapi.Vec3(*get_axis_params(0.04, grasp_pose_axis_1))
@@ -516,6 +518,7 @@ class DualFranka(VecTask):
         spoon_pos = self.rigid_body_states[:, self.spoon_handle][:, 0:3]
         spoon_rot = self.rigid_body_states[:, self.spoon_handle][:, 3:7]
 
+
         # franka with cup and franka1 with spoon
         self.franka_grasp_rot[:], self.franka_grasp_pos[:], self.spoon_grasp_rot[:], self.spoon_grasp_pos[:], \
         self.franka_grasp_rot_1[:], self.franka_grasp_pos_1[:], self.cup_grasp_rot[:], self.cup_grasp_pos[:] = \
@@ -544,8 +547,8 @@ class DualFranka(VecTask):
         to_target_1 = self.cup_grasp_pos - self.franka_grasp_pos_1
         # TODO: No further information after reaching the object
         self.obs_buf = torch.cat((dof_pos_scaled, dof_pos_scaled_1,
-                                  self.franka_dof_vel * self.dof_vel_scale, to_target,
-                                  self.franka_dof_vel_1 * self.dof_vel_scale, to_target_1,), dim=-1)
+                                  self.franka_dof_vel * self.dof_vel_scale, to_target,cup_pos,cup_rot,
+                                  self.franka_dof_vel_1 * self.dof_vel_scale, to_target_1,spoon_pos,spoon_rot), dim=-1)
 
         return self.obs_buf
 
@@ -1218,6 +1221,8 @@ def compute_franka_reward(
         'rotation': (rot_reward, rot_reward_scale),
         'around_hand': (around_handle_reward, around_handle_reward_scale),
         'finger_distance': (finger_dist_reward, finger_dist_reward_scale),
+        'left_distance':lfinger_dist,
+        'right_distance': rfinger_dist,
     }
     reward_franka_1 = {
         'distance': (dist_reward_1, dist_reward_scale),
