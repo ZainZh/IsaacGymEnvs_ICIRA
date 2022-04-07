@@ -1,7 +1,7 @@
 params:
   seed: ${...seed}
   algo:
-    name: cql   # main Runner: cql_agent.CQLAgent
+    name: sac   # main Runner: cql_agent.CQLAgent
 
   model:
     name: soft_actor_critic   # model_builder.ModelBuilder -> models.ModelSACContinuous
@@ -20,10 +20,9 @@ params:
         #   name: const_initializer
         #   val: 0
         fixed_sigma: False   # if fixed_sigma=True, config.sigma is used below
-        
+
     mlp:
       units: [256, 128, 64]
-#      units: [256, 256, 256]
       activation: elu   # network_builder activations_factory line 38
       d2rl: False
 
@@ -32,24 +31,24 @@ params:
       # regularizer:    # seems useless
       #   name: None
 
-    log_std_bounds: [-5, 2]   # default 
+    log_std_bounds: [-5, 2]   # default
 
   # load_checkpoint: ${if:${...checkpoint},True,False} # flag which sets whether to load the checkpoint
   # load_path: ${...checkpoint} # seem useless, path to the checkpoint to load
 
   config:
-    name: ${resolve_default:DualFrankaCQL,${....experiment}}
+    name: ${resolve_default:FrankaCabinetCQL,${....experiment}}
     full_experiment_name: ${.name}
     load_checkpoint: ${if:${....checkpoint},True,False}
     # base_init
-    # env_config: 
-    # env_info: 
+    # env_config:
+    # env_info:
     num_actors: ${....task.env.numEnvs}
     env_name: rlgpu
     device: ${....rl_device}   # sac_device
-    weight_decay: 
+    weight_decay:
     is_train: ${if:${....test},False,True}
-    save_best_after: 200   # > epoch_num can save, if not set default 500
+    save_best_after: 100    # > epoch_num can save, if not set default 500
     print_stats: True   # print fps_step,fps_total
     max_epochs: ${resolve_default:3000,${....max_iterations}}   # can be overrided in main config
     reward_shaper:    # needed
@@ -67,14 +66,14 @@ params:
     replay_buffer_size: 100000
     replay_buffer_path: ${....dataset}
     num_steps_per_episode: 1000
-    normalize_input: False
-    max_env_steps: 1000   # compare with current_lengths
+    normalize_input: True
+    max_env_steps: 500   # compare with current_lengths
     actor_lr: 3e-5    # policy lr, can set actor(/critic/alpha)_betas ,default=[0.9,0.999]
     critic_lr: 3e-4   # qf lr
     alpha_lr: 3e-4    # sac entropy tuning alpha
     target_entropy_coef: 0.5  # if none, default 0.5
 
-    score_to_win: 40000
+    score_to_win: 10000
     sigma: 0.9    # need tune, if fixed_sigma=True
 
     # CQL args
@@ -91,13 +90,13 @@ params:
     #   name: HumanoidRun-v0
     #   flat_observation: True
 
-    # mixed_precision: False 
+    # mixed_precision: False
     # normalize_value: True
     # normalize_advantage: True
     # tau: 0.95
     # learning_rate: 5e-4
     # lr_schedule: adaptive
-    # kl_threshold: 0.008   # used in a2c_common   
+    # kl_threshold: 0.008   # used in a2c_common
     # save_frequency: 100
     # grad_norm: 1.0
     # entropy_coef: 0.0
@@ -110,9 +109,9 @@ params:
     # clip_value: True
     # seq_len: 4
     # bounds_loss_coef: 0.0001
-    
-    
-    
+
+
+
 
 
 
