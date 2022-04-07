@@ -124,7 +124,7 @@ def launch_rlg_hydra(cfg: DictConfig):
     with open(os.path.join(experiment_dir, 'config.yaml'), 'w') as f:
         f.write(OmegaConf.to_yaml(cfg))
 
-    if cfg.task_name == 'DualFranka':
+    if cfg.train.params.algo.name == 'cql':
         runner.run({
             'train': not cfg.test,  # decide train or play in cfg
             'play': cfg.test,
