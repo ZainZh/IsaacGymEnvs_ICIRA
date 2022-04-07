@@ -95,8 +95,8 @@ class Runner:
     def run_play(self, args):
         print('Started to play')
         player = self.create_player()
+        _restore(player, args)
         if self.algo_name == 'cql':
-            _restore(player, args)
             _override_sigma(player, args)
         player.run()
 
