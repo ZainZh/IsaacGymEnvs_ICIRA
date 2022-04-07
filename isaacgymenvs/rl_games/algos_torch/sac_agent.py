@@ -15,6 +15,7 @@ from torch import nn
 import torch.nn.functional as F
 import numpy as np
 import time
+import os
 
 
 
@@ -147,8 +148,21 @@ class SACAgent(BaseAlgorithm):
         self.play_time = 0
         self.epoch_num = 0
         
-        self.writer = SummaryWriter('runs/' + config['name'] + datetime.now().strftime("_%d-%H-%M-%S"))
-        print("Run Directory:", config['name'] + datetime.now().strftime("_%d-%H-%M-%S"))
+        # allows us to specify a folder where all experiments will reside
+        self.train_dir = config.get('train_dir', 'runs')
+        # a folder inside of train_dir containing everything related to a particular experiment
+        file_time = datetime.now().strftime("%m%d-%H-%M-%S")
+        self.experiment_name = config.get('name')
+        self.experiment_dir = os.path.join(self.train_dir, self.experiment_name)
+        self.nn_dir = os.path.join(self.experiment_dir, 'nn')
+        os.makedirs(self.train_dir, exist_ok=True)
+        os.makedirs(self.experiment_dir, exist_ok=True)
+        os.makedirs(self.nn_dir, exist_ok=True)
+        self.checkpoint_dir = os.path.join(self.nn_dir, file_time)
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
+
+        self.writer = SummaryWriter(self.experiment_dir + '/summaries/' + file_time)
+        print("Run Directory:", self.experiment_dir + '/summaries/' + file_time)
         
         self.is_tensor_obses = None
         self.is_rnn = False
@@ -319,6 +333,7 @@ class SACAgent(BaseAlgorithm):
     def env_reset(self):
         with torch.no_grad():
             obs = self.vec_env.reset()
+        obs = self.preproc_obs(obs)
 
         if self.is_tensor_obses is None:
             self.is_tensor_obses = torch.is_tensor(obs)
@@ -452,6 +467,8 @@ class SACAgent(BaseAlgorithm):
 
         while True:
             self.epoch_num += 1
+            print('\033[1;32m---------------- Epoch {} ----------------\033[0m'.format(self.epoch_num))
+
             step_time, play_time, update_time, epoch_total_time, actor_losses, entropies, alphas, alpha_losses, critic1_losses, critic2_losses = self.train_epoch()
 
             total_time += epoch_total_time
@@ -491,6 +508,10 @@ class SACAgent(BaseAlgorithm):
                 mean_rewards = self.game_rewards.get_mean()
                 mean_lengths = self.game_lengths.get_mean()
 
+                print('current length: {}'.format(self.current_lengths))
+                print('current rewards: {}'.format(self.current_rewards / self.current_lengths))
+                print('mean_rewards: {}, mean_length: {}'.format(mean_rewards, mean_lengths))
+
                 self.writer.add_scalar('rewards/step', mean_rewards, frame)
                 # self.writer.add_scalar('rewards/iter', mean_rewards, epoch_num)
                 self.writer.add_scalar('rewards/time', mean_rewards, total_time)
@@ -498,19 +519,31 @@ class SACAgent(BaseAlgorithm):
                 # self.writer.add_scalar('episode_lengths/iter', mean_lengths, epoch_num)
                 self.writer.add_scalar('episode_lengths/time', mean_lengths, total_time)
 
+
+                # <editor-fold desc="Checkpoint">
                 if mean_rewards > self.last_mean_rewards and self.epoch_num >= self.save_best_after:
                     print('saving next best rewards: ', mean_rewards)
                     self.last_mean_rewards = mean_rewards
-                    self.save("./nn/" + self.config['name'])
-                    if self.last_mean_rewards > self.config.get('score_to_win', float('inf')):
-                        print('Network won!')
-                        self.save("./nn/" + self.config['name'] + 'ep=' + str(self.epoch_num) + 'rew=' + str(mean_rewards))
-                        return self.last_mean_rewards, self.epoch_num
+                    self.save(
+                        os.path.join(self.checkpoint_dir, 'ep_' + str(self.epoch_num) + '_rew_' + str(mean_rewards)))
+                    # if self.last_mean_rewards > self.config.get('score_to_win', float('inf')):  #
+                    #     print('Network won!')
+                    #     self.save(os.path.join(self.checkpoint_dir,
+                    #                            'won_ep=' + str(self.epoch_num) + '_rew=' + str(mean_rewards)))
+                    #     return self.last_mean_rewards, self.epoch_num
 
                 if self.epoch_num > self.max_epochs:
-                    self.save("./nn/" + 'last_' + self.config['name'] + 'ep=' + str(self.epoch_num) + 'rew=' + str(mean_rewards))
+                    self.save(os.path.join(self.checkpoint_dir,
+                                           'last_ep_' + str(self.epoch_num) + '_rew_' + str(mean_rewards)))
                     print('MAX EPOCHS NUM!')
-                    return self.last_mean_rewards, self.epoch_num                               
+                    return self.last_mean_rewards, self.epoch_num
                 update_time = 0
+
+                if self.epoch_num % 100 == 0:
+                    self.save(
+                        os.path.join(self.checkpoint_dir, 'ep_' + str(self.epoch_num) + '_rew_' + str(mean_rewards)))
+                    print('model backup save')
+                # </editor-fold>
+
 
     
