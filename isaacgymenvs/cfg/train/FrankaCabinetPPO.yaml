@@ -51,15 +51,15 @@ params:
     lr_schedule: adaptive
     kl_threshold: 0.008
     score_to_win: 10000
-    max_epochs: ${resolve_default:50000,${....max_iterations}}
-    save_best_after: 200
-    save_frequency: 200
+    max_epochs: ${resolve_default:500,${....max_iterations}}
+    save_best_after: 20
+    save_frequency: 10
     print_stats: True
     grad_norm: 1.0
     entropy_coef: 0.0
     truncate_grads: True
     e_clip: 0.2
-    horizon_length: 16
+    horizon_length: 1000
     minibatch_size: 8192
     mini_epochs: 8
     critic_coef: 4
