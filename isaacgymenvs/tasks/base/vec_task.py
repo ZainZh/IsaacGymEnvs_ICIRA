@@ -70,7 +70,7 @@ class Env(ABC):
                 print("GPU Pipeline can only be used with GPU simulation. Forcing CPU Pipeline.")
                 config["sim"]["use_gpu_pipeline"] = False
 
-        self.rl_device = config.get("rl_device", "cuda:0")
+        self.rl_device = config.get("rl_device", self.device)
 
         # Rendering
         # if training in a headless mode

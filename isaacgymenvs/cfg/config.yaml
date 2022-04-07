@@ -48,7 +48,8 @@ dataset: ''
 # set default task and default training config based on task
 defaults:
   - task: DualFranka    # set default to our task
-  #- train: ${task}PPO
+#  - task: FrankaCabinet
+#  - train: ${task}PPO
   - train: ${task}CQL   # if use CQL need to use this suffix
   - hydra/job_logging: disabled
 

@@ -8,7 +8,7 @@ rl_device: ${..rl_device}
 env:
   numEnvs: ${resolve_default:4096,${...num_envs}}
   envSpacing: 1.5
-  episodeLength: 500
+  episodeLength: 1000
   enableDebugVis: False
 
   clipObservations: 5.0
