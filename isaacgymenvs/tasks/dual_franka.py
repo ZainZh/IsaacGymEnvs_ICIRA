@@ -1030,12 +1030,12 @@ def compute_franka_reward(
                                            Dict[str, Tensor], Dict[str, Union[Tensor, Tuple[Tensor, float]]]]]]:
     """
 
-    print('spoon_grasp_pos: {}'.format(spoon_grasp_pos[0]))
+    # print('spoon_grasp_pos: {}'.format(spoon_grasp_pos[0]))
     # print('cup_grasp_pos: {}'.format(cup_grasp_pos[0]))
-    print('spoon_positions: {}'.format(spoon_positions[0]))
+    # print('spoon_positions: {}'.format(spoon_positions[0]))
     # print('cup_positions: {}'.format(cup_positions[0]))
-    print('franka_lfinger_pos: {}'.format(franka_lfinger_pos[0]))
-    print('franka_rfinger_pos: {}'.format(franka_rfinger_pos[0]))
+    # print('franka_lfinger_pos: {}'.format(franka_lfinger_pos[0]))
+    # print('franka_rfinger_pos: {}'.format(franka_rfinger_pos[0]))
     # print('franka_lfinger_pos_1: {}'.format(franka_lfinger_pos_1[0]))
     # print('franka_rfinger_pos_1: {}'.format(franka_rfinger_pos_1[0]))
 
@@ -1044,8 +1044,8 @@ def compute_franka_reward(
     d = torch.norm(franka_grasp_pos - spoon_grasp_pos, p=2, dim=-1)
     dist_reward = 1.0 / (1.0 + d ** 2)
     dist_reward *= dist_reward
-    dist_reward = torch.where(d <= 0.02, dist_reward * 2, dist_reward)
-    dist_reward = torch.where(d <= 0.01, dist_reward * 2, dist_reward)
+    dist_reward = torch.where(d <= 0.06, dist_reward * 2, dist_reward)
+    # dist_reward = torch.where(d <= 0.01, dist_reward * 2, dist_reward)
 
 
     d_1 = torch.norm(franka_grasp_pos_1 - cup_grasp_pos, p=2, dim=-1)
@@ -1134,8 +1134,8 @@ def compute_franka_reward(
     #                                                finger_dist_reward_1),
     #                                    finger_dist_reward_1)
     finger_dist_reward = torch.zeros_like(rot_reward)
-    lfinger_dist = torch.abs(franka_lfinger_pos[:, 2] - (spoon_grasp_pos[:, 2] + 0.005))
-    rfinger_dist = torch.abs(franka_rfinger_pos[:, 2] - (spoon_grasp_pos[:, 2] - 0.005))
+    lfinger_dist = torch.abs(franka_lfinger_pos[:, 2] - (spoon_grasp_pos[:, 2]))
+    rfinger_dist = torch.abs(franka_rfinger_pos[:, 2] - (spoon_grasp_pos[:, 2]))
     finger_dist_reward = torch.where(franka_lfinger_pos[:, 2] > spoon_grasp_pos[:, 2],
                                      torch.where(franka_rfinger_pos[:, 2] < spoon_grasp_pos[:, 2],
                                                  (0.04 - lfinger_dist) + (0.04 - rfinger_dist), finger_dist_reward),
@@ -1169,7 +1169,7 @@ def compute_franka_reward(
 
     # <editor-fold desc="7. lift reward">
     # the higher the y coordinates of objects are, the larger the rewards will be set
-    init_spoon_pos = torch.tensor([-0.2785, 0.4923, 0.29])
+    init_spoon_pos = torch.tensor([-0.2785, 0.4989, 0.29])
     init_cup_pos = torch.tensor([-0.3, 0.4425, -0.29])
     lift_reward = (spoon_positions[:, 1] - init_spoon_pos[1]) * around_handle_reward + (
             spoon_positions[:, 1] - init_spoon_pos[1])
