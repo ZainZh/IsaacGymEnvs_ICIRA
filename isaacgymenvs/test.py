@@ -359,8 +359,8 @@ class HDF5DatasetWriter():
         # 构建两种数据，一种用来存储图像特征一种用来存储标签
         self.db = h5py.File(outputPath, "w")
         self.actions = self.db.create_dataset('actions', (1, 18), maxshape=(maxSize, 18), dtype="float")
-        self.observations = self.db.create_dataset('observations', (1, 56), maxshape=(maxSize, 56), dtype="float")
-        self.next_observations = self.db.create_dataset('next_observations', (1, 56), maxshape=(maxSize, 56),
+        self.observations = self.db.create_dataset('observations', (1, 74), maxshape=(maxSize, 74), dtype="float")
+        self.next_observations = self.db.create_dataset('next_observations', (1, 74), maxshape=(maxSize, 74),
                                                         dtype="float")
         self.rewards = self.db.create_dataset('rewards', (1, 1), maxshape=(maxSize, 1), dtype="float")
         self.dones = self.db.create_dataset("dones", (1, 1), maxshape=(maxSize, 1), dtype="i8")
@@ -388,8 +388,8 @@ class HDF5DatasetWriter():
         i = self.idx + len(self.buffer["actions"])
         if i >= len(self.actions):
             self.actions.resize((i, 18))
-            self.observations.resize((i, 56))
-            self.next_observations.resize((i, 56))
+            self.observations.resize((i, 74))
+            self.next_observations.resize((i, 74))
             self.rewards.resize((i, 1))
             self.dones.resize((i, 1))
         self.actions[self.idx:i] = self.buffer["actions"]
@@ -445,7 +445,7 @@ def get_franka():
 def reset_env():
     # need to disable pose override in viewer
     print('Reset env')
-    env.reset_idx(torch.arange(env.num_envs, device=env.device))
+    env.reset_idx_replay_buffer(torch.arange(env.num_envs, device=env.device))
 
 
 def ready_to_track():
@@ -621,7 +621,7 @@ if __name__ == "__main__":
             if write_hdf5data and auto_track_pose:
                 env.compute_observations()
                 # save after get next_obs
-                next_obs = env.obs_buf.clone().view(-1, 56).numpy()
+                next_obs = env.obs_buf.clone().view(-1, 74).numpy()
                 action = pos_action.clone().view(-1, 18).numpy()
                 # TODO: here calculate done
                 done = np.array([[0]], dtype='i8')

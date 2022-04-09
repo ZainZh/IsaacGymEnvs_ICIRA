@@ -3,7 +3,7 @@ import numpy as np
 import os
 import torch
 from torch import Tensor
-
+import random
 from isaacgym import gymutil, gymtorch, gymapi
 from isaacgym.torch_utils import *
 from tasks.base.vec_task import VecTask
@@ -31,6 +31,7 @@ class DualFranka(VecTask):
         self.action_penalty_scale = self.cfg["env"]["actionPenaltyScale"]
         self.num_agents = self.cfg["env"]["numAgents"]
         self.debug_viz = self.cfg["env"]["enableDebugVis"]
+        self.ResetFromReplay=self.cfg["env"]["ResetFromReplay"]
 
         self.up_axis = "y"
         self.up_axis_idx = 2
@@ -47,7 +48,7 @@ class DualFranka(VecTask):
         # num_obs = 42
         # num_acts = 18
         actors_per_env = 7
-        self.cfg["env"]["numObservations"] = 56
+        self.cfg["env"]["numObservations"] = 74
         self.cfg["env"]["numActions"] = 18
         super().__init__(config=self.cfg, sim_device=sim_device, graphics_device_id=graphics_device_id,
                          headless=headless)
@@ -545,12 +546,91 @@ class DualFranka(VecTask):
                             / (self.franka_dof_upper_limits - self.franka_dof_lower_limits) - 1.0)
         to_target = self.spoon_grasp_pos - self.franka_grasp_pos
         to_target_1 = self.cup_grasp_pos - self.franka_grasp_pos_1
-        # TODO: No further information after reaching the object
         self.obs_buf = torch.cat((dof_pos_scaled, dof_pos_scaled_1,
-                                  self.franka_dof_vel * self.dof_vel_scale, to_target,cup_pos,cup_rot,
-                                  self.franka_dof_vel_1 * self.dof_vel_scale, to_target_1,spoon_pos,spoon_rot), dim=-1)
+                                  self.franka_dof_vel * self.dof_vel_scale, to_target,
+                                  self.franka_dof_vel_1 * self.dof_vel_scale, to_target_1,
+                                  spoon_pos,spoon_rot,cup_pos,cup_rot,self.franka_dof_pos,self.franka_dof_pos_1), dim=-1)
 
         return self.obs_buf
+
+    def reset_idx_replay_buffer(self, env_ids):
+        import h5py
+        with h5py.File('/home/zzain/下载/replay_buff.hdf5', 'r') as hdf:
+            ls = list(hdf.keys())
+            data = hdf.get('observations')
+            dataset1 = np.array(data) #get the obversation buffer from replay buffer
+            rand_idx=random.randrange(0,dataset1.shape[0],1)
+            rand_franka_cup_pos=dataset1[rand_idx,-9:]
+            rand_franka_spoon_pos = dataset1[rand_idx,-18:-9]
+            rand_cup_pos=dataset1[rand_idx,-25:-18]
+            rand_spoon_pos=dataset1[rand_idx,-32:-25]
+        pos = to_torch(rand_franka_spoon_pos,device=self.device)
+        # print("pos is ", pos)
+        # reset franka with "pos"
+        self.franka_dof_pos[env_ids, :] = pos
+        self.franka_dof_vel[env_ids, :] = torch.zeros_like(self.franka_dof_vel[env_ids])
+        self.franka_dof_targets[env_ids, :self.num_franka_dofs] = pos
+
+        # reset franka1
+        pos_1 = to_torch(rand_franka_cup_pos,device=self.device)
+        self.franka_dof_pos_1[env_ids, :] = pos_1
+        self.franka_dof_vel_1[env_ids, :] = torch.zeros_like(self.franka_dof_vel_1[env_ids])
+        self.franka_dof_targets[env_ids, self.num_franka_dofs: 2 * self.num_franka_dofs] = pos_1
+
+
+        # # reset cup
+        self.cup_positions[env_ids] = to_torch(rand_cup_pos[0:3],device=self.device)
+        self.cup_orientations[env_ids] = to_torch(rand_cup_pos[3:7],device=self.device)
+        self.cup_angvels[env_ids] = 0.0
+        self.cup_linvels[env_ids] = 0.0
+        # reset spoon
+        self.spoon_positions[env_ids] = to_torch(rand_spoon_pos[0:3],device=self.device)
+        self.spoon_orientations[env_ids] = to_torch(rand_spoon_pos[3:7],device=self.device)
+        self.spoon_angvels[env_ids] = 0.0
+        self.spoon_linvels[env_ids] = 0.0
+
+        # reset shelf
+        self.shelf_positions[env_ids, 0] = -0.3
+        self.shelf_positions[env_ids, 1] = 0.4
+        self.shelf_positions[env_ids, 2] = 0.29
+        self.shelf_orientations[env_ids, 0] = -0.707107
+        self.shelf_orientations[env_ids, 1:3] = 0.0
+        self.shelf_orientations[env_ids, 3] = 0.707107
+        self.shelf_angvels[env_ids] = 0.0
+        self.shelf_linvels[env_ids] = 0.0
+
+        # reset table
+        self.table_positions[env_ids, 0] = 0.0
+        self.table_positions[env_ids, 1] = 0.0
+        self.table_positions[env_ids, 2] = 0.0
+        self.table_orientations[env_ids, 0] = 0.0
+        self.table_orientations[env_ids, 1:3] = 0.0
+        self.table_orientations[env_ids, 3] = 0.0
+        self.table_angvels[env_ids] = 0.0
+        self.table_linvels[env_ids] = 0.0
+
+        # reset root state for spoon and cup in selected envs
+        actor_indices = self.global_indices[env_ids, 2:4].flatten()
+
+        actor_indices_32 = actor_indices.to(torch.int32)
+
+        self.gym.set_actor_root_state_tensor_indexed(self.sim, gymtorch.unwrap_tensor(self.root_tensor),
+                                                     gymtorch.unwrap_tensor(actor_indices_32), len(actor_indices_32))
+
+        multi_env_ids = self.global_indices[env_ids, :2].flatten()
+        multi_env_ids_int32 = multi_env_ids.to(torch.int32)
+        self.gym.set_dof_position_target_tensor_indexed(self.sim,
+                                                        gymtorch.unwrap_tensor(self.franka_dof_targets),
+                                                        gymtorch.unwrap_tensor(multi_env_ids_int32),
+                                                        len(multi_env_ids_int32))
+
+        self.gym.set_dof_state_tensor_indexed(self.sim,
+                                              gymtorch.unwrap_tensor(self.dof_state),
+                                              gymtorch.unwrap_tensor(multi_env_ids_int32), len(multi_env_ids_int32))
+
+        self.progress_buf[env_ids] = 0
+
+        self.reset_buf[env_ids] = 0
     def reset_idx(self, env_ids):
         # reset franka
         # self.root_states[env_ids] = self.saved_root_tensor[env_ids]
@@ -835,7 +915,7 @@ class DualFranka(VecTask):
         env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         # print("env_ids", env_ids)
 
-        # # choose the simulation way(multi or single) and comment out the other way
+        # # choose the simulation way(multi ,single or resetfromreplay) and comment out the other way
         # env_ids_new = torch.zeros_like(env_ids)
         # env_ids_new_1 = torch.zeros_like(env_ids)
         # env_ids_new_2 = torch.zeros_like(env_ids)
@@ -866,9 +946,14 @@ class DualFranka(VecTask):
         #     print("env_ids_neww", env_ids_new_1[:k])
         #     print("env_ids_newwW", env_ids_new_2[:m])
 
-        # single simulation
+        # single simulation and reset from replay buffer
+
+
         if len(env_ids) > 0:
-            self.reset_idx(env_ids)
+            if self.ResetFromReplay == True :
+                self.reset_idx_replay_buffer(env_ids)
+            else:
+                self.reset_idx(env_ids)
 
         self.compute_observations()
         self.compute_reward()
