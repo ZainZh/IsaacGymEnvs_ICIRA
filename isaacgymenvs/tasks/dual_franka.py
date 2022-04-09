@@ -431,7 +431,7 @@ class DualFranka(VecTask):
 
         spoon_local_grasp_pose = gymapi.Transform()
         spoon_local_grasp_pose.p.x = 0
-        spoon_local_grasp_pose.p.y = 0.025
+        spoon_local_grasp_pose.p.y = 0.0025
         spoon_local_grasp_pose.p.z = 0
         spoon_local_grasp_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)  # TODO: check
 
@@ -1135,8 +1135,8 @@ def compute_franka_reward(
     #                                                finger_dist_reward_1),
     #                                    finger_dist_reward_1)
     finger_dist_reward = torch.zeros_like(rot_reward)
-    lfinger_dist = torch.abs(franka_lfinger_pos[:, 2] - (spoon_grasp_pos[:, 2]))
-    rfinger_dist = torch.abs(franka_rfinger_pos[:, 2] - (spoon_grasp_pos[:, 2]))
+    lfinger_dist = torch.abs(franka_lfinger_pos[:, 2] - (spoon_grasp_pos[:, 2]+0.005))
+    rfinger_dist = torch.abs(franka_rfinger_pos[:, 2] - (spoon_grasp_pos[:, 2]-0.005))
     finger_dist_reward = torch.where(franka_lfinger_pos[:, 2] > spoon_grasp_pos[:, 2],
                                      torch.where(franka_rfinger_pos[:, 2] < spoon_grasp_pos[:, 2],
                                                  (0.04 - lfinger_dist) + (0.04 - rfinger_dist), finger_dist_reward),
