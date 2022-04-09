@@ -162,15 +162,15 @@ class DualFranka(VecTask):
         # load table, cup asset
         table_dims = gymapi.Vec3(1, 0.8, 1.5)
         table_asset = self.gym.create_box(self.sim, table_dims.x, table_dims.y, table_dims.z, asset_options)
-        shelf_dims = gymapi.Vec3(0.15, 0.2, 0.15)
-        shelf_asset = self.gym.create_box(self.sim, shelf_dims.x, shelf_dims.y, shelf_dims.z, asset_options)
+        # shelf_dims = gymapi.Vec3(0.15, 0.2, 0.15)
+        # shelf_asset = self.gym.create_box(self.sim, shelf_dims.x, shelf_dims.y, shelf_dims.z, asset_options)
         other_asset_options = gymapi.AssetOptions()
         cup_asset = self.gym.load_asset(self.sim, asset_root, cup_asset_file, other_asset_options)
 
         # load shelf and spoon
         box_dims = gymapi.Vec3(0.1, 0.08, 0.1)
         other_asset_options.fix_base_link = True
-        #shelf_asset = self.gym.load_asset(self.sim, asset_root, shelf_asset_file, other_asset_options)
+        shelf_asset = self.gym.load_asset(self.sim, asset_root, shelf_asset_file, other_asset_options)
         box_asset = self.gym.create_box(self.sim, box_dims.x, box_dims.y, box_dims.z, other_asset_options)
         other_asset_options.fix_base_link = False
         spoon_asset = self.gym.load_asset(self.sim, asset_root, spoon_asset_file, other_asset_options)
