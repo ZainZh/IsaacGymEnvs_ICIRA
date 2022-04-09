@@ -431,7 +431,7 @@ class DualFranka(VecTask):
 
         spoon_local_grasp_pose = gymapi.Transform()
         spoon_local_grasp_pose.p.x = 0
-        spoon_local_grasp_pose.p.y = 0.0025
+        spoon_local_grasp_pose.p.y = 0.005
         spoon_local_grasp_pose.p.z = 0
         spoon_local_grasp_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)  # TODO: check
 
