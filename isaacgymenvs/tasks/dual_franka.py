@@ -670,7 +670,7 @@ class DualFranka(VecTask):
         self.spoon_orientations[env_ids, 0] = 0.0
         self.spoon_orientations[env_ids, 1] = 0.0
         self.spoon_orientations[env_ids, 2] = 0.0
-        self.spoon_orientations[env_ids, 3] = 0.707107
+        self.spoon_orientations[env_ids, 3] = 1.0
         self.spoon_angvels[env_ids] = 0.0
         self.spoon_linvels[env_ids] = 0.0
 
@@ -756,7 +756,7 @@ class DualFranka(VecTask):
         self.spoon_orientations[env_ids, 0] = 0.0
         self.spoon_orientations[env_ids, 1] = 0.0
         self.spoon_orientations[env_ids, 2] = 0.0
-        self.spoon_orientations[env_ids, 3] = 0.707107
+        self.spoon_orientations[env_ids, 3] = 1.0
         self.spoon_angvels[env_ids] = 0.0
         self.spoon_linvels[env_ids] = 0.0
 
@@ -841,7 +841,7 @@ class DualFranka(VecTask):
         self.spoon_orientations[env_ids, 0] = 0.0
         self.spoon_orientations[env_ids, 1] = 0.0
         self.spoon_orientations[env_ids, 2] = 0.0
-        self.spoon_orientations[env_ids, 3] = 0.707107
+        self.spoon_orientations[env_ids, 3] = 1.0
         self.spoon_angvels[env_ids] = 0.0
         self.spoon_linvels[env_ids] = 0.0
 
