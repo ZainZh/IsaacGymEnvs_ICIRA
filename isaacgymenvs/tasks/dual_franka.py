@@ -1010,7 +1010,7 @@ class DualFranka(VecTask):
 #####################################################################
 
 
-@torch.jit.script
+# @torch.jit.script
 def compute_franka_reward(
         reset_buf, progress_buf, actions, franka_grasp_pos, cup_grasp_pos, franka_grasp_rot, franka_grasp_pos_1,
         spoon_grasp_pos, franka_grasp_rot_1, cup_grasp_rot, spoon_grasp_rot,
@@ -1060,8 +1060,9 @@ def compute_franka_reward(
     dot2_1 = torch.bmm(axis3_1.view(num_envs, 1, 3), axis4_1.view(num_envs, 3, 1)).squeeze(-1).squeeze(-1)  # franka-x with cup-y
 
     # reward for matching the orientation of the hand to the cup(fingers wrapped)
-    rot_reward = 0.5 * (torch.sign(dot1) * dot1 ** 2 + torch.sign(dot2) * dot2 ** 2)
-    rot_reward_1 = 0.5 * (torch.sign(dot1_1) * dot1_1 ** 2 + torch.sign(dot2_1) * dot2_1 ** 2)
+    # rot_reward = 0.5 * (torch.sign(dot1) * dot1 ** 2 + torch.sign(dot2) * dot2 ** 2)
+    rot_reward = 0.5 * (torch.sign(dot1) * dot1 ** 2 +  dot2 ** 2) * dist_reward*0.1
+    rot_reward_1 = 0.5 * (torch.sign(dot1_1) * dot1_1 ** 2 + dot2_1 ** 2) * dist_reward_1*0.1
     # </editor-fold>
 
     # <editor-fold desc="3. around reward">
@@ -1072,14 +1073,14 @@ def compute_franka_reward(
                                        torch.where(quat_rotate_inverse(spoon_grasp_rot,franka_rfinger_pos)[:, 2] \
                                             < quat_rotate_inverse(spoon_grasp_rot,spoon_grasp_pos)[:, 2],
                                             around_handle_reward + 0.5, around_handle_reward),
-                                       around_handle_reward)
+                                       around_handle_reward)* dist_reward*0.1
     around_handle_reward_1 = torch.zeros_like(rot_reward_1)
     around_handle_reward_1 = torch.where(quat_rotate_inverse(cup_grasp_rot, franka_lfinger_pos_1)[:, 2] \
                                                > quat_rotate_inverse(cup_grasp_rot, cup_grasp_pos)[:, 2],
                                          torch.where(quat_rotate_inverse(cup_grasp_rot,franka_rfinger_pos_1)[:, 2] \
                                                 < quat_rotate_inverse(cup_grasp_rot, cup_grasp_pos)[:, 2],
                                                      around_handle_reward_1 + 0.5, around_handle_reward_1),
-                                         around_handle_reward_1)
+                                         around_handle_reward_1)* dist_reward_1*0.1
     # </editor-fold>
 
     # <editor-fold desc="4. reward for distance of each finger from the objects">
@@ -1090,8 +1091,10 @@ def compute_franka_reward(
     rfinger_dist = quat_rotate_inverse(spoon_grasp_rot,franka_rfinger_pos - spoon_grasp_pos)[:, 2]
     finger_dist_reward = torch.where(lfinger_dist > 0,
                                      torch.where(rfinger_dist < 0,
-                                                 50 * (0.08 - (torch.abs(lfinger_dist) + torch.abs(rfinger_dist))), 
-                                                 finger_dist_reward),
+                                                 torch.where(d < 0.04,
+                                                             50 * (0.08 - (torch.abs(lfinger_dist) + torch.abs(
+                                                                 rfinger_dist))),
+                                                             finger_dist_reward), finger_dist_reward),
                                      finger_dist_reward)
 
     # reward for distance of each finger from the cup
@@ -1100,9 +1103,10 @@ def compute_franka_reward(
     rfinger_dist_1 = quat_rotate_inverse(cup_grasp_rot,franka_rfinger_pos_1 - cup_grasp_pos)[:, 2]
     finger_dist_reward_1 = torch.where(lfinger_dist_1 > 0,
                                        torch.where(rfinger_dist_1 < 0,
-                                                   50 * (0.08 - 0.2 * (torch.abs(lfinger_dist_1) + torch.abs(rfinger_dist_1)) ),
-                                                   finger_dist_reward_1),
-                                       finger_dist_reward)
+                                                   torch.where(d_1 < 0.04,
+                                                               50 * (0.08 - 0.2 * (torch.abs(lfinger_dist_1) + torch.abs(rfinger_dist_1))),
+                                                    finger_dist_reward_1),finger_dist_reward_1),
+                                       finger_dist_reward_1)
     # </editor-fold>
 
     # <editor-fold desc="5. fall penalty(table or ground)">
@@ -1228,12 +1232,14 @@ def compute_franka_reward(
         'rotation': (rot_reward, rot_reward_scale),
         'around_hand': (around_handle_reward, around_handle_reward_scale),
         'finger_distance': (finger_dist_reward, finger_dist_reward_scale),
+        'd': (d, 1.0)
     }
     reward_franka_1 = {
         'distance': (dist_reward_1, dist_reward_scale),
         'rotation': (rot_reward_1, rot_reward_scale),
         'around_hand': (around_handle_reward_1, around_handle_reward_scale),
         'finger_distance': (finger_dist_reward_1, finger_dist_reward_scale),
+        'd1': (d_1, 1.0)
     }
     rewards_other = {
         'action_penalty(minus)': (action_penalty, action_penalty_scale),
