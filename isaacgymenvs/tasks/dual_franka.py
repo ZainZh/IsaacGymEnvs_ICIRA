@@ -431,7 +431,7 @@ class DualFranka(VecTask):
 
         spoon_local_grasp_pose = gymapi.Transform()
         spoon_local_grasp_pose.p.x = 0
-        spoon_local_grasp_pose.p.y = 0.005
+        spoon_local_grasp_pose.p.y = 0.025
         spoon_local_grasp_pose.p.z = 0
         spoon_local_grasp_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)  # TODO: check
 
@@ -1169,7 +1169,7 @@ def compute_franka_reward(
 
     # <editor-fold desc="7. lift reward">
     # the higher the y coordinates of objects are, the larger the rewards will be set
-    init_spoon_pos = torch.tensor([-0.2785, 0.4989, 0.29])
+    init_spoon_pos = torch.tensor([-0.2785, 0.499, 0.29])
     init_cup_pos = torch.tensor([-0.3, 0.4425, -0.29])
     lift_reward = (spoon_positions[:, 1] - init_spoon_pos[1]) * around_handle_reward + (
             spoon_positions[:, 1] - init_spoon_pos[1])
