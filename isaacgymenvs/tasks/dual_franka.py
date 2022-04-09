@@ -593,7 +593,7 @@ class DualFranka(VecTask):
         self.spoon_orientations[env_ids, 0] = 0.0
         self.spoon_orientations[env_ids, 1] = 0.0
         self.spoon_orientations[env_ids, 2] = 0.0
-        self.spoon_orientations[env_ids, 3] = 0.707107
+        self.spoon_orientations[env_ids, 3] = 1.0
         self.spoon_angvels[env_ids] = 0.0
         self.spoon_linvels[env_ids] = 0.0
 
@@ -674,12 +674,12 @@ class DualFranka(VecTask):
 
         # reset spoon
         self.spoon_positions[env_ids, 0] = -0.29
-        self.spoon_positions[env_ids, 1] = 0.525
+        self.spoon_positions[env_ids, 1] = 0.5
         self.spoon_positions[env_ids, 2] = 0.29
         self.spoon_orientations[env_ids, 0] = 0.0
         self.spoon_orientations[env_ids, 1] = 0.0
         self.spoon_orientations[env_ids, 2] = 0.0
-        self.spoon_orientations[env_ids, 3] = 0.707107
+        self.spoon_orientations[env_ids, 3] = 1.0
         self.spoon_angvels[env_ids] = 0.0
         self.spoon_linvels[env_ids] = 0.0
 
@@ -748,6 +748,7 @@ class DualFranka(VecTask):
         self.franka_dof_targets[env_ids, self.num_franka_dofs:2 * self.num_franka_dofs] = pos_1
 
         # reset cup
+        # reset cup
         self.cup_positions[env_ids, 0] = -0.3
         self.cup_positions[env_ids, 1] = 0.44
         self.cup_positions[env_ids, 2] = -0.29
@@ -759,12 +760,12 @@ class DualFranka(VecTask):
 
         # reset spoon
         self.spoon_positions[env_ids, 0] = -0.29
-        self.spoon_positions[env_ids, 1] = 0.525
+        self.spoon_positions[env_ids, 1] = 0.5
         self.spoon_positions[env_ids, 2] = 0.29
         self.spoon_orientations[env_ids, 0] = 0.0
         self.spoon_orientations[env_ids, 1] = 0.0
         self.spoon_orientations[env_ids, 2] = 0.0
-        self.spoon_orientations[env_ids, 3] = 0.707107
+        self.spoon_orientations[env_ids, 3] = 1.0
         self.spoon_angvels[env_ids] = 0.0
         self.spoon_linvels[env_ids] = 0.0
 
