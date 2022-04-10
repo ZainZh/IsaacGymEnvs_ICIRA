@@ -278,13 +278,13 @@ class DualFranka(VecTask):
         spoon_pose.p.x = table_pose.p.x - 0.29
         spoon_pose.p.y = 0.5
         spoon_pose.p.z = 0.29
-        spoon_pose.r = gymapi.Quat(0, 0, 0, 1.0)
+        spoon_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)
 
         shelf_pose = gymapi.Transform()
         shelf_pose.p.x = table_pose.p.x - 0.3
         shelf_pose.p.y = 0.4
         shelf_pose.p.z = 0.29
-        shelf_pose.r = gymapi.Quat(0, 0.0, 0.0, 0.707107)
+        shelf_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)
 
         # compute aggregate size
         num_franka_bodies = self.gym.get_asset_rigid_body_count(franka_asset)
@@ -431,7 +431,7 @@ class DualFranka(VecTask):
         spoon_local_grasp_pose.p.x = 0
         spoon_local_grasp_pose.p.y = 0.005
         spoon_local_grasp_pose.p.z = 0
-        spoon_local_grasp_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)  # TODO: check
+        spoon_local_grasp_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)
 
         self.spoon_local_grasp_pos = to_torch([spoon_local_grasp_pose.p.x, spoon_local_grasp_pose.p.y,
                                                spoon_local_grasp_pose.p.z], device=self.device).repeat(
@@ -590,7 +590,7 @@ class DualFranka(VecTask):
         self.spoon_orientations[env_ids, 0] = 0.0
         self.spoon_orientations[env_ids, 1] = 0.0
         self.spoon_orientations[env_ids, 2] = 0.0
-        self.spoon_orientations[env_ids, 3] = 0.707107
+        self.spoon_orientations[env_ids, 3] = 1.0
         self.spoon_angvels[env_ids] = 0.0
         self.spoon_linvels[env_ids] = 0.0
 
@@ -610,7 +610,7 @@ class DualFranka(VecTask):
         self.table_positions[env_ids, 2] = 0.0
         self.table_orientations[env_ids, 0] = 0.0
         self.table_orientations[env_ids, 1:3] = 0.0
-        self.table_orientations[env_ids, 3] = 0.0
+        self.table_orientations[env_ids, 3] = 1.0
         self.table_angvels[env_ids] = 0.0
         self.table_linvels[env_ids] = 0.0
 
@@ -676,7 +676,7 @@ class DualFranka(VecTask):
         self.spoon_orientations[env_ids, 0] = 0.0
         self.spoon_orientations[env_ids, 1] = 0.0
         self.spoon_orientations[env_ids, 2] = 0.0
-        self.spoon_orientations[env_ids, 3] = 0.707107
+        self.spoon_orientations[env_ids, 3] = 1.0
         self.spoon_angvels[env_ids] = 0.0
         self.spoon_linvels[env_ids] = 0.0
 
@@ -696,7 +696,7 @@ class DualFranka(VecTask):
         self.table_positions[env_ids, 2] = 0.0
         self.table_orientations[env_ids, 0] = 0.0
         self.table_orientations[env_ids, 1:3] = 0.0
-        self.table_orientations[env_ids, 3] = 0.0
+        self.table_orientations[env_ids, 3] = 1.0
         self.table_angvels[env_ids] = 0.0
         self.table_linvels[env_ids] = 0.0
         # reset root state for spoon and cup in selected envs
@@ -761,7 +761,7 @@ class DualFranka(VecTask):
         self.spoon_orientations[env_ids, 0] = 0.0
         self.spoon_orientations[env_ids, 1] = 0.0
         self.spoon_orientations[env_ids, 2] = 0.0
-        self.spoon_orientations[env_ids, 3] = 0.707107
+        self.spoon_orientations[env_ids, 3] = 1.0
         self.spoon_angvels[env_ids] = 0.0
         self.spoon_linvels[env_ids] = 0.0
 
@@ -781,7 +781,7 @@ class DualFranka(VecTask):
         self.table_positions[env_ids, 2] = 0.0
         self.table_orientations[env_ids, 0] = 0.0
         self.table_orientations[env_ids, 1:3] = 0.0
-        self.table_orientations[env_ids, 3] = 0.0
+        self.table_orientations[env_ids, 3] = 1.0
         self.table_angvels[env_ids] = 0.0
         self.table_linvels[env_ids] = 0.0
         # reset root state for spoon and cup in selected envs
@@ -1106,14 +1106,12 @@ def compute_franka_reward(
     # </editor-fold>
 
     # <editor-fold desc="5. fall penalty(table or ground)">
-    """
-      # cup(fall and reverse)
-    cup_fall_penalty = torch.where(cup_positions[:, 1] < 0.439, 1.0, 0.0)
-    dot_cup_reverse = torch.bmm(axis4_1.view(num_envs, 1, 3), cup_up_axis.view(num_envs, 3, 1)).squeeze(-1).squeeze(-1) # cup rotation y align with ground y(=cup up axis)
-    cup_reverse_penalty = torch.where(torch.acos(dot_cup_reverse) * 180 / torch.pi > 45 , 1.0, 0.0)    
-    # spoon
-    spoon_fall_penalty = torch.where(spoon_positions[:, 1] < 0.49, 1.0, 0.0)
-    """
+    # # cup(fall and reverse)
+    # cup_fall_penalty = torch.where(cup_positions[:, 1] < 0.439, 1.0, 0.0)
+    # dot_cup_reverse = torch.bmm(axis4_1.view(num_envs, 1, 3), cup_up_axis.view(num_envs, 3, 1)).squeeze(-1).squeeze(-1) # cup rotation y align with ground y(=cup up axis)
+    # cup_reverse_penalty = torch.where(torch.acos(dot_cup_reverse) * 180 / torch.pi > 45 , 1.0, 0.0)    
+    # # spoon
+    # spoon_fall_penalty = torch.where(spoon_positions[:, 1] < 0.49, 1.0, 0.0)
 
     # </editor-fold>
 
@@ -1132,6 +1130,8 @@ def compute_franka_reward(
               + around_handle_reward_scale * around_handle_reward_1 \
               + finger_dist_reward_scale * finger_dist_reward_1 \
               - action_penalty * action_penalty_scale \
+            #   - cup_fall_penalty - cup_reverse_penalty - spoon_fall_penalty
+
 
     # test args
     rewards_step = rewards.clone().detach()
@@ -1139,8 +1139,8 @@ def compute_franka_reward(
     # <editor-fold desc="II. reward bonus">
     # <editor-fold desc="1. bonus for take up the cup properly(franka1)">
     rewards = torch.where(cup_positions[:, 1] > 0.445, rewards + 1.5, rewards)
-    rewards = torch.where(cup_positions[:, 1] > 0.5, rewards + 1.5 * around_handle_reward, rewards)
-    rewards = torch.where(cup_positions[:, 1] > 0.6, rewards + (2.5 * around_handle_reward), rewards)
+    rewards = torch.where(cup_positions[:, 1] > 0.5, rewards + 1.5 * around_handle_reward_1, rewards)
+    rewards = torch.where(cup_positions[:, 1] > 0.6, rewards + (2.5 * around_handle_reward_1), rewards)
     # test args
     take_cup_bonus = rewards - rewards_step
     rewards_step += take_cup_bonus
@@ -1178,8 +1178,8 @@ def compute_franka_reward(
 
     # <editor-fold desc="4. bonus for take up the spoon properly(franka)">
     rewards = torch.where(spoon_positions[:, 1] > 0.5, rewards + 1.5, rewards)
-    rewards = torch.where(spoon_positions[:, 1] > 0.595, rewards + 1.5 * around_handle_reward_1, rewards)
-    rewards = torch.where(spoon_positions[:, 1] > 0.695, rewards + (2.5 * around_handle_reward_1), rewards)
+    rewards = torch.where(spoon_positions[:, 1] > 0.595, rewards + 1.5 * around_handle_reward, rewards)
+    rewards = torch.where(spoon_positions[:, 1] > 0.695, rewards + (2.5 * around_handle_reward), rewards)
     # test args
     take_spoon_bonus = rewards - rewards_step
     rewards_step += take_spoon_bonus
@@ -1207,11 +1207,8 @@ def compute_franka_reward(
     reset_buf = torch.where(spoon_positions[:, 1] > 1.1, torch.ones_like(reset_buf), reset_buf) 
     reset_buf = torch.where(cup_positions[:, 1] < 0.3, torch.ones_like(reset_buf),
                             reset_buf)  # cup fall to table or ground
-    """
-        reset_buf = torch.where(torch.acos(dot_cup_reverse) * 180 / torch.pi > 90, torch.ones_like(reset_buf),
+    reset_buf = torch.where(torch.acos(dot_cup_reverse) * 180 / torch.pi > 90, torch.ones_like(reset_buf),
                             reset_buf)  # cup fall direction
-    """
-
     reset_buf = torch.where(spoon_positions[:, 1] < 0.41, torch.ones_like(reset_buf),
                             reset_buf)  # spoon fall to table or ground
 
