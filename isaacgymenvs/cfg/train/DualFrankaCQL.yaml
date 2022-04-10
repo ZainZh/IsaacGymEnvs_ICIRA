@@ -75,7 +75,7 @@ params:
     alpha_lr: 3e-4    # sac entropy tuning alpha
     target_entropy_coef: 0.5  # if none, default 0.5
 
-    score_to_win: 10000
+    score_to_win: 40000
     sigma: 0.9    # need tune, if fixed_sigma=True
 
     # CQL args
