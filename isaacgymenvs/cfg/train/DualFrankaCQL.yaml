@@ -22,8 +22,10 @@ params:
         fixed_sigma: False   # if fixed_sigma=True, config.sigma is used below
         
     mlp:
-      units: [256, 256, 256]
-      activation: relu   # network_builder activations_factory line 38
+      # units: [256, 256, 256]
+      # activation: relu   # network_builder activations_factory line 38
+      units: [256, 128, 64]
+      activation: elu   # network_builder activations_factory line 38
       d2rl: False
 
       initializer:    # network_builder init_factory line 50
