@@ -12,6 +12,7 @@ env:
   envSpacing: 2
   episodeLength: 1000   # max step
   enableDebugVis: False
+  ResetFromReplay: False
 
   clipObservations: 5.0
   clipActions: 1.0
