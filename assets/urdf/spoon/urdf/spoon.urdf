@@ -26,7 +26,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://spoon/meshes/base_link.STL" />
+          filename="package://spoon/meshes/base_link.obj" />
       </geometry>
       <material
         name="">
@@ -40,7 +40,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://spoon/meshes/base_link.STL" />
+          filename="package://spoon/meshes/base_link.obj" />
       </geometry>
     </collision>
   </link>
