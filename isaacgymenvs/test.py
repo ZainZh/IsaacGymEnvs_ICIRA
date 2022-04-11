@@ -195,10 +195,10 @@ def print_state(if_all=False):
         print('ee_pose&gripper', torch.cat((ee_pose, gripper_dof), dim=1))
         print('obs-', env.compute_observations())
         print('rew-', env.compute_reward())
-    
+        print("franka_grasp_pos", env.franka_grasp_pos)
     if print_mode >= 2 or if_all==True:
         print_detail_clearly(env.reward_dict)
-
+        print("franka_grasp_pos", env.franka_grasp_pos)
     # print reset env_ids
     if print_mode >= 1 or if_all == True:
         check_reset()
