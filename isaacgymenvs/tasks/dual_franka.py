@@ -1289,8 +1289,8 @@ def compute_franka_reward(
     reset_buf = torch.where(spoon_positions[:, 1] > 1.1, torch.ones_like(reset_buf), reset_buf) 
     reset_buf = torch.where(cup_positions[:, 1] < 0.3, torch.ones_like(reset_buf),
                             reset_buf)  # cup fall to table or ground
-    reset_buf = torch.where(torch.acos(dot_cup_reverse) * 180 / torch.pi > 90, torch.ones_like(reset_buf),
-                            reset_buf)  # cup fall direction
+    # reset_buf = torch.where(torch.acos(dot_cup_reverse) * 180 / torch.pi > 90, torch.ones_like(reset_buf),
+    #                         reset_buf)  # cup fall direction
     reset_buf = torch.where(spoon_positions[:, 1] < 0.41, torch.ones_like(reset_buf),
                             reset_buf)  # spoon fall to table or ground
 
