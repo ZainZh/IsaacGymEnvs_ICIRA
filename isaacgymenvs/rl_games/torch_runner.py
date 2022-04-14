@@ -39,7 +39,8 @@ def _override_sigma(agent, args):
 
 def _load_hdf5(agent, args):
     if args['dataset'] is not None and args['dataset']!='':
-        agent.load_hdf5(args['dataset'])
+        return agent.load_hdf5(args['dataset'])
+
 
 class Runner:
     def __init__(self, algo_observer=None):
@@ -114,5 +115,44 @@ class Runner:
 
         elif args['play']:
             self.run_play(args)
+        elif args['reg']:
+            if args['dataset'] is not None and args['dataset']!='':
+                self.train_regression(args)
+            else:
+                raise Exception('add dataset path!')
         else:
             self.run_train(args)
+
+    def train_regression(self, args):
+        from torch.utils.data import Dataset, DataLoader, random_split
+        print('\033[1;33mTrain regression\033[0m')
+        agent = self.algo_factory.create(self.algo_name, base_name='run', params=self.params)
+        if hasattr(agent.regression(), '__call__'):
+            _restore(agent, args)
+            _obs, _actions, _rewards, _next_obs, _dones = _load_hdf5(agent, args)
+            train_dataset = myhdf5dataset(_obs, _actions, _rewards, _next_obs, _dones)
+            if self.algo_name == 'cql':
+                _override_sigma(agent, args)
+            agent.regression(train_dataset, batch_size=256)
+        else:
+            raise Exception('no this function')
+
+        class myhdf5dataset(Dataset):
+            def __init__(self, obs, reward, next_obs, dones, action=None):
+                if action is None:
+                    self.action = action
+                else:
+                    self.action = torch.FloatTensor(action)
+                self.obs = torch.FloatTensor(obs)
+                self.reward = torch.FloatTensor(reward)
+                self.next_obs = torch.FloatTensor(next_obs)
+                self.dones = torch.FloatTensor(dones)
+
+            def __getitem__(self, idx):
+                if self.action is None:
+                    return self.obs[idx], self.reward[idx], self.next_obs[idx], self.dones[idx]
+                else:
+                    return self.obs[idx], self.reward[idx], self.next_obs[idx], self.dones[idx], self.action[idx]
+
+            def __len__(self):
+                return len(self.obs)

@@ -1184,7 +1184,7 @@ def compute_franka_reward(
                                        torch.where(rfinger_dist_1 < 0,
                                                    50 * (0.08 - (torch.abs(lfinger_dist_1) + torch.abs(rfinger_dist_1)) ),
                                                    finger_dist_reward_1),
-                                       finger_dist_reward)
+                                       finger_dist_reward_1)
     # </editor-fold>
 
     # <editor-fold desc="5. fall penalty(table or ground)">
