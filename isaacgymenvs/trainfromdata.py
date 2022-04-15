@@ -132,6 +132,7 @@ def launch_rlg_hydra(cfg: DictConfig):
             'checkpoint': cfg.checkpoint,  # checkpoint arg
             'sigma': cfg.train.params.config.sigma,  # torch_runner line 26
             'dataset': cfg.dataset,
+            'device': cfg.rl_device,
         })
     else:
         runner.run({
@@ -141,6 +142,7 @@ def launch_rlg_hydra(cfg: DictConfig):
             'checkpoint': cfg.checkpoint,  # checkpoint arg
             # 'sigma': cfg.train.params.config.sigma,  # torch_runner line 26
             'dataset': cfg.dataset,
+            'device': cfg.rl_device,
         })
 
 

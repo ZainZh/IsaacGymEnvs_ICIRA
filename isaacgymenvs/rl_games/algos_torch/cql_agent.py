@@ -683,7 +683,7 @@ class CQLAgent(BaseAlgorithm):
         print('hdf5 loaded from', dataset_path, 'now idx', self.replay_buffer.idx)
         return _obs, _actions, _rewards, _next_obs, _dones
 
-    def regression(self, train_dataset, batch_size=256, total_epoch_num=200):
+    def regression(self, train_dataset, batch_size=256, total_epoch_num=570):
         from torch.utils.data import Dataset, DataLoader, random_split
         
         self.init_tensors()
@@ -694,7 +694,7 @@ class CQLAgent(BaseAlgorithm):
         self.frame = 0
         # self.obs = self.env_reset()
         
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=False)
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=False, drop_last=True)
 
         print('\033[1;33mStart training\033[0m')  # add hint
 
@@ -720,12 +720,8 @@ class CQLAgent(BaseAlgorithm):
 
             self.set_train()
             for s in train_loader:
-                obs = s.obs
-                action = s.action
-                reward = s.reward
-                next_obs = s.next_obs
-                done = s.done
-                not_done = ~done
+                obs, reward, next_obs, done, action = s
+                not_done = 1.0 - done.float()
                 
                 # update
                 critic_loss, critic1_loss, critic2_loss, min_qf1_loss, min_qf2_loss, std_q1, std_q2, alpha_prime_loss \
@@ -749,8 +745,7 @@ class CQLAgent(BaseAlgorithm):
             self.set_eval()
             eval_loss = []
             for s in train_loader:
-                obs = s.obs
-                action = s.action
+                obs, reward, next_obs, done, action = s
                 with torch.no_grad():
                     pred_action = self.act(obs.float(), self.env_info["action_space"].shape, sample=True)
                     loss = torch.norm(pred_action-action)
@@ -785,7 +780,7 @@ class CQLAgent(BaseAlgorithm):
                 self.save(
                     os.path.join(self.checkpoint_dir, 'reg_ep_' + str(self.epoch_num)))
 
-            if self.epoch_num > total_epoch_num:
+            if self.epoch_num >= total_epoch_num:
                 self.save(os.path.join(self.checkpoint_dir,
                                         'reg_last' + str(self.epoch_num)))
                 print('MAX EPOCHS NUM!')

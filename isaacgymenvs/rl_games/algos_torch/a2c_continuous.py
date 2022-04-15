@@ -249,47 +249,63 @@ class A2CAgent(a2c_common.ContinuousA2CBase):
             step_time = 0.0
 
             for n, s in enumerate(train_loader):
-                obs = s.obs
-                action = s.action
-                reward = s.reward
-                next_obs = s.next_obs
-                done = s.done
-                not_done = ~done
+                _obs, _reward, _next_obs, _done, _action = s
 
-                self.obs = obs
-                # get action value
-                processed_obs = self._preproc_obs(next_obs)
+                for idx in range(len(_obs)):
+                    i = idx + batch_size * n
+                    if i >= self.horizon_length:
+                        break
+                    obs = _obs[idx].view(-1, 74)
+                    reward = _reward[idx].view(-1, 1)
+                    next_obs = _next_obs[idx].view(-1, 74)
+                    done = _done[idx].view(-1, 1)
+                    action = _action[idx].view(-1, 18)
+
+                    self.obs = obs
+                    # get action value
+                    processed_obs = self._preproc_obs(next_obs)
+                    self.model.eval()
+                    input_dict = {
+                        'is_train': False,
+                        'prev_actions': action,
+                        'obs': processed_obs,
+                        'rnn_states': self.rnn_states
+                    }
+                    with torch.no_grad():
+                        res_dict = self.model(input_dict)
+                    # return res_dict
+
+                    self.experience_buffer.update_data('obses', i, obs)
+                    self.experience_buffer.update_data('dones', i, done)
+                    for k in update_list:
+                        self.experience_buffer.update_data(k, i, res_dict[k])
+
+
+                    shaped_rewards = self.rewards_shaper(reward)
+
+                    self.experience_buffer.update_data('rewards', i, shaped_rewards)
+
+                    self.current_lengths += 1
+                    # all_done_indices = done.nonzero(as_tuple=False)
+                    # env_done_indices = done.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
+
+                    not_dones = 1.0 - done.float()
+
+                    self.current_rewards = self.current_rewards * not_dones.unsqueeze(1)
+                    self.current_lengths = self.current_lengths * not_dones
+
+            # last_values = self.get_values(self.obs)
+            with torch.no_grad():
                 self.model.eval()
+                processed_obs = self._preproc_obs(obs)
                 input_dict = {
                     'is_train': False,
-                    'prev_actions': action,
+                    'prev_actions': None,
                     'obs': processed_obs,
                     'rnn_states': self.rnn_states
                 }
-                with torch.no_grad():
-                    res_dict = self.model(input_dict)
-                # return res_dict
-
-                self.experience_buffer.update_data('obses', n, obs)
-                self.experience_buffer.update_data('dones', n, done)
-                for k in update_list:
-                    self.experience_buffer.update_data(k, n, res_dict[k])
-
-
-                shaped_rewards = self.rewards_shaper(reward)
-
-                self.experience_buffer.update_data('rewards', n, shaped_rewards)
-
-                self.current_lengths += 1
-                all_done_indices = done.nonzero(as_tuple=False)
-                env_done_indices = done.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
-
-                not_dones = 1.0 - done.float()
-
-                self.current_rewards = self.current_rewards * not_dones.unsqueeze(1)
-                self.current_lengths = self.current_lengths * not_dones
-
-            last_values = self.get_values(self.obs)
+                result = self.model(input_dict)
+                last_values = result['values']
 
             fdones = self.dones.float()
             mb_fdones = self.experience_buffer.tensor_dict['dones'].float()
@@ -325,33 +341,33 @@ class A2CAgent(a2c_common.ContinuousA2CBase):
             entropies = []
             kls = []
 
-            for mini_ep in range(0, self.mini_epochs_num):
-                ep_kls = []
-                for i in range(len(self.dataset)):
-                    a_loss, c_loss, entropy, kl, last_lr, lr_mul, cmu, csigma, b_loss = self.train_actor_critic(
-                        self.dataset[i])
-                    a_losses.append(a_loss)
-                    c_losses.append(c_loss)
-                    ep_kls.append(kl)
-                    entropies.append(entropy)
-                    if self.bounds_loss_coef is not None:
-                        b_losses.append(b_loss)
+            # for mini_ep in range(0, self.mini_epochs_num):
+            ep_kls = []
+            for i in range(len(self.dataset)):
+                a_loss, c_loss, entropy, kl, last_lr, lr_mul, cmu, csigma, b_loss = self.train_actor_critic(
+                    self.dataset[i])
+                a_losses.append(a_loss)
+                c_losses.append(c_loss)
+                ep_kls.append(kl)
+                entropies.append(entropy)
+                if self.bounds_loss_coef is not None:
+                    b_losses.append(b_loss)
 
-                    self.dataset.update_mu_sigma(cmu, csigma)
+                self.dataset.update_mu_sigma(cmu, csigma)
 
-                    if self.schedule_type == 'legacy':
-                        if self.multi_gpu:
-                            kl = self.hvd.average_value(kl, 'ep_kls')
-                        self.last_lr, self.entropy_coef = self.scheduler.update(self.last_lr, self.entropy_coef,
-                                                                                self.epoch_num, 0, kl.item())
-                        self.update_lr(self.last_lr)
+                if self.schedule_type == 'legacy':
+                    if self.multi_gpu:
+                        kl = self.hvd.average_value(kl, 'ep_kls')
+                    self.last_lr, self.entropy_coef = self.scheduler.update(self.last_lr, self.entropy_coef,
+                                                                            self.epoch_num, 0, kl.item())
+                    self.update_lr(self.last_lr)
 
-                av_kls = torch_ext.mean_list(ep_kls)
+            av_kls = torch_ext.mean_list(ep_kls)
 
-                kls.append(av_kls)
-                self.diagnostics.mini_epoch(self, mini_ep)
-                if self.normalize_input:
-                    self.model.running_mean_std.eval()  # don't need to update statstics more than one miniepoch
+            kls.append(av_kls)
+            # self.diagnostics.mini_epoch(self, mini_ep)
+            if self.normalize_input:
+                self.model.running_mean_std.eval()  # don't need to update statstics more than one miniepoch
 
             update_time_end = time.time()
             play_time = play_time_end - play_time_start
@@ -374,8 +390,8 @@ class A2CAgent(a2c_common.ContinuousA2CBase):
                 # do we need scaled_time?
                 curr_frames = self.curr_frames
                 self.frame += curr_frames
-                if self.print_stats:
-                    fps_step = curr_frames / step_time
+                # if self.print_stats:
+                #     fps_step = curr_frames / step_time
 
                 self.diagnostics.send_info(self.writer)
                 self.writer.add_scalar('losses/a_loss', torch_ext.mean_list(a_losses).item(), frame)
@@ -392,15 +408,15 @@ class A2CAgent(a2c_common.ContinuousA2CBase):
                 if len(b_losses) > 0:
                     self.writer.add_scalar('losses/bounds_loss', torch_ext.mean_list(b_losses).item(), frame)
             mean_a_loss = sum(a_losses)/len(a_losses)
-            print(f'Epoch [{frame}/{total_epoch_num}]: Train loss: {mean_a_loss:.4f}')
+            print(f'Epoch [{epoch_num}/{total_epoch_num}]: Train loss: {mean_a_loss:.4f}')
 
-            if mean_a_loss < 1e-2:
-                print('mean_a_loss : ', mean_a_loss)
-                self.save(
-                    os.path.join(self.checkpoint_dir, 'reg_ep_' + str(self.epoch_num)))
-                should_exit = True
+            # if mean_a_loss < 1e-2:
+            #     print('mean_a_loss : ', mean_a_loss)
+            #     self.save(
+            #         os.path.join(self.nn_dir, 'reg_ep_' + str(self.epoch_num)))
+            #     should_exit = True
 
-            if epoch_num > self.max_epochs:
+            if epoch_num >= total_epoch_num:
                 self.save(os.path.join(self.nn_dir,
                                         'reglast_' + self.config['name'] + 'ep' + str(epoch_num)))
                 print('MAX EPOCHS NUM!')
@@ -410,3 +426,15 @@ class A2CAgent(a2c_common.ContinuousA2CBase):
 
             if should_exit:
                 return self.last_mean_rewards, epoch_num
+    
+    def load_hdf5(self, dataset_path):
+        import h5py
+        _dataset = h5py.File(dataset_path, 'r')
+        _obs = torch.tensor(np.array(_dataset['observations']), dtype=torch.float, device=self.device)
+        _actions = torch.tensor(np.array(_dataset['actions']), dtype=torch.float, device=self.device)
+        _rewards = torch.tensor(np.array(_dataset['rewards']), dtype=torch.float, device=self.device)
+        _next_obs = torch.tensor(np.array(_dataset['next_observations']), dtype=torch.float, device=self.device)
+        _dones = torch.tensor(np.array(_dataset['dones']), dtype=torch.float, device=self.device)
+        # self.replay_buffer.add(_obs, _actions, _rewards, _next_obs, _dones)
+        # print('hdf5 loaded from', dataset_path, 'now idx', self.replay_buffer.idx)
+        return _obs, _actions, _rewards, _next_obs, _dones
