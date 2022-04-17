@@ -40,7 +40,7 @@ checkpoint: ''
 multi_gpu: False
 
 # disables rendering
-headless: True
+headless: False
 
 # dataset loading path
 dataset: ''
