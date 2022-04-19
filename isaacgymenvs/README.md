@@ -62,6 +62,7 @@ python train.py test=True headless=False checkpoint='runs/DualFrankaCQL/nn/model
 | `D`                     | Enable/disable debug info                                    |
 | `V`                     | Check task stage in certain obs                              |
 | `9`                     | Pause tracking                                               |
+| `L`                     | Override Franka DOFs                                         |
 | `UP, DOWN, LEFT, RIGHT` | Drive franka position manually in `xz` plane                 |
 | `[`, `]`                | Drive franka position manually in `y` axis                   |
 | `LEFT_SHIFT`            | Switch driving between left/right Franka                     |
