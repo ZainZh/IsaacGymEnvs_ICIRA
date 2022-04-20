@@ -36,6 +36,8 @@ class CQLAgent(BaseAlgorithm):
         self.replay_buffer_path = config["replay_buffer_path"]
         self.num_steps_per_episode = config.get("num_steps_per_episode", 1000)
         self.normalize_input = config.get("normalize_input", False)
+        self.actor_update_frequency = config.get("actor_update_frequency", 1)
+        self.critic_target_update_frequency = config.get("critic_target_update_frequency", 2)
 
         self.max_env_steps = config.get("max_env_steps", 1000)  # temporary, in future we will use other approach
 
@@ -61,7 +63,6 @@ class CQLAgent(BaseAlgorithm):
             'action_dim': self.env_info["action_space"].shape[0],
             'actions_num': self.actions_num,
             'input_shape': obs_shape,
-            'normalize_input': self.normalize_input,
             'normalize_input': self.normalize_input,
         }
         self.model = self.network.build(net_config)
@@ -387,10 +388,13 @@ class CQLAgent(BaseAlgorithm):
         critic_loss, critic1_loss, critic2_loss, min_qf1_loss, min_qf2_loss, std_q1, std_q2, alpha_prime_loss \
             = self.update_critic(obs, action, reward, next_obs, not_done, step)
 
-        actor_loss, entropy, alpha, alpha_loss = self.update_actor_and_alpha(obs, step)
+        if step % self.actor_update_frequency == 0:
+            actor_loss, entropy, alpha, alpha_loss = self.update_actor_and_alpha(obs, step)
 
         actor_loss_info = actor_loss, entropy, alpha, alpha_loss
-        self.soft_update_params(self.model.sac_network.critic, self.model.sac_network.critic_target,
+        
+        if step % self.critic_target_update_frequency == 0:
+            self.soft_update_params(self.model.sac_network.critic, self.model.sac_network.critic_target,
                                 self.critic_tau)
         return actor_loss_info, critic1_loss, critic2_loss, min_qf1_loss, min_qf2_loss, std_q1, std_q2, alpha_prime_loss
 
@@ -645,7 +649,7 @@ class CQLAgent(BaseAlgorithm):
                     return self.last_mean_rewards, self.epoch_num
                 update_time = 0
 
-                if self.epoch_num % 100 == 0:
+                if self.epoch_num % 30 == 0:
                     self.save(
                         os.path.join(self.checkpoint_dir, 'ep_' + str(self.epoch_num) + '_rew_' + str(mean_rewards)))
                     print('model backup save')
