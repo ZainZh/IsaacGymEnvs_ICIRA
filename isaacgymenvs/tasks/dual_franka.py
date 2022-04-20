@@ -441,16 +441,15 @@ class DualFranka(VecTask):
 
         # set axis
         # need look details
-        self.gripper_forward_axis = to_torch([0, 0, -1], device=self.device).repeat((self.num_envs, 1))
-        self.cup_inward_axis = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
-        self.gripper_up_axis = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
-        self.cup_up_axis = to_torch([0, 1, 0], device=self.device).repeat((self.num_envs, 1))
-
-        self.gripper_forward_axis_1 = to_torch([0, 0, 1], device=self.device).repeat((self.num_envs, 1))
+        self.gripper_forward_axis = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
+        self.gripper_up_axis = to_torch([0, 0, -1], device=self.device).repeat((self.num_envs, 1))
         self.spoon_inward_axis = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
-        self.gripper_up_axis_1 = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
         self.spoon_up_axis = to_torch([0, 1, 0], device=self.device).repeat((self.num_envs, 1))
 
+        self.gripper_forward_axis_1 = to_torch([0, 0, 1], device=self.device).repeat((self.num_envs, 1))
+        self.gripper_up_axis_1 = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
+        self.cup_inward_axis = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
+        self.cup_up_axis = to_torch([0, 1, 0], device=self.device).repeat((self.num_envs, 1))
         # params for calculation
         self.franka_grasp_pos = torch.zeros_like(self.franka_local_grasp_pos)
         self.franka_grasp_rot = torch.zeros_like(self.franka_local_grasp_rot)
@@ -1146,9 +1145,9 @@ def compute_franka_reward(
     # <editor-fold desc="2. rotation reward">
     # define axis to make sure the alignment
     axis1 = tf_vector(franka_grasp_rot, gripper_forward_axis)  # franka
-    axis2 = tf_vector(spoon_grasp_rot, spoon_up_axis)  # [0,1,0]
+    axis2 = tf_vector(spoon_grasp_rot, spoon_inward_axis)  # [0,1,0]
     axis3 = tf_vector(franka_grasp_rot, gripper_up_axis)
-    axis4 = tf_vector(spoon_grasp_rot, spoon_inward_axis)  # [0,0,1]
+    axis4 = tf_vector(spoon_grasp_rot, spoon_up_axis)# [0,0,1]
 
     axis1_1 = tf_vector(franka_grasp_rot_1, gripper_forward_axis_1)  # franka1
     axis2_1 = tf_vector(cup_grasp_rot, cup_inward_axis)
