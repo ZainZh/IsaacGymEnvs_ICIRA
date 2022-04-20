@@ -11,7 +11,7 @@ env:
   numAgents: 1
   envSpacing: 2
   episodeLength: 1000   # max step
-  enableDebugVis: False
+  enableDebugVis: True
   ResetFromReplay: False
 
   clipObservations: 5.0
