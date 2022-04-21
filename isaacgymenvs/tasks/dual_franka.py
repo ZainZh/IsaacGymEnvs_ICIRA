@@ -532,12 +532,17 @@ class DualFranka(VecTask):
         self.franka_lfinger_rot = self.rigid_body_states[:, self.lfinger_handle][:, 3:7]
         self.franka_rfinger_rot = self.rigid_body_states[:, self.rfinger_handle][:, 3:7]
         # globally convert all finger pos
-
+        v = torch.zeros_like(self.franka_lfinger_pos)
+        v[:, 2] = 0.04
+        self.franka_lfinger_pos += quat_rotate(self.franka_grasp_rot, v)
+        self.franka_rfinger_pos += quat_rotate(self.franka_grasp_rot, v)
         self.franka_lfinger_pos_1 = self.rigid_body_states[:, self.lfinger_handle_1][:, 0:3]
         self.franka_rfinger_pos_1 = self.rigid_body_states[:, self.rfinger_handle_1][:, 0:3]
         self.franka_lfinger_rot_1 = self.rigid_body_states[:, self.lfinger_handle_1][:, 3:7]
         self.franka_rfinger_rot_1 = self.rigid_body_states[:, self.rfinger_handle_1][:, 3:7]
 
+        self.franka_lfinger_pos_1 += quat_rotate(self.franka_grasp_rot_1, v)
+        self.franka_rfinger_pos_1 += quat_rotate(self.franka_grasp_rot_1, v)
         dof_pos_scaled = (2.0 * (self.franka_dof_pos - self.franka_dof_lower_limits)
                           / (self.franka_dof_upper_limits - self.franka_dof_lower_limits) - 1.0)
         dof_pos_scaled_1 = (2.0 * (self.franka_dof_pos_1 - self.franka_dof_lower_limits)
@@ -1122,13 +1127,6 @@ def compute_franka_reward(
     """
     # globally convert all finger pos
     # globally convert all finger pos
-    v = torch.zeros_like(franka_lfinger_pos)
-    v[:, 2] = 0.04
-    franka_lfinger_pos += quat_rotate(franka_grasp_rot, v)
-    franka_rfinger_pos += quat_rotate(franka_grasp_rot, v)
-    franka_lfinger_pos_1 += quat_rotate(franka_grasp_rot_1, v)
-    franka_rfinger_pos_1 += quat_rotate(franka_grasp_rot_1, v)
-
     # <editor-fold desc="1. distance reward - grasp and object">
     d = torch.norm(franka_grasp_pos - spoon_grasp_pos, p=2, dim=-1)
     dist_reward = 1.0 / (1.0 + d ** 2)
@@ -1147,7 +1145,7 @@ def compute_franka_reward(
     axis1 = tf_vector(franka_grasp_rot, gripper_forward_axis)  # franka
     axis2 = tf_vector(spoon_grasp_rot, spoon_up_axis)  # [0,1,0]
     axis3 = tf_vector(franka_grasp_rot, gripper_up_axis)
-    axis4 = tf_vector(spoon_grasp_rot, spoon_inward_axis)  # [0,0,1]
+    axis4 = tf_vector(spoon_grasp_rot, spoon_inward_axis)  # [1,0,0]
 
     axis1_1 = tf_vector(franka_grasp_rot_1, gripper_forward_axis_1)  # franka1
     axis2_1 = tf_vector(cup_grasp_rot, cup_inward_axis)
@@ -1156,10 +1154,15 @@ def compute_franka_reward(
 
     # compute the alignment(reward)
     # alignment of forward axis for gripper
-    dot1 = torch.bmm(axis1.view(num_envs, 1, 3), axis2.view(num_envs, 3, 1)).squeeze(-1).squeeze(-1)  # franka-z-minus with spoon-y
-    dot2 = torch.bmm(axis3.view(num_envs, 1, 3), axis4.view(num_envs, 3, 1)).squeeze(-1).squeeze(-1)  # franka-x with spoon-x
-    dot1_1 = torch.bmm(axis1_1.view(num_envs, 1, 3), axis2_1.view(num_envs, 3, 1)).squeeze(-1).squeeze(-1)  # franka-z with cup-x
-    dot2_1 = torch.bmm(axis3_1.view(num_envs, 1, 3), axis4_1.view(num_envs, 3, 1)).squeeze(-1).squeeze(-1)  # franka-x with cup-y
+    dot1 = torch.bmm(axis1.view(num_envs, 1, 3), axis4.view(num_envs, 3, 1)).squeeze(-1).squeeze(
+        -1)  # franka-z with spoon-z-minus
+    dot2 = torch.bmm(axis3.view(num_envs, 1, 3), axis2.view(num_envs, 3, 1)).squeeze(-1).squeeze(
+        -1)  # franka-y with spoon-y
+
+    dot1_1 = torch.bmm(axis1_1.view(num_envs, 1, 3), axis2_1.view(num_envs, 3, 1)).squeeze(-1).squeeze(
+        -1)  # franka-z with cup-x
+    dot2_1 = torch.bmm(axis3_1.view(num_envs, 1, 3), axis4_1.view(num_envs, 3, 1)).squeeze(-1).squeeze(
+        -1)  # franka-x with cup-y
     # reward for matching the orientation of the hand to the cup(fingers wrapped)
     rot_reward = 0.5 * (torch.sign(dot1) * dot1 ** 2 + torch.sign(dot2) * dot2 ** 2)
     rot_reward_1 = 0.5 * (torch.sign(dot1_1) * dot1_1 ** 2 + torch.sign(dot2_1) * dot2_1 ** 2)
