@@ -532,18 +532,12 @@ class DualFranka(VecTask):
         self.franka_lfinger_rot = self.rigid_body_states[:, self.lfinger_handle][:, 3:7]
         self.franka_rfinger_rot = self.rigid_body_states[:, self.rfinger_handle][:, 3:7]
         # globally convert all finger pos
-        v = torch.zeros_like(self.franka_lfinger_pos)
-        v[:, 2] = 0.04
-        self.franka_lfinger_pos += quat_rotate(self.franka_grasp_rot, v)
-        self.franka_rfinger_pos += quat_rotate(self.franka_grasp_rot, v)
 
-        self.franka_lfinger_pos_1 = self.rigid_body_states[:, self.lfinger_handle_1][:, 0:3].clone()
-        self.franka_rfinger_pos_1 = self.rigid_body_states[:, self.rfinger_handle_1][:, 0:3].clone()
+        self.franka_lfinger_pos_1 = self.rigid_body_states[:, self.lfinger_handle_1][:, 0:3]
+        self.franka_rfinger_pos_1 = self.rigid_body_states[:, self.rfinger_handle_1][:, 0:3]
         self.franka_lfinger_rot_1 = self.rigid_body_states[:, self.lfinger_handle_1][:, 3:7]
         self.franka_rfinger_rot_1 = self.rigid_body_states[:, self.rfinger_handle_1][:, 3:7]
 
-        self.franka_lfinger_pos_1 += quat_rotate(self.franka_grasp_rot_1, v)
-        self.franka_rfinger_pos_1 += quat_rotate(self.franka_grasp_rot_1, v)
         dof_pos_scaled = (2.0 * (self.franka_dof_pos - self.franka_dof_lower_limits)
                           / (self.franka_dof_upper_limits - self.franka_dof_lower_limits) - 1.0)
         dof_pos_scaled_1 = (2.0 * (self.franka_dof_pos_1 - self.franka_dof_lower_limits)
@@ -1127,7 +1121,13 @@ def compute_franka_reward(
 
     """
     # globally convert all finger pos
-
+    # globally convert all finger pos
+    v = torch.zeros_like(franka_lfinger_pos)
+    v[:, 2] = 0.04
+    franka_lfinger_pos += quat_rotate(franka_grasp_rot, v)
+    franka_rfinger_pos += quat_rotate(franka_grasp_rot, v)
+    franka_lfinger_pos_1 += quat_rotate(franka_grasp_rot_1, v)
+    franka_rfinger_pos_1 += quat_rotate(franka_grasp_rot_1, v)
 
     # <editor-fold desc="1. distance reward - grasp and object">
     d = torch.norm(franka_grasp_pos - spoon_grasp_pos, p=2, dim=-1)
