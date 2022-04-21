@@ -1156,14 +1156,14 @@ def compute_franka_reward(
 
     # compute the alignment(reward)
     # alignment of forward axis for gripper
-    dot1 = torch.bmm(axis1.view(num_envs, 1, 3), axis2.view(num_envs, 3, 1)).squeeze(-1).squeeze(-1)    # franka-z-minus with spoon-y
-    dot2 = torch.bmm(axis3.view(num_envs, 1, 3), axis4.view(num_envs, 3, 1)).squeeze(-1).squeeze(-1)    # franka-x with spoon-x
+    dot1 = torch.bmm(axis1.view(num_envs, 1, 3), axis2.view(num_envs, 3, 1)).squeeze(-1).squeeze(-1)    # franka-x-minus with spoon-x
+    dot2 = torch.bmm(axis3.view(num_envs, 1, 3), axis4.view(num_envs, 3, 1)).squeeze(-1).squeeze(-1)    # franka-(-z) with spoon-y
 
     dot1_1 = torch.bmm(axis1_1.view(num_envs, 1, 3), axis2_1.view(num_envs, 3, 1)).squeeze(-1).squeeze(-1)  # franka-z with cup-x
     dot2_1 = torch.bmm(axis3_1.view(num_envs, 1, 3), axis4_1.view(num_envs, 3, 1)).squeeze(-1).squeeze(-1)  # franka-x with cup-y
 
     # reward for matching the orientation of the hand to the cup(fingers wrapped)
-    rot_reward = ( torch.sign(dot2) * dot2 ** 2)
+    rot_reward = 0.5 * (torch.sign(dot1) * dot1 ** 2 + torch.sign(dot2) * dot2 ** 2)
     rot_reward_1 = 0.5 * (torch.sign(dot1_1) * dot1_1 ** 2 + torch.sign(dot2_1) * dot2_1 ** 2)
     # </editor-fold>
 
@@ -1221,6 +1221,9 @@ def compute_franka_reward(
     # <editor-fold desc="4. reward for distance of each finger from the objects">
     # XXX: inital leftfranka z-pos is near cup-z already, distance reward seems like around reward
     # reward for distance of each finger from the spoon, finger distance=0.08
+    """
+
+    """
     finger_dist_reward = torch.zeros_like(rot_reward)
     lfinger_dist = quat_rotate_inverse(spoon_grasp_rot,franka_lfinger_pos - spoon_grasp_pos)[:, 2]
     rfinger_dist = quat_rotate_inverse(spoon_grasp_rot,franka_rfinger_pos - spoon_grasp_pos)[:, 2]
@@ -1231,6 +1234,7 @@ def compute_franka_reward(
     lfinger_dist_1 = quat_rotate_inverse(cup_grasp_rot,franka_lfinger_pos_1 - cup_grasp_pos)[:, 2]
     rfinger_dist_1 = quat_rotate_inverse(cup_grasp_rot,franka_rfinger_pos_1 - cup_grasp_pos)[:, 2]
     finger_dist_reward_1 = torch.where(around_handle_reward_1>0,0.2*dist_reward_1*50 * (0.08 - (torch.abs(lfinger_dist_1) + torch.abs(rfinger_dist_1)) ), finger_dist_reward_1)
+
     # </editor-fold>
 
     # <editor-fold desc="5. fall penalty(table or ground)">
