@@ -60,6 +60,8 @@ class A2CBase(BaseAlgorithm):
             self.experiment_name = config['name'] + pbt_str + datetime.now().strftime("_%d-%H-%M-%S")
 
         self.config = config
+        self.add_cql = config.get('add_cql', False)
+        self.cql_version = self.config.get('cql_version', 0)
         self.algo_observer = config['features']['observer']
         self.algo_observer.before_init(base_name, config, self.experiment_name)
         self.load_networks(params)
