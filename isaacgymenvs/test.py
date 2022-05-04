@@ -445,8 +445,8 @@ def get_franka():
 def reset_env():
     # need to disable pose override in viewer
     print('Reset env')
-    # env.reset_idx_replay_buffer(torch.arange(env.num_envs, device=env.device))
-    env.reset_idx(torch.arange(env.num_envs, device=env.device))
+    env.reset_idx_replay_buffer(torch.arange(env.num_envs, device=env.device))
+   # env.reset_idx_replay_buffer(torch.arange(env.num_envs, device=env.device))
 
 
 def ready_to_track():

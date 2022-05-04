@@ -89,6 +89,10 @@ class DualFranka(VecTask):
                                                device=self.device)
         self.franka_default_dof_pos_1 = to_torch([-0.5349, 0, 0.1401, -1.7951, 0.0334, 3.2965, 0.6484, 0.04, 0.04],
                                                  device=self.device)
+        self.franka_default_dof_pos_stage2 = to_torch([-0.3545, 0.6990, 0.2934, 0.7159, -0.1442, 0.3583, 0.5817, 0.04, 0.04],
+                                               device=self.device)
+        self.franka_default_dof_pos_1_stage2 = to_torch([-0.4901, 0.5585, -0.3762, -0.5309, -0.1273, -0.7353, -0.4016, 0.04, 0.04],
+                                                 device=self.device)
         self.franka_default_dof_pos_2 = to_torch([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                                  device=self.device)
         self.franka_default_dof_pos_3 = to_torch([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -559,7 +563,9 @@ class DualFranka(VecTask):
             ls = list(hdf.keys())
             data = hdf.get('observations')
             dataset1 = np.array(data)  # get the obversation buffer from replay buffer
-            rand_idx = random.randrange(0, dataset1.shape[0], 1)
+            # rand_idx = random.randrange(0, dataset1.shape[0], 1)
+            rand_idx = 350
+            print("rand_idx is",rand_idx)
             rand_franka_cup_pos = dataset1[rand_idx, -9:]
             rand_franka_spoon_pos = dataset1[rand_idx, -18:-9]
             rand_cup_pos = dataset1[rand_idx, -25:-18]
@@ -634,6 +640,7 @@ class DualFranka(VecTask):
     def reset_idx(self, env_ids):
         # reset franka
         # self.root_states[env_ids] = self.saved_root_tensor[env_ids]
+
         pos = tensor_clamp(
             self.franka_default_dof_pos.unsqueeze(0) + 0.1 * (
                     torch.rand((len(env_ids), self.num_franka_dofs), device=self.device) - 0.5),
@@ -643,7 +650,6 @@ class DualFranka(VecTask):
         self.franka_dof_pos[env_ids, :] = pos
         self.franka_dof_vel[env_ids, :] = torch.zeros_like(self.franka_dof_vel[env_ids])
         self.franka_dof_targets[env_ids, :self.num_franka_dofs] = pos
-
         # reset franka1
         pos_1 = tensor_clamp(
             self.franka_default_dof_pos_1.unsqueeze(0) + 0.1 * (
@@ -908,10 +914,10 @@ class DualFranka(VecTask):
         gripper_sep_cup = self.franka_dof_targets[:, -1] + self.franka_dof_targets[:, -2]
         # self.franka_dof_targets[:,7]=torch.where(gripper_sep_spoon<0.008,0.04, 0.005)
         # self.franka_dof_targets[:,8]=torch.where(gripper_sep_spoon<0.008,0.04, 0.005)
-        self.franka_dof_targets[:, 7] = torch.where(self.gripped == 1, 0.0049, 0.04)
-        self.franka_dof_targets[:, 8] = torch.where(self.gripped == 1, 0.0049, 0.04)
-        self.franka_dof_targets[:, -1] = torch.where(self.gripped_1 == 1, 0.0249, 0.04)
-        self.franka_dof_targets[:, -2] = torch.where(self.gripped_1 == 1, 0.0249, 0.04)
+        self.franka_dof_targets[:, 7] = torch.where(self.gripped == 1, 0.0046, 0.04)
+        self.franka_dof_targets[:, 8] = torch.where(self.gripped == 1, 0.0046, 0.04)
+        self.franka_dof_targets[:, -1] = torch.where(self.gripped_1 == 1, 0.0244, 0.04)
+        self.franka_dof_targets[:, -2] = torch.where(self.gripped_1 == 1, 0.0244, 0.04)
         # print(self.franka_dof_targets[:,7],self.franka_dof_targets[:,8])
         # give to gym
         self.gym.set_dof_position_target_tensor(self.sim,
@@ -1140,6 +1146,9 @@ def compute_franka_reward(
 
     # <editor-fold desc="1. distance reward - grasp and object">
     d = torch.norm(franka_grasp_pos - spoon_grasp_pos, p=2, dim=-1)
+
+
+   # d_stage2=torch.norm(franka_grasp_pos[:,0]-spoon_grasp_pos[:,0])
     # dist_reward = 2.0 / (1.0 + d ** 2)
     dist_reward = 1.0 / (1.0 + d ** 2)
     dist_reward *= dist_reward
@@ -1308,17 +1317,50 @@ def compute_franka_reward(
             cup_positions[:, 1] - init_cup_pos[1])
     # </editor-fold>
 
+    # ....................stage 2 reward....................................................................
+    # #delete the y column
+    franka_grasp_pos_trans = franka_grasp_pos.t()
+    franka_grasp_pos_1_trans = franka_grasp_pos_1.t()
+    idx = 1
+    franka_grasp_pos_stage2 = franka_grasp_pos_trans[torch.arange(franka_grasp_pos_trans.size(0)) != idx]
+    franka_grasp_pos_1_stage2 = franka_grasp_pos_1_trans[torch.arange(franka_grasp_pos_1_trans.size(0)) != idx]
+    d_spoon_cup = torch.norm(franka_grasp_pos_stage2.t() - franka_grasp_pos_1_stage2.t(), p=2, dim=-1)
+
+    # dist_reward = 2.0 / (1.0 + d ** 2)
+    dist_reward_stage2 = 1.0 / (1.0 + d_spoon_cup ** 2)
+    dist_reward_stage2 *= dist_reward_stage2
+
+    dot_stage2 = torch.bmm(axis4_1.view(num_envs, 1, 3), axis4.view(num_envs, 3, 1)).squeeze(-1).squeeze(
+        -1)  # spoon z with cup-y
+
+    rot_reward_stage2 = torch.sign(dot_stage2) * dot_stage2 ** 2
+    d_spoon_cup_y = torch.norm(franka_grasp_pos[:, 1] - franka_grasp_pos_1[:, 1], p=2, dim=-1)
+    dist_reward_stage2_y=torch.zeros_like(dist_reward)
+    dist_reward_stage2_y = torch.where(franka_grasp_pos[:, 1] > franka_grasp_pos_1[:, 1],
+                                       torch.where(d_spoon_cup_y > 0.4, 1.0 / (1.0 + d_spoon_cup_y ** 2),
+                                                   dist_reward_stage2_y),
+                                       dist_reward_stage2_y)
+    dist_reward_stage2_y *= dist_reward_stage2_y
+
+
+
+    # ................................................................................................................
     ## sum of rewards
     sf = 1  # spoon flag
     cf = 1  # cup flag
-
-    rewards = dist_reward_scale * (dist_reward * sf + dist_reward_1 * cf) \
+    stage1= 0 # stage1 flag
+    stage2 = 1  # stage1 flag
+    rewards = stage1*(dist_reward_scale * (dist_reward * sf + dist_reward_1 * cf) \
               + rot_reward_scale * (rot_reward * sf + rot_reward_1 * cf) \
               + around_handle_reward_scale * (around_handle_reward * sf + around_handle_reward_1 * cf) \
               + finger_dist_reward_scale * (finger_dist_reward * sf + finger_dist_reward_1 * cf) \
               + lift_reward_scale * (lift_reward * sf + lift_reward_1 * cf) \
               - action_penalty_scale * action_penalty \
-              - spoon_fall_penalty
+              - spoon_fall_penalty)
+    rewards=rewards+stage2*(lift_reward_scale * (lift_reward * sf + lift_reward_1 * cf)\
+                    +dist_reward_stage2*dist_reward_scale\
+                    +rot_reward_stage2*rot_reward_scale\
+                    +dist_reward_stage2_y*dist_reward_scale)
 
     # test args
     rewards_step = rewards.clone().detach()
@@ -1390,7 +1432,7 @@ def compute_franka_reward(
     # reset if cup and spoon is taken up (max) or max length reached
     # TODO: may need further refinement
     reset_buf = torch.where(spoon_positions[:, 1] > 1.1, torch.ones_like(reset_buf), reset_buf)
-    reset_buf = torch.where(cup_positions[:, 1] > 0.78, torch.ones_like(reset_buf), reset_buf)  # taken up too high
+    reset_buf = torch.where(cup_positions[:, 1] > 1.1, torch.ones_like(reset_buf), reset_buf)  # taken up too high
     reset_buf = torch.where(spoon_positions[:, 1] > 1.1, torch.ones_like(reset_buf), reset_buf)
     reset_buf = torch.where(cup_positions[:, 1] < 0.3, torch.ones_like(reset_buf),
                             reset_buf)  # cup fall to table or ground
@@ -1421,10 +1463,10 @@ def compute_franka_reward(
         'finger_distance': (finger_dist_reward_1, finger_dist_reward_scale),
     }
     rewards_other = {
-        'action_penalty(minus)': (action_penalty, action_penalty_scale),
-        # 'cup_fall_penalty': cup_fall_penalty,
-        # 'cup_reverse_penalty': cup_reverse_penalty,
-        # 'spoon_fall_penalty': spoon_fall_penalty,
+        'dist_reward_stage2': (dist_reward_stage2, dist_reward_scale),
+        'rot_reward_stage2': (rot_reward_stage2, rot_reward_scale),
+        'dist_reward_stage2_y': (dist_reward_stage2_y, dist_reward_scale),
+        'l and r distance': (lfinger_dist, rfinger_dist)
     }
     rewards_bonus = {
         'take_cup_bonus(franka0)': take_cup_bonus,
