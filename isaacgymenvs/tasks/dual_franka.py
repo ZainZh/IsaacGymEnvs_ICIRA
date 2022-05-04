@@ -559,7 +559,7 @@ class DualFranka(VecTask):
 
     def reset_idx_replay_buffer(self, env_ids):
         import h5py
-        with h5py.File('/home/zzain/下载/replay_buff.hdf5', 'r') as hdf:
+        with h5py.File('./reset_buffer/replay_buff.hdf5', 'r') as hdf:
             ls = list(hdf.keys())
             data = hdf.get('observations')
             dataset1 = np.array(data)  # get the obversation buffer from replay buffer
