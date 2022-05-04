@@ -34,7 +34,7 @@ params:
   load_path: ${...checkpoint} # path to the checkpoint to load
 
   config:
-    name: ${resolve_default:DualFrankaPPO_testsz0421,${....experiment}}
+    name: ${resolve_default:DualFrankaPPO_stage2,${....experiment}}
     full_experiment_name: ${.name}
     env_name: rlgpu
     ppo: True
@@ -50,7 +50,7 @@ params:
     learning_rate: 5e-4
     lr_schedule: adaptive
     kl_threshold: 0.008
-    score_to_win: 100000
+    score_to_win: 1000000
     max_epochs: ${resolve_default:1500,${....max_iterations}}
     save_best_after: 20
     save_frequency: 10

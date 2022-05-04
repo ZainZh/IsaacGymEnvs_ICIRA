@@ -127,8 +127,10 @@ class DualFranka(VecTask):
         self.franka_dof_targets = torch.zeros((self.num_envs, self.num_dofs), dtype=torch.float, device=self.device)
         self.global_indices = torch.arange(self.num_envs * 7, dtype=torch.int32, device=self.device).view(self.num_envs,
                                                                                                           -1)
-
-        self.reset_idx(torch.arange(self.num_envs, device=self.device))
+        if self.ResetFromReplay:
+            self.reset_idx_replay_buffer(torch.arange(self.num_envs, device=self.device))
+        else:
+            self.reset_idx(torch.arange(self.num_envs, device=self.device))
 
     def create_sim(self):
         self.sim_params.up_axis = gymapi.UP_AXIS_Y
@@ -565,7 +567,6 @@ class DualFranka(VecTask):
             dataset1 = np.array(data)  # get the obversation buffer from replay buffer
             # rand_idx = random.randrange(0, dataset1.shape[0], 1)
             rand_idx = 350
-            print("rand_idx is",rand_idx)
             rand_franka_cup_pos = dataset1[rand_idx, -9:]
             rand_franka_spoon_pos = dataset1[rand_idx, -18:-9]
             rand_cup_pos = dataset1[rand_idx, -25:-18]
@@ -1357,10 +1358,10 @@ def compute_franka_reward(
               + lift_reward_scale * (lift_reward * sf + lift_reward_1 * cf) \
               - action_penalty_scale * action_penalty \
               - spoon_fall_penalty)
-    rewards=rewards+stage2*(lift_reward_scale * (lift_reward * sf + lift_reward_1 * cf)\
-                    +dist_reward_stage2*dist_reward_scale\
-                    +rot_reward_stage2*rot_reward_scale\
-                    +dist_reward_stage2_y*dist_reward_scale)
+    rewards=rewards+stage2*(lift_reward_scale*0.5 * (lift_reward * sf + lift_reward_1 * cf)\
+                    +dist_reward_stage2*dist_reward_scale*10\
+                    +rot_reward_stage2*rot_reward_scale*10\
+                    +dist_reward_stage2_y*dist_reward_scale*10)
 
     # test args
     rewards_step = rewards.clone().detach()
