@@ -457,6 +457,7 @@ class DualFranka(VecTask):
         self.spoon_inward_axis = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
         self.gripper_up_axis_1 = to_torch([1, 0, 0], device=self.device).repeat((self.num_envs, 1))
         self.spoon_up_axis = to_torch([0, 1, 0], device=self.device).repeat((self.num_envs, 1))
+        self.table_rot= to_torch([0, 0, 0, 1], device=self.device).repeat((self.num_envs, 1))
 
         # params for calculation
         self.franka_grasp_pos = torch.zeros_like(self.franka_local_grasp_pos)
@@ -492,7 +493,7 @@ class DualFranka(VecTask):
             self.reset_buf, self.progress_buf, self.actions,
             self.franka_grasp_pos, self.cup_grasp_pos, self.franka_grasp_rot,
             self.franka_grasp_pos_1, self.spoon_grasp_pos, self.franka_grasp_rot_1,
-            self.cup_grasp_rot, self.spoon_grasp_rot, self.cup_positions, self.spoon_positions, self.cup_orientations,
+            self.cup_grasp_rot, self.spoon_grasp_rot,self.table_rot, self.cup_positions, self.spoon_positions, self.cup_orientations,
             self.cup_inward_axis, self.cup_up_axis, self.franka_lfinger_pos, self.franka_rfinger_pos,
             self.spoon_inward_axis, self.spoon_up_axis, self.franka_lfinger_pos_1, self.franka_rfinger_pos_1,
             self.gripper_forward_axis, self.gripper_up_axis,
@@ -1113,7 +1114,7 @@ class DualFranka(VecTask):
 @torch.jit.script
 def compute_franka_reward(
         reset_buf, progress_buf, actions, franka_grasp_pos, cup_grasp_pos, franka_grasp_rot, franka_grasp_pos_1,
-        spoon_grasp_pos, franka_grasp_rot_1, cup_grasp_rot, spoon_grasp_rot,
+        spoon_grasp_pos, franka_grasp_rot_1, cup_grasp_rot, spoon_grasp_rot,table_rot,
         cup_positions, spoon_positions, cup_orientations,
         cup_inward_axis, cup_up_axis, franka_lfinger_pos, franka_rfinger_pos,
         spoon_inward_axis, spoon_up_axis, franka_lfinger_pos_1, franka_rfinger_pos_1,
@@ -1161,7 +1162,6 @@ def compute_franka_reward(
     dist_reward_1 *= dist_reward_1
     dist_reward_1 = torch.where(d_1 <= 0.06, dist_reward_1 * 2, dist_reward_1)
     # </editor-fold>
-
     # <editor-fold desc="2. rotation reward">
     # define axis to make sure the alignment
     axis1 = tf_vector(franka_grasp_rot, gripper_forward_axis)  # franka
@@ -1173,6 +1173,8 @@ def compute_franka_reward(
     axis2_1 = tf_vector(cup_grasp_rot, cup_inward_axis)
     axis3_1 = tf_vector(franka_grasp_rot_1, gripper_up_axis_1)
     axis4_1 = tf_vector(cup_grasp_rot, cup_up_axis)
+
+    axistable=tf_vector(table_rot,cup_up_axis) #add ground axis
 
     # compute the alignment(reward)
     # alignment of forward axis for gripper
@@ -1333,8 +1335,10 @@ def compute_franka_reward(
 
     dot_stage2 = torch.bmm(axis4_1.view(num_envs, 1, 3), axis4.view(num_envs, 3, 1)).squeeze(-1).squeeze(
         -1)  # spoon z with cup-y
+    dot_stage2_table=torch.bmm(axistable.view(num_envs, 1, 3), axis4.view(num_envs, 3, 1)).squeeze(-1).squeeze(
+        -1)  # spoon z with cup-y
+    rot_reward_stage2 = 0.5*(torch.sign(dot_stage2) * dot_stage2 ** 2+torch.sign(dot_stage2_table) * dot_stage2_table ** 2)
 
-    rot_reward_stage2 = torch.sign(dot_stage2) * dot_stage2 ** 2
     d_spoon_cup_y = torch.norm(franka_grasp_pos[:, 1] - franka_grasp_pos_1[:, 1], p=2, dim=-1)
     dist_reward_stage2_y=torch.zeros_like(dist_reward)
     dist_reward_stage2_y = torch.where(franka_grasp_pos[:, 1] > franka_grasp_pos_1[:, 1],
