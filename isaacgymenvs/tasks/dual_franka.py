@@ -1238,6 +1238,7 @@ def compute_franka_reward(
     Tuple[Tensor, Tensor, Dict[str, Union[Dict[str, Tuple[Tensor, float]],
                                            Dict[str, Tensor], Dict[str, Union[Tensor, Tuple[Tensor, float]]]]]]:
     """
+    tensor_device = franka_grasp_pos.device
     # turn_spoon = True
 
     # print('spoon_grasp_pos: {}'.format(spoon_grasp_pos[0]))
@@ -1544,17 +1545,21 @@ def compute_franka_reward(
 
 
     ## stage 3
-    spoon_tip_pos = quat_rotate_inverse(spoon_orientations,spoon_positions) - 0.5 * torch.tensor([0.15, 0, 0])
+    preset_h = 0.08
+    cup_r = 0.025
+    spoon_tip_pos = quat_rotate_inverse(spoon_orientations,spoon_positions) - 0.5 * torch.tensor([0.15, 0.0, 0.0], device=tensor_device)
     spoon_tip_pos = quat_rotate(spoon_orientations,spoon_tip_pos)
     v1_s3 = quat_rotate_inverse(cup_orientations, spoon_tip_pos-cup_positions)   # relative spoon pos in cup
-    prestage_s3=[torch.gt(torch.tensor([0.025, 0.025]),v1_s3[:, [0,2]]) ,
-                 torch.lt(torch.tensor([-0.025, -0.025]),v1_s3[:, [0,2]]) ,   # x,z in cup
-                        v1_s3[:, 1] - 0.1 < 0 and v1_s3[:, 1] > 0 ]   # spoon tip in cup
-    h_s3 = torch.abs(v1_s3[:, 1] - 0.1)
-    h_reward_s3 = 1.0 / 1.0 + h_s3**2
-    d_s3 = torch.norm(v1_s3[:, [0,2]] - torch.tensor([0.025, 0.025]), dim=-1)
-    d_reward_s3 = 1.0 / 1.0 + d_s3**2
-    v_reward_s3 = torch.norm(spoon_linvels, dim=-1)
+    prestage_s3=[torch.gt(torch.tensor([cup_r, cup_r], device=tensor_device),v1_s3[:, [0,2]]).all(dim=-1) ,
+                 torch.lt(torch.tensor([-cup_r, -cup_r], device=tensor_device),v1_s3[:, [0,2]]).all(dim=-1) ,   # x,z in cup
+                 torch.logical_and(v1_s3[:, 1] - preset_h < 0,v1_s3[:, 1] > 0) ]   # spoon tip in cup
+    flag_range_s3 = torch.logical_and(prestage_s3[0], prestage_s3[1])
+    flag_full_s3 = torch.logical_and(flag_range_s3, prestage_s3[2])
+    h_s3 = torch.abs(v1_s3[:, 1] - preset_h)
+    h_reward_s3 = 2.0 / (1.0 + h_s3**2) * flag_range_s3
+    d_s3 = torch.norm(v1_s3[:, [0,2]] - torch.tensor([cup_r, cup_r], device=tensor_device), dim=-1)
+    d_reward_s3 = 2.0 / (1.0 + d_s3**2) * flag_range_s3
+    v_reward_s3 = torch.norm(spoon_linvels, dim=-1) * flag_full_s3
 
     # test args
     rewards_step = rewards.clone().detach()
@@ -1664,7 +1669,7 @@ def compute_franka_reward(
     }
     rewards_bonus = {
         'take_cup_bonus(franka0)': take_cup_bonus,
-        'collision_penalty_bonus': collision_penalty_bonus,
+        # 'collision_penalty_bonus': collision_penalty_bonus,
         # 'cup_penalty_lossen': cup_penalty_lossen,
         # 'spoon_penalty_lossen': spoon_penalty_lossen,
         'take_spoon_bonus': take_spoon_bonus,
@@ -1672,8 +1677,13 @@ def compute_franka_reward(
         # 'collision_penalty_bonus': collision_penalty_bonus,
         # 'cup_penalty_lossen': cup_penalty_lossen,
         # 'spoon_penalty_lossen': spoon_penalty_lossen,
+        'hrew': h_reward_s3,
+        'drew': d_reward_s3,
+        'vrew': v_reward_s3,
     }
 
+    if False:
+        print(prestage_s3)
     # output dict
     rewards_dict = {
         'Franka_0': reward_franka_0,
