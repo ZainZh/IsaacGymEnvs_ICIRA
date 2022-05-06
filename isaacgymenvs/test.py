@@ -350,16 +350,25 @@ class DualFrankaTest(DualFranka):
                     #     axis3[:, 1]-0.15/2 -0.1 > 0, # spoon tip higher than cup height(spoon_base_y-half_spoon_len-cup_height>0)
                     ]
 
+        spoon_tip_pos = quat_rotate_inverse(spoon_rot,spoon_pos) - 0.5 * torch.tensor([0.15, 0, 0])
+        spoon_tip_pos = quat_rotate(spoon_rot,spoon_tip_pos)
+        v1_s3 = quat_rotate_inverse(cup_rot, spoon_tip_pos-cup_pos)   # relative spoon pos in cup
         stage_3 = [
                     torch.acos(dot1) /3.1415*180 <30,
                     torch.gt(torch.tensor([0.025, 0.025]),axis3[:, [0,2]]).all() , 
                         axis3[:, 1]-0.15/2 - 0.1 < 0,   # spoon tip in cup
                 ]
+        
+        prestage_s3=[torch.gt(torch.tensor([0.025, 0.025]),v1_s3[:, [0,2]]) ,
+                    torch.lt(torch.tensor([-0.025, -0.025]),v1_s3[:, [0,2]]) ,   # x,z in cup
+                        v1_s3[:, 1] - 0.1 < 0 and v1_s3[:, 1] > 0 ]
+
         if debug:
             print("pre_stage_1", pre_stage_1)
             print("stage_1", stage_1)
             print("stage_2", stage_2)
             print("stage_3", stage_3)
+            print("prestage_3", prestage_s3)
         return [all(pre_stage_1), all(stage_1), all(stage_2), all(stage_3),]
 
 
