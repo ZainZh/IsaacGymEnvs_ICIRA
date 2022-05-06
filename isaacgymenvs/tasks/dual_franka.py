@@ -1322,8 +1322,8 @@ def compute_franka_reward(
 
     # ....................stage 2 reward....................................................................
     # #delete the y column
-    franka_grasp_pos_trans = franka_grasp_pos.t()
-    franka_grasp_pos_1_trans = franka_grasp_pos_1.t()
+    franka_grasp_pos_trans = spoon_positions.t()
+    franka_grasp_pos_1_trans = cup_positions.t()
     idx = 1
     franka_grasp_pos_stage2 = franka_grasp_pos_trans[torch.arange(franka_grasp_pos_trans.size(0)) != idx]
     franka_grasp_pos_1_stage2 = franka_grasp_pos_1_trans[torch.arange(franka_grasp_pos_1_trans.size(0)) != idx]
@@ -1335,10 +1335,10 @@ def compute_franka_reward(
 
     dot_stage2 = torch.bmm(axis4_1.view(num_envs, 1, 3), axis4.view(num_envs, 3, 1)).squeeze(-1).squeeze(
         -1)  # spoon z with cup-y
-    dot_stage2_table=torch.bmm(axistable.view(num_envs, 1, 3), axis4.view(num_envs, 3, 1)).squeeze(-1).squeeze(
+    dot_stage2_table=torch.bmm(axistable.view(num_envs, 1, 3), axis4_1.view(num_envs, 3, 1)).squeeze(-1).squeeze(
         -1)  # spoon z with cup-y
     rot_reward_stage2 = 0.5*(torch.sign(dot_stage2) * dot_stage2 ** 2+torch.sign(dot_stage2_table) * dot_stage2_table ** 2)
-
+    
     d_spoon_cup_y = torch.norm(franka_grasp_pos[:, 1] - franka_grasp_pos_1[:, 1], p=2, dim=-1)
     dist_reward_stage2_y=torch.zeros_like(dist_reward)
     dist_reward_stage2_y = torch.where(franka_grasp_pos[:, 1] > franka_grasp_pos_1[:, 1],
@@ -1363,9 +1363,9 @@ def compute_franka_reward(
               - action_penalty_scale * action_penalty \
               - spoon_fall_penalty)
     rewards=rewards+stage2*(lift_reward_scale*0.5 * (lift_reward * sf + lift_reward_1 * cf)\
-                    +dist_reward_stage2*dist_reward_scale*10\
-                    +rot_reward_stage2*rot_reward_scale*10\
-                    +dist_reward_stage2_y*dist_reward_scale*10)
+                    +dist_reward_stage2*dist_reward_scale*20\
+                    +rot_reward_stage2*rot_reward_scale*20\
+                    +dist_reward_stage2_y*dist_reward_scale*20)
 
     # test args
     rewards_step = rewards.clone().detach()
@@ -1437,7 +1437,7 @@ def compute_franka_reward(
     # reset if cup and spoon is taken up (max) or max length reached
     # TODO: may need further refinement
     reset_buf = torch.where(spoon_positions[:, 1] > 1.1, torch.ones_like(reset_buf), reset_buf)
-    reset_buf = torch.where(cup_positions[:, 1] > 1.1, torch.ones_like(reset_buf), reset_buf)  # taken up too high
+    reset_buf = torch.where(cup_positions[:, 1] > 0.7, torch.ones_like(reset_buf), reset_buf)  # taken up too high
     reset_buf = torch.where(spoon_positions[:, 1] > 1.1, torch.ones_like(reset_buf), reset_buf)
     reset_buf = torch.where(cup_positions[:, 1] < 0.3, torch.ones_like(reset_buf),
                             reset_buf)  # cup fall to table or ground
