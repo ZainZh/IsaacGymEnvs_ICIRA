@@ -1312,9 +1312,9 @@ def compute_franka_reward(
     #                           (lift_dist * around_handle_reward + lift_reward * finger_dist_reward) * 100,
     #                           lift_reward)  # 3
 
-    lift_reward = torch.where(lift_dist > 0,
-                              (lift_dist * around_handle_reward + lift_dist + lift_dist * finger_dist_reward * 10) * 5,
-                              lift_reward)  # 3
+    # lift_reward = torch.where(lift_dist > 0,
+    #                           (lift_dist * around_handle_reward + lift_dist + lift_dist * finger_dist_reward * 10) * 5,
+    #                           lift_reward)  # 3
 
     lift_reward_1 = (cup_positions[:, 1] - init_cup_pos[1]) * around_handle_reward_1 + (
             cup_positions[:, 1] - init_cup_pos[1])
@@ -1362,7 +1362,7 @@ def compute_franka_reward(
               + lift_reward_scale * (lift_reward * sf + lift_reward_1 * cf) \
               - action_penalty_scale * action_penalty \
               - spoon_fall_penalty)
-    rewards=rewards+stage2*(lift_reward_scale*0.5 * (lift_reward * sf + lift_reward_1 * cf)\
+    rewards=rewards+stage2*(lift_reward_scale*0.1*(lift_reward * sf + lift_reward_1 * cf)\
                     +dist_reward_stage2*dist_reward_scale*20\
                     +rot_reward_stage2*rot_reward_scale*20\
                     +dist_reward_stage2_y*dist_reward_scale*20)
@@ -1436,7 +1436,7 @@ def compute_franka_reward(
     # if reset buf equal to 1, reset this environment
     # reset if cup and spoon is taken up (max) or max length reached
     # TODO: may need further refinement
-    reset_buf = torch.where(spoon_positions[:, 1] > 1.1, torch.ones_like(reset_buf), reset_buf)
+    reset_buf = torch.where(spoon_positions[:, 1] > 1.0, torch.ones_like(reset_buf), reset_buf)
     reset_buf = torch.where(cup_positions[:, 1] > 0.7, torch.ones_like(reset_buf), reset_buf)  # taken up too high
     reset_buf = torch.where(spoon_positions[:, 1] > 1.1, torch.ones_like(reset_buf), reset_buf)
     reset_buf = torch.where(cup_positions[:, 1] < 0.3, torch.ones_like(reset_buf),
