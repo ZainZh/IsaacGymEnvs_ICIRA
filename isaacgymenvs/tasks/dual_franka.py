@@ -1322,8 +1322,8 @@ def compute_franka_reward(
 
     # ....................stage 2 reward....................................................................
     # #delete the y column
-    franka_grasp_pos_trans = spoon_positions.t()
-    franka_grasp_pos_1_trans = cup_positions.t()
+    franka_grasp_pos_trans = franka_grasp_pos.t()
+    franka_grasp_pos_1_trans = franka_grasp_pos_1.t()
     idx = 1
     franka_grasp_pos_stage2 = franka_grasp_pos_trans[torch.arange(franka_grasp_pos_trans.size(0)) != idx]
     franka_grasp_pos_1_stage2 = franka_grasp_pos_1_trans[torch.arange(franka_grasp_pos_1_trans.size(0)) != idx]
