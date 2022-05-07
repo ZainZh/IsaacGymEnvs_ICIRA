@@ -398,6 +398,9 @@ class VecTask(Env):
                     sys.exit()
                 elif evt.action == "toggle_viewer_sync" and evt.value > 0:
                     self.enable_viewer_sync = not self.enable_viewer_sync
+                elif evt.action == "myprint" and evt.value > 0:
+                    print(self.franka_dof_pos[0])
+                    print(self.franka_dof_pos_1[0])
 
             # fetch results
             if self.device != 'cpu':
