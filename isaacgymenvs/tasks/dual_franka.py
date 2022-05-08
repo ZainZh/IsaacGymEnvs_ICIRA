@@ -632,7 +632,7 @@ class DualFranka(VecTask):
             self.franka_grasp_pos, self.cup_grasp_pos, self.franka_grasp_rot,
             self.franka_grasp_pos_1, self.spoon_grasp_pos, self.franka_grasp_rot_1,
             self.cup_grasp_rot, self.spoon_grasp_rot, self.table_rot, self.cup_positions, self.spoon_positions,
-            self.cup_orientations, self.spoon_orientations, self.spoon_linvels, self.spoon_angvels,
+            self.cup_orientations, self.spoon_orientations, self.spoon_linvels, self.cup_linvels,
             self.cup_inward_axis, self.cup_up_axis, self.franka_lfinger_pos, self.franka_rfinger_pos,
             self.spoon_inward_axis, self.spoon_up_axis, self.franka_lfinger_pos_1, self.franka_rfinger_pos_1,
             self.gripper_forward_axis, self.gripper_up_axis,
@@ -1235,7 +1235,7 @@ def compute_franka_reward(
         reset_buf, progress_buf, actions, franka_grasp_pos, cup_grasp_pos, franka_grasp_rot, franka_grasp_pos_1,
         spoon_grasp_pos, franka_grasp_rot_1, cup_grasp_rot, spoon_grasp_rot,table_rot,
         cup_positions, spoon_positions, cup_orientations, spoon_orientations,
-        spoon_linvels, spoon_angvels,
+        spoon_linvels, cup_linvels,
         cup_inward_axis, cup_up_axis, franka_lfinger_pos, franka_rfinger_pos,
         spoon_inward_axis, spoon_up_axis, franka_lfinger_pos_1, franka_rfinger_pos_1,
         gripper_forward_axis, gripper_up_axis,
@@ -1570,7 +1570,7 @@ def compute_franka_reward(
     # dist_reward_stage2_y *= dist_reward_stage2_y
 
     # ....................stage 3 reward....................................................................
-    preset_h = 0.08
+    preset_h = 0.09
     cup_r = 0.025
     spoon_tip_pos = quat_rotate_inverse(spoon_orientations,spoon_positions) - 0.5 * torch.tensor([0.15, 0.0, 0.0], device=tensor_device)
     spoon_tip_pos = quat_rotate(spoon_orientations,spoon_tip_pos)
@@ -1585,11 +1585,15 @@ def compute_franka_reward(
     h_reward_s3 = 2.0 / (1.0 + h_s3**2) * flag_range_s3
     d_s3 = torch.norm(v1_s3[:, [0,2]] - torch.tensor([cup_r, cup_r], device=tensor_device), dim=-1)
     d_reward_s3 = 2.0 / (1.0 + d_s3**2) * flag_range_s3
-    v_reward_s3 = torch.norm(spoon_linvels, dim=-1) * flag_full_s3
+    spoon_v = torch.norm(spoon_linvels, dim=-1)
+    spoon_v = torch.clamp(spoon_v - 0.049, min=0)
+    cup_v = torch.norm(cup_linvels, dim=-1)
+    cup_v = torch.clamp(cup_v - 0.049, min=0)
+    v_reward_s3 = spoon_v * flag_full_s3
 
     h_reward_s3 = torch.where(stage_s3, 10 * h_reward_s3, h_reward_s3)
     d_reward_s3 = torch.where(stage_s3, 10 * d_reward_s3, d_reward_s3)
-    v_reward_s3 = torch.where(stage_s3, 10 * v_reward_s3, v_reward_s3)
+    v_reward_s3 = torch.where(torch.logical_and(stage_s3, cup_v < 0.1), 1000 * v_reward_s3, v_reward_s3)
 
     # ................................................................................................................
     ## sum of rewards
@@ -1612,7 +1616,10 @@ def compute_franka_reward(
                     + dist_reward_stage2_y * dist_reward_scale * 20)
 
     #TODO: add stage 3 reward
-    rewards = rewards + stage3 * ( h_reward_s3 * 20 \
+    fulfill_s2 = torch.logical_and(spoon_positions[:,1]-0.4 > 0.15,    # spoon_y - table_height > x  (shelf height ignored)
+                    cup_positions[:,1]-0.4 > 0.15,    
+                    )
+    rewards = rewards + stage3 * fulfill_s2 *( h_reward_s3 * 20 \
                     + d_reward_s3 * 20 \
                     + v_reward_s3 * 20)
 
@@ -1621,19 +1628,19 @@ def compute_franka_reward(
 
     # <editor-fold desc="II. reward bonus">
     # <editor-fold desc="1. bonus for take up the cup properly(franka1)">
-    rewards = torch.where(spoon_positions[:, 1] > 0.51, rewards + 0.5, rewards)
-    rewards = torch.where(spoon_positions[:, 1] > 0.7, rewards + around_handle_reward, rewards)
-    rewards = torch.where(spoon_positions[:, 1] > 1.1, rewards + (2.0 * around_handle_reward), rewards)
-    # test args
-    take_spoon_bonus = rewards - rewards_step
-    rewards_step += take_spoon_bonus
+    # rewards = torch.where(spoon_positions[:, 1] > 0.51, rewards + 0.5, rewards)
+    # rewards = torch.where(spoon_positions[:, 1] > 0.7, rewards + around_handle_reward, rewards)
+    # rewards = torch.where(spoon_positions[:, 1] > 1.1, rewards + (2.0 * around_handle_reward), rewards)
+    # # test args
+    # take_spoon_bonus = rewards - rewards_step
+    # rewards_step += take_spoon_bonus
 
-    rewards = torch.where(cup_positions[:, 1] > 0.45, rewards + 0.5, rewards)
-    rewards = torch.where(cup_positions[:, 1] > 0.64, rewards + around_handle_reward_1, rewards)
-    rewards = torch.where(cup_positions[:, 1] > 0.78, rewards + (2.0 * around_handle_reward_1), rewards)
-    # test args
-    take_cup_bonus = rewards - rewards_step
-    rewards_step += take_cup_bonus
+    # rewards = torch.where(cup_positions[:, 1] > 0.45, rewards + 0.5, rewards)
+    # rewards = torch.where(cup_positions[:, 1] > 0.64, rewards + around_handle_reward_1, rewards)
+    # rewards = torch.where(cup_positions[:, 1] > 0.78, rewards + (2.0 * around_handle_reward_1), rewards)
+    # # test args
+    # take_cup_bonus = rewards - rewards_step
+    # rewards_step += take_cup_bonus
     # </editor-fold>
 
     # <editor-fold desc="2. collision penalty (contact)">
@@ -1723,12 +1730,12 @@ def compute_franka_reward(
         'l and r distance': (lfinger_dist, rfinger_dist)
     }
     rewards_bonus = {
-        'take_cup_bonus(franka0)': take_cup_bonus,
-        # 'collision_penalty_bonus': collision_penalty_bonus,
-        # 'cup_penalty_lossen': cup_penalty_lossen,
-        # 'spoon_penalty_lossen': spoon_penalty_lossen,
-        'take_spoon_bonus': take_spoon_bonus,
-        'take_cup_bonus': take_cup_bonus,
+        # 'take_cup_bonus(franka0)': take_cup_bonus,
+        # # 'collision_penalty_bonus': collision_penalty_bonus,
+        # # 'cup_penalty_lossen': cup_penalty_lossen,
+        # # 'spoon_penalty_lossen': spoon_penalty_lossen,
+        # 'take_spoon_bonus': take_spoon_bonus,
+        # 'take_cup_bonus': take_cup_bonus,
         # 'collision_penalty_bonus': collision_penalty_bonus,
         # 'cup_penalty_lossen': cup_penalty_lossen,
         # 'spoon_penalty_lossen': spoon_penalty_lossen,

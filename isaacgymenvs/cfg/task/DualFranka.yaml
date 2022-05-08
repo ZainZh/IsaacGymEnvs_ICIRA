@@ -12,7 +12,7 @@ env:
   envSpacing: 2
   episodeLength: 1000   # max step
   enableDebugVis: False
-  ResetFromReplay: False
+  ResetFromReplay: True
 
   clipObservations: 5.0
   clipActions: 1.0
@@ -28,7 +28,7 @@ env:
   distRewardScale: 2.0
   rotRewardScale: 0.5
   aroundHandleRewardScale: 0.25
-  liftRewardScale: 1
+  liftRewardScale: 0.1
   fingerDistRewardScale: 5.0
   actionPenaltyScale: 0.01
 
