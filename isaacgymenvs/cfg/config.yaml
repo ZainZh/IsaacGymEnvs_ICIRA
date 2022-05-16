@@ -45,6 +45,10 @@ headless: True
 # dataset loading path
 dataset: ''
 
+# collect trajectory when play test
+save_hdf5_when_play: False
+save_hdf5_folder: 'test_save/hdf5'
+
 # set default task and default training config based on task
 defaults:
   - task: DualFranka    # set default to our task

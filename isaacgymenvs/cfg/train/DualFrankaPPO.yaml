@@ -40,6 +40,8 @@ params:
     ppo: True
     add_cql: True
     cql_version: 1
+    save_hdf5_when_play: ${resolve_default:False,${....save_hdf5_when_play}}
+    save_hdf5_folder: ${....save_hdf5_folder}
     mixed_precision: False
     normalize_input: True
     normalize_value: True

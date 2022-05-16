@@ -32,6 +32,7 @@ import numpy as np
 import torch
 import random
 import os
+import h5py
 
 def set_np_formatting():
     """ formats numpy print """
@@ -68,10 +69,64 @@ def set_seed(seed, torch_deterministic=False):
     return seed
 
 # add
-# def soft_update_from_to(source, target, tau):
-#     for target_param, param in zip(target.parameters(), source.parameters()):
-#         target_param.data.copy_(
-#             target_param.data * (1.0 - tau) + param.data * tau
-#         )
+class HDF5DatasetWriter():
+    def __init__(self, outputPath, bufSize=1000, maxSize=None):
+        # 如果输出文件路径存在，提示异常
+        # if os.path.exists(outputPath):
+        #     raise ValueError("The supplied 'outputPath' already exists and cannot be overwritten. Manually delete the file before continuing", outputPath)
+
+        # 构建两种数据，一种用来存储图像特征一种用来存储标签
+        self.db = h5py.File(outputPath, "w")
+        self.actions = self.db.create_dataset('actions', (1, 18), maxshape=(maxSize, 18), dtype="float")
+        self.observations = self.db.create_dataset('observations', (1, 74), maxshape=(maxSize, 74), dtype="float")
+        self.next_observations = self.db.create_dataset('next_observations', (1, 74), maxshape=(maxSize, 74),
+                                                        dtype="float")
+        self.rewards = self.db.create_dataset('rewards', (1, 1), maxshape=(maxSize, 1), dtype="float")
+        self.dones = self.db.create_dataset("dones", (1, 1), maxshape=(maxSize, 1), dtype="i8")
+
+        # 设置buffer大小，并初始化buffer
+        self.bufSize = bufSize
+        self.buffer = {"actions": [], "observations": [],
+                       "next_observations": [], "rewards": [],
+                       "dones": [], }
+        self.idx = 0  # 用来进行计数
+
+    def add(self, obs, action, reward, next_obs, done):
+        self.buffer["actions"].extend(action)
+        self.buffer["observations"].extend(obs)
+        self.buffer["next_observations"].extend(next_obs)
+        self.buffer["rewards"].extend(reward)
+        self.buffer["dones"].extend(done)
+
+        # 查看是否需要将缓冲区的数据添加到磁盘中
+        if len(self.buffer["actions"]) >= self.bufSize:
+            self.flush()
+
+    def flush(self):
+        # 将buffer中的内容写入磁盘之后重置buffer
+        i = self.idx + len(self.buffer["actions"])
+        if i >= len(self.actions):
+            self.actions.resize((i, 18))
+            self.observations.resize((i, 74))
+            self.next_observations.resize((i, 74))
+            self.rewards.resize((i, 1))
+            self.dones.resize((i, 1))
+        self.actions[self.idx:i] = self.buffer["actions"]
+        self.observations[self.idx:i] = self.buffer["observations"]
+        self.next_observations[self.idx:i] = self.buffer["next_observations"]
+        self.rewards[self.idx:i] = self.buffer["rewards"]
+        self.dones[self.idx:i] = self.buffer["dones"]
+        self.idx = i
+        self.buffer = {"actions": [], "observations": [],
+                       "next_observations": [], "rewards": [],
+                       "dones": [], }
+
+    def close(self):
+        if len(self.buffer["actions"]) > 0:  # 查看是否缓冲区中还有数据
+            self.flush()
+        print('total length:', len(self.actions))
+        self.db.close()
+        print('hdf5 save success')
+
 
 # EOF
