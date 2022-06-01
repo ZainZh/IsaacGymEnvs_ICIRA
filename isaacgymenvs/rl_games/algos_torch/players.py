@@ -25,7 +25,8 @@ class PpoPlayerContinuous(BasePlayer):
         self.mask = [False]
 
         self.normalize_input = self.config['normalize_input']
-        self.normalize_value = self.config['normalize_value']
+        self.normalize_value = self.config.get('normalize_value', False)
+
         obs_shape = self.obs_shape
         config = {
             'actions_num' : self.actions_num,
@@ -89,7 +90,7 @@ class PpoPlayerDiscrete(BasePlayer):
             self.is_multi_discrete = True
         self.mask = [False]
         self.normalize_input = self.config['normalize_input']
-        self.normalize_value = self.config['normalize_value']
+        self.normalize_value = self.config.get('normalize_value', False)
         obs_shape = self.obs_shape
         config = {
             'actions_num' : self.actions_num,
@@ -184,8 +185,7 @@ class SACPlayer(BasePlayer):
             float(self.env_info['action_space'].high.max())
         ]
 
-        # obs_shape = torch_ext.shape_whc_to_cwh(self.state_shape)
-        obs_shape = self.state_shape
+        obs_shape = self.obs_shape
         self.normalize_input = False
         config = {
             'obs_dim': self.env_info["observation_space"].shape[0],
@@ -209,11 +209,14 @@ class SACPlayer(BasePlayer):
         if self.normalize_input and 'running_mean_std' in checkpoint:
             self.model.running_mean_std.load_state_dict(checkpoint['running_mean_std'])
 
-    def get_action(self, obs, sample=False):
+    def get_action(self, obs, is_determenistic=False):
+        if self.has_batch_dimension == False:
+            obs = unsqueeze_obs(obs)
         dist = self.model.actor(obs)
-        actions = dist.sample() if sample else dist.mean
+        actions = dist.sample() if is_determenistic else dist.mean
         actions = actions.clamp(*self.action_range).to(self.device)
-        assert actions.ndim == 2
+        if self.has_batch_dimension == False:
+            actions = torch.squeeze(actions.detach())
         return actions
 
     def reset(self):
@@ -222,5 +225,5 @@ class SACPlayer(BasePlayer):
 
 class CQLPlayer(SACPlayer):
     def __init__(self,params):
-        self.state_shape = 42
+        # self.state_shape = 42
         super().__init__(params)

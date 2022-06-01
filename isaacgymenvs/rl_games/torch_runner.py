@@ -1,4 +1,6 @@
+import time
 import numpy as np
+import random
 import copy
 import torch
 import yaml
@@ -16,11 +18,12 @@ from rl_games.algos_torch import a2c_discrete
 from rl_games.algos_torch import players
 from rl_games.common.algo_observer import DefaultAlgoObserver
 from rl_games.algos_torch import sac_agent
+import rl_games.networks
 from rl_games.algos_torch import cql_agent
 from torch.utils.data import Dataset, DataLoader, random_split
 
 def _restore(agent, args):
-    if args['checkpoint'] is not None and args['checkpoint']!='':
+    if 'checkpoint' in args and args['checkpoint'] is not None and args['checkpoint'] !='':
         agent.restore(args['checkpoint'])
     else:
         # no restore but model exists
@@ -29,7 +32,7 @@ def _restore(agent, args):
             raise Exception('pth exists!', basepath)
 
 def _override_sigma(agent, args):
-    if args['sigma'] is not None:
+    if 'sigma' in args and args['sigma'] is not None:
         net = agent.model.sac_network   # a2c_network -> sac_network
         if hasattr(net, 'sigma') and hasattr(net, 'fixed_sigma'):
             if net.fixed_sigma:
@@ -61,9 +64,23 @@ class Runner:
 
         self.algo_observer = algo_observer if algo_observer else DefaultAlgoObserver()
         torch.backends.cudnn.benchmark = True
+        ### it didnot help for lots for openai gym envs anyway :(
+        #torch.backends.cudnn.deterministic = True
+        #torch.use_deterministic_algorithms(True)
+    def reset(self):
+        pass
 
     def load_config(self, params):
         self.seed = params.get('seed', None)
+        if self.seed is None:
+            self.seed = int(time.time())
+        
+        if params["config"].get('multi_gpu', False):
+            import horovod.torch as hvd
+
+            hvd.init()
+            self.seed += hvd.rank()
+        print(f"self.seed = {self.seed}")
 
         self.algo_params = params['algo']
         self.algo_name = self.algo_params['name']
@@ -73,6 +90,15 @@ class Runner:
             torch.manual_seed(self.seed)
             torch.cuda.manual_seed_all(self.seed)
             np.random.seed(self.seed)
+            random.seed(self.seed)
+            
+            # deal with environment specific seed if applicable
+            if 'env_config' in params['config']:
+                if not 'seed' in params['config']['env_config']:
+                    params['config']['env_config']['seed'] = self.seed
+                else:
+                    if params["config"].get('multi_gpu', False):
+                        params['config']['env_config']['seed'] += hvd.rank()
 
         config = params['config']
         config['reward_shaper'] = tr_helpers.DefaultRewardsShaper(**config['reward_shaper'])
