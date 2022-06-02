@@ -55,7 +55,8 @@ class BasePlayer(object):
         if self.if_write_hdf5:
             file_time = datetime.now().strftime("%m%d-%H-%M-%S")
             output_path = os.path.join(self.config['save_hdf5_folder'], file_time+'.hdf5')
-            self.hdf5_writer = HDF5DatasetWriter(output_path, bufSize=10000, maxSize=None)
+            self.hdf5_writer = HDF5DatasetWriter(output_path, action_size=self.action_space.shape[0], obs_size=self.observation_space.shape[0], bufSize=1000, maxSize=None)
+            print('\033[1;33mWrite HDF5 offline dataset, path=>{}\033[0m'.format(output_path))
 
 
     def load_networks(self, params):

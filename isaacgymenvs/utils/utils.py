@@ -70,16 +70,19 @@ def set_seed(seed, torch_deterministic=False):
 
 # add
 class HDF5DatasetWriter():
-    def __init__(self, outputPath, bufSize=1000, maxSize=None):
+    def __init__(self, outputPath, action_size=18, obs_size=74,bufSize=1000, maxSize=None):
         # 如果输出文件路径存在，提示异常
         # if os.path.exists(outputPath):
         #     raise ValueError("The supplied 'outputPath' already exists and cannot be overwritten. Manually delete the file before continuing", outputPath)
 
+        self._action_size = action_size
+        self._obs_size = obs_size
+
         # 构建两种数据，一种用来存储图像特征一种用来存储标签
         self.db = h5py.File(outputPath, "w")
-        self.actions = self.db.create_dataset('actions', (1, 18), maxshape=(maxSize, 18), dtype="float")
-        self.observations = self.db.create_dataset('observations', (1, 74), maxshape=(maxSize, 74), dtype="float")
-        self.next_observations = self.db.create_dataset('next_observations', (1, 74), maxshape=(maxSize, 74),
+        self.actions = self.db.create_dataset('actions', (1, self._action_size), maxshape=(maxSize, self._action_size), dtype="float")
+        self.observations = self.db.create_dataset('observations', (1, self._obs_size), maxshape=(maxSize, self._obs_size), dtype="float")
+        self.next_observations = self.db.create_dataset('next_observations', (1, self._obs_size), maxshape=(maxSize, self._obs_size),
                                                         dtype="float")
         self.rewards = self.db.create_dataset('rewards', (1, 1), maxshape=(maxSize, 1), dtype="float")
         self.dones = self.db.create_dataset("dones", (1, 1), maxshape=(maxSize, 1), dtype="i8")
@@ -92,11 +95,17 @@ class HDF5DatasetWriter():
         self.idx = 0  # 用来进行计数
 
     def add(self, obs, action, reward, next_obs, done):
-        self.buffer["actions"].extend(action)
-        self.buffer["observations"].extend(obs)
-        self.buffer["next_observations"].extend(next_obs)
-        self.buffer["rewards"].extend(reward)
-        self.buffer["dones"].extend(done)
+        if isinstance(obs, torch.Tensor):
+            _action=action.cpu().clone().view(-1, self._action_size).numpy()
+            _obs=obs.cpu().clone().view(-1, self._obs_size).numpy()
+            _reward=reward.cpu().clone().view(-1, 1).numpy()
+            _next_obs=next_obs.cpu().clone().view(-1, self._obs_size).numpy()
+            _done=done.cpu().clone().view(-1, 1).numpy()
+        self.buffer["actions"].extend(_action)
+        self.buffer["observations"].extend(_obs)
+        self.buffer["next_observations"].extend(_next_obs)
+        self.buffer["rewards"].extend(_reward)
+        self.buffer["dones"].extend(_done)
 
         # 查看是否需要将缓冲区的数据添加到磁盘中
         if len(self.buffer["actions"]) >= self.bufSize:
@@ -106,9 +115,9 @@ class HDF5DatasetWriter():
         # 将buffer中的内容写入磁盘之后重置buffer
         i = self.idx + len(self.buffer["actions"])
         if i >= len(self.actions):
-            self.actions.resize((i, 18))
-            self.observations.resize((i, 74))
-            self.next_observations.resize((i, 74))
+            self.actions.resize((i, self._action_size))
+            self.observations.resize((i, self._obs_size))
+            self.next_observations.resize((i, self._obs_size))
             self.rewards.resize((i, 1))
             self.dones.resize((i, 1))
         self.actions[self.idx:i] = self.buffer["actions"]
@@ -120,6 +129,7 @@ class HDF5DatasetWriter():
         self.buffer = {"actions": [], "observations": [],
                        "next_observations": [], "rewards": [],
                        "dones": [], }
+        print('hdf5 data flush, {} rows'.format(i))
 
     def close(self):
         if len(self.buffer["actions"]) > 0:  # 查看是否缓冲区中还有数据
