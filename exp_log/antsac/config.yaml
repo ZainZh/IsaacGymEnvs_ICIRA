@@ -1,0 +1,174 @@
+task:
+  name: Ant
+  physics_engine: ${..physics_engine}
+  env:
+    numEnvs: ${resolve_default:4096,${...num_envs}}
+    envSpacing: 5
+    episodeLength: 1000
+    enableDebugVis: false
+    clipActions: 1.0
+    powerScale: 1.0
+    controlFrequencyInv: 1
+    headingWeight: 0.5
+    upWeight: 0.1
+    actionsCost: 0.005
+    energyCost: 0.05
+    dofVelocityScale: 0.2
+    contactForceScale: 0.1
+    jointsAtLimitCost: 0.1
+    deathCost: -2.0
+    terminationHeight: 0.31
+    plane:
+      staticFriction: 1.0
+      dynamicFriction: 1.0
+      restitution: 0.0
+    asset:
+      assetFileName: mjcf/nv_ant.xml
+    enableCameraSensors: false
+  sim:
+    dt: 0.0166
+    substeps: 2
+    up_axis: z
+    use_gpu_pipeline: ${eq:${...pipeline},"gpu"}
+    gravity:
+    - 0.0
+    - 0.0
+    - -9.81
+    physx:
+      num_threads: ${....num_threads}
+      solver_type: ${....solver_type}
+      use_gpu: ${contains:"cuda",${....sim_device}}
+      num_position_iterations: 4
+      num_velocity_iterations: 0
+      contact_offset: 0.02
+      rest_offset: 0.0
+      bounce_threshold_velocity: 0.2
+      max_depenetration_velocity: 10.0
+      default_buffer_size_multiplier: 5.0
+      max_gpu_contact_pairs: 8388608
+      num_subscenes: ${....num_subscenes}
+      contact_collection: 0
+  task:
+    randomize: false
+    randomization_params:
+      frequency: 600
+      observations:
+        range:
+        - 0
+        - 0.002
+        operation: additive
+        distribution: gaussian
+      actions:
+        range:
+        - 0.0
+        - 0.02
+        operation: additive
+        distribution: gaussian
+      actor_params:
+        ant:
+          color: true
+          rigid_body_properties:
+            mass:
+              range:
+              - 0.5
+              - 1.5
+              operation: scaling
+              distribution: uniform
+              setup_only: true
+          dof_properties:
+            damping:
+              range:
+              - 0.5
+              - 1.5
+              operation: scaling
+              distribution: uniform
+            stiffness:
+              range:
+              - 0.5
+              - 1.5
+              operation: scaling
+              distribution: uniform
+            lower:
+              range:
+              - 0
+              - 0.01
+              operation: additive
+              distribution: gaussian
+            upper:
+              range:
+              - 0
+              - 0.01
+              operation: additive
+              distribution: gaussian
+train:
+  params:
+    seed: ${...seed}
+    algo:
+      name: sac
+    model:
+      name: soft_actor_critic
+    network:
+      name: soft_actor_critic
+      separate: true
+      space:
+        continuous:
+          fixed_sigma: false
+      mlp:
+        units:
+        - 256
+        - 128
+        - 64
+        activation: relu
+        initializer:
+          name: default
+      log_std_bounds:
+      - -5
+      - 2
+    load_checkpoint: ${if:${...checkpoint},True,False}
+    load_path: ${...checkpoint}
+    config:
+      name: ${resolve_default:AntSAC,${....experiment}}
+      full_experiment_name: ${.name}
+      env_name: rlgpu
+      multi_gpu: false
+      normalize_input: true
+      reward_shaper:
+        scale_value: 1.0
+      device: ${....rl_device}
+      max_epochs: 10000
+      num_steps_per_episode: 16
+      save_best_after: 100
+      save_frequency: 10000
+      gamma: 0.99
+      init_alpha: 1
+      actor_lr: 0.0005
+      critic_lr: 0.0005
+      critic_tau: 0.005
+      alpha_lr: 0.005
+      batch_size: 1024
+      learnable_temperature: true
+      num_seed_steps: 5
+      replay_buffer_size: 1000000
+      mixed_precision: true
+      normalize_value: true
+      value_bootstrap: true
+      num_actors: ${....task.env.numEnvs}
+task_name: ${task.name}
+experiment: ''
+num_envs: 10
+seed: 42
+torch_deterministic: false
+max_iterations: ''
+physics_engine: physx
+pipeline: gpu
+sim_device: cuda:1
+rl_device: cuda:1
+graphics_device_id: 1
+num_threads: 4
+solver_type: 1
+num_subscenes: 4
+test: true
+checkpoint: /home/ubuntu/Github/IsaacGymEnvs/isaacgymenvs/runs/AntSAC/nn/0531-08-13-04/ep_2604_rew_6186.4336.pth
+multi_gpu: false
+headless: false
+dataset: ''

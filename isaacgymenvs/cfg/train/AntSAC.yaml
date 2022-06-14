@@ -1,0 +1,122 @@
+params:
+  seed: ${...seed}
+  algo:
+    name: sac   # main Runner: cql_agent.CQLAgent
+
+  model:
+    name: soft_actor_critic   # model_builder.ModelBuilder -> models.ModelSACContinuous
+
+  network:
+    name: soft_actor_critic  # model_builder.NetworkBuilder ->network_builder.SACBuilder
+    separate: True    # True, use critic, critic_target
+
+    space:
+      continuous:
+        # mu_activation: None
+        # sigma_activation: None
+        # mu_init:
+        #   name: default
+        # sigma_init:
+        #   name: const_initializer
+        #   val: 0
+        fixed_sigma: False   # if fixed_sigma=True, config.sigma is used below
+
+    mlp:
+      # units: [256, 256, 256]
+      # activation: relu   # network_builder activations_factory line 38
+      units: [256, 128, 64]
+      activation: relu   # network_builder activations_factory line 38
+#      d2rl: False
+
+      initializer:    # network_builder init_factory line 50
+        name: default   # default-identity
+      # regularizer:    # seems useless
+      #   name: None
+
+    log_std_bounds: [-5, 2]   # default
+
+  load_checkpoint: ${if:${...checkpoint},True,False} # flag which sets whether to load the checkpoint
+  load_path: ${...checkpoint} # seem useless, path to the checkpoint to load
+
+  config:
+    name: ${resolve_default:AntSAC,${....experiment}}
+    full_experiment_name: ${.name}
+    env_name: rlgpu
+    multi_gpu: False
+    normalize_input: True
+    reward_shaper: # needed
+      scale_value: 1.0
+    device: ${....rl_device}   # sac_device
+
+
+
+    max_epochs: 10000
+    num_steps_per_episode: 16
+    save_best_after: 100
+    save_frequency: 10000
+    gamma: 0.99
+    init_alpha: 1   # inital log_alpha
+    actor_lr: 0.0005    # policy lr, can set actor(/critic/alpha)_betas ,default=[0.9,0.999]
+    critic_lr: 0.0005   # qf lr
+    critic_tau: 0.005   # critic soft update tau
+    alpha_lr: 0.005    # sac entropy tuning alpha
+    batch_size: 1024
+    learnable_temperature: True   # learnable alpha, alpha_lr
+    num_seed_steps: 5 # first few epochs, random play
+    replay_buffer_size: 1000000
+
+
+
+    mixed_precision: True
+    normalize_value: True
+    value_bootstrap: True
+    num_actors: ${....task.env.numEnvs}
+
+#    normalize_advantage: True
+#    tau: 0.95
+#    learning_rate: 3e-4
+#    lr_schedule: adaptive
+#    schedule_type: legacy
+#    kl_threshold: 0.008
+#    score_to_win: 20000
+#    print_stats: true
+#    grad_norm: 1.0
+#    entropy_coef: 0.0
+#    truncate_grads: False
+#    e_clip: 0.2
+#    horizon_length: 16
+#    minibatch_size: 32768
+#    mini_epochs: 4
+#    critic_coef: 2
+#    clip_value: True
+#    seq_len: 4
+#    bounds_loss_coef: 0.0001
+#
+#    weight_decay:
+#    is_train: ${if:${....test},False,True}
+#
+#    games_to_track: 100   # game track if done
+#
+#    # agent init
+#    # ? total steps: num_actors * num_steps_per_episode * num_seed_steps
+#    replay_buffer_path: ${....dataset}
+#    max_env_steps: 1000   # compare with current_lengths
+#
+#    target_entropy_coef: 0.5  # if none, default 0.5
+#
+#    sigma: 0.9    # need tune, if fixed_sigma=True
+
+#    # CQL args
+#    # max_q_backup: False   # not added
+#    # deterministic_backup: False
+#    # policy_eval_start: 40000    # same as num_seed_steps
+#    min_q_weight: 1.0
+#    min_q_version: 3  # choose cql(rho/H)
+#    with_lagrange: True
+#    lagrange_thresh: 5.0
+#    num_random : 10
+
+
+
+
+
