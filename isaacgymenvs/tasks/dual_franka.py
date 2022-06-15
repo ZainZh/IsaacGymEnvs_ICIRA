@@ -1601,7 +1601,7 @@ def compute_franka_reward(
     cf = 1  # cup flag
     stage1 = 0 # stage1 flag
     stage2 = 1  # stage2 flag
-    stage3 = 1  # stage3 flag
+    stage3 = 0  # stage3 flag
     rewards = stage1*(dist_reward_scale * (dist_reward * sf + dist_reward_1 * cf) \
               + rot_reward_scale * (rot_reward * sf + rot_reward_1 * cf) \
               + around_handle_reward_scale * (around_handle_reward * sf + around_handle_reward_1 * cf) \
@@ -1709,7 +1709,7 @@ def compute_franka_reward(
     # </editor-fold>
 
     # list rewards details for test
-    assert True
+    # assert True
     reward_franka_0 = {
         'distance': (dist_reward, dist_reward_scale),
         'rotation': (rot_reward, rot_reward_scale),
@@ -1744,8 +1744,8 @@ def compute_franka_reward(
         'vrew': v_reward_s3,
     }
 
-    if False:
-        print(prestage_s3)
+    # if False:
+    #     print(prestage_s3)
     # output dict
     rewards_dict = {
         'Franka_0': reward_franka_0,
