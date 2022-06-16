@@ -39,7 +39,7 @@ params:
   # load_path: ${...checkpoint} # seem useless, path to the checkpoint to load
 
   config:
-    name: ${resolve_default:DualFrankaSAC_0614,${....experiment}}
+    name: ${resolve_default:DualFrankaSAC_0616,${....experiment}}
     full_experiment_name: ${.name}
     load_checkpoint: ${if:${....checkpoint},True,False}
     # base_init
