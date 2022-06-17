@@ -52,6 +52,8 @@ class BasePlayer(object):
 
         # add
         self.if_write_hdf5 = self.config.get('save_hdf5_when_play', False)
+        a = self.config.get('save_hdf5_when_play')
+
         if self.if_write_hdf5:
             file_time = datetime.now().strftime("%m%d-%H-%M-%S")
             output_path = os.path.join(self.config['save_hdf5_folder'], file_time+'.hdf5')

@@ -115,7 +115,7 @@ class Runner:
         print('\033[1;33mStarted to train\033[0m')
         agent = self.algo_factory.create(self.algo_name, base_name='run', params=self.params)
         _restore(agent, args)
-        if self.algo_name == 'cql':
+        if self.algo_name == 'cql' or self.algo_name == 'sac':
             _override_sigma(agent, args)
             _load_hdf5(agent, args)
         agent.train()
@@ -174,8 +174,9 @@ class Runner:
             _restore(agent, args)
             _obs, _actions, _rewards, _next_obs, _dones = _load_hdf5(agent, args)
             train_dataset = myhdf5dataset(_obs, _rewards, _next_obs, _dones, _actions)
-            if self.algo_name == 'cql':
+            if self.algo_name == 'cql' or self.algo_name == 'sac':
                 _override_sigma(agent, args)
+                print("dataset learning start")
             agent.regression(train_dataset, batch_size=256)
         else:
             raise Exception('no this function')

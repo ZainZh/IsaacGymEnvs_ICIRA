@@ -491,6 +491,18 @@ class SACAgent(BaseAlgorithm):
 
         return step_time, play_time, total_update_time, total_time, actor_losses, entropies, alphas, alpha_losses, critic1_losses, critic2_losses
 
+    def load_hdf5(self, dataset_path):
+        import h5py
+        _dataset = h5py.File(dataset_path, 'r')
+        _obs = torch.tensor(np.array(_dataset['observations']), dtype=torch.float, device=self.device)
+        _actions = torch.tensor(np.array(_dataset['actions']), dtype=torch.float, device=self.device)
+        _rewards = torch.tensor(np.array(_dataset['rewards']), dtype=torch.float, device=self.device)
+        _next_obs = torch.tensor(np.array(_dataset['next_observations']), dtype=torch.float, device=self.device)
+        _dones = torch.tensor(np.array(_dataset['dones']), dtype=torch.float, device=self.device)
+        self.replay_buffer.add(_obs, _actions, _rewards, _next_obs, _dones)
+        print('hdf5 loaded from', dataset_path, 'now idx', self.replay_buffer.idx)
+        return _obs, _actions, _rewards, _next_obs, _dones
+
     def train(self):
         self.init_tensors()
         self.algo_observer.after_init(self)

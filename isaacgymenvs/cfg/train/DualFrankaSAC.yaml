@@ -39,7 +39,7 @@ params:
   # load_path: ${...checkpoint} # seem useless, path to the checkpoint to load
 
   config:
-    name: ${resolve_default:DualFrankaSAC_0616,${....experiment}}
+    name: ${resolve_default:DualFrankaSAC_0617_1024_re,${....experiment}}
     full_experiment_name: ${.name}
     load_checkpoint: ${if:${....checkpoint},True,False}
     # base_init
@@ -47,6 +47,8 @@ params:
     # env_info:
     num_actors: ${....task.env.numEnvs}
     env_name: rlgpu
+    save_hdf5_when_play: ${resolve_default:False,${....save_hdf5_when_play}}
+    save_hdf5_folder: ${....save_hdf5_folder}
     device: ${....rl_device}   # sac_device
     weight_decay:
     is_train: ${if:${....test},False,True}
@@ -67,7 +69,7 @@ params:
     batch_size: 1024
     init_alpha: 1   # inital log_alpha
     learnable_temperature: True   # learnable alpha, alpha_lr
-    replay_buffer_size: 100000
+    replay_buffer_size: 3000000
     replay_buffer_path: ${....dataset}
     num_steps_per_episode: 1000
     normalize_input: True
