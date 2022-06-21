@@ -53,8 +53,8 @@ save_hdf5_folder: 'test_save/hdf5'
 defaults:
   - task: DualFranka    # set default to our task
 #  - task: FrankaCabinet
-  - train: ${task}SAC
-  #- train: ${task}PPO
+  #- train: ${task}SAC
+  - train: ${task}PPO
 #  - train: ${task}CQL   # if use CQL need to use this suffix
   - hydra/job_logging: disabled
 
