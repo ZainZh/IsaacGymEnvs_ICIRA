@@ -48,6 +48,7 @@ class DualFranka(VecTask):
         self.prop_height = 0.06
         self.prop_length = 0.06
         self.prop_spacing = 0.09
+        self.index_of_simulation = 0
         self.gripped = torch.zeros((1, self.num_Envs))
         self.gripped_1 = torch.zeros((1, self.num_Envs))
         # num_obs = 42
@@ -93,10 +94,12 @@ class DualFranka(VecTask):
                                                device=self.device)
         self.franka_default_dof_pos_1 = to_torch([-0.5349, 0, 0.1401, -1.7951, 0.0334, 3.2965, 0.6484, 0.04, 0.04],
                                                  device=self.device)
-        self.franka_default_dof_pos_stage2 = to_torch([-0.3545, 0.6990, 0.2934, 0.7159, -0.1442, 0.3583, 0.5817, 0.04, 0.04],
-                                               device=self.device)
-        self.franka_default_dof_pos_1_stage2 = to_torch([-0.4901, 0.5585, -0.3762, -0.5309, -0.1273, -0.7353, -0.4016, 0.04, 0.04],
-                                                 device=self.device)
+        self.franka_default_dof_pos_stage2 = to_torch(
+            [-0.3545, 0.6990, 0.2934, 0.7159, -0.1442, 0.3583, 0.5817, 0.04, 0.04],
+            device=self.device)
+        self.franka_default_dof_pos_1_stage2 = to_torch(
+            [-0.4901, 0.5585, -0.3762, -0.5309, -0.1273, -0.7353, -0.4016, 0.04, 0.04],
+            device=self.device)
         self.franka_default_dof_pos_2 = to_torch([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                                  device=self.device)
         self.franka_default_dof_pos_3 = to_torch([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -135,6 +138,11 @@ class DualFranka(VecTask):
             self.reset_idx_replay_buffer(torch.arange(self.num_envs, device=self.device))
         else:
             self.reset_idx(torch.arange(self.num_envs, device=self.device))
+
+        # if not headless:
+        #     # Wait for dt to elapse in real time to sync viewer with
+        #     # simulation rate. Not necessary in headless.
+        #     self.gym.sync_frame_time(self.sim)
 
     def create_sim(self):
         self.sim_params.up_axis = gymapi.UP_AXIS_Y
@@ -250,6 +258,7 @@ class DualFranka(VecTask):
         franka_dof_props_1 = self.gym.get_asset_dof_properties(franka_asset_1)
         self.franka_dof_lower_limits = []
         self.franka_dof_upper_limits = []
+        self.camera_handles = [[]]
         for i in range(self.num_franka_dofs):
             franka_dof_props['driveMode'][i] = gymapi.DOF_MODE_POS
             franka_dof_props_1['driveMode'][i] = gymapi.DOF_MODE_POS
@@ -382,28 +391,29 @@ class DualFranka(VecTask):
 
         for i in range(self.num_envs):
 
-            env_ptr = self.gym.create_env(self.sim, env_lower, env_upper, num_per_row)
+            self.env_ptr = self.gym.create_env(self.sim, env_lower, env_upper, num_per_row)
             if self.aggregate_mode >= 3:
-                self.gym.begin_aggregate(env_ptr, max_agg_bodies, max_agg_shapes, True)
+                self.gym.begin_aggregate(self.env_ptr, max_agg_bodies, max_agg_shapes, True)
 
-            franka_actor = self.gym.create_actor(env_ptr, franka_asset, pose, "franka", i, 0)
-            self.gym.set_actor_dof_properties(env_ptr, franka_actor, franka_dof_props)
-            franka_actor_1 = self.gym.create_actor(env_ptr, franka_asset_1, pose_1, "franka1", i, 0)
-            self.gym.set_actor_dof_properties(env_ptr, franka_actor_1, franka_dof_props_1)
+            franka_actor = self.gym.create_actor(self.env_ptr, franka_asset, pose, "franka", i, 0)
+            self.gym.set_actor_dof_properties(self.env_ptr, franka_actor, franka_dof_props)
+            franka_actor_1 = self.gym.create_actor(self.env_ptr, franka_asset_1, pose_1, "franka1", i, 0)
+            self.gym.set_actor_dof_properties(self.env_ptr, franka_actor_1, franka_dof_props_1)
 
             if self.aggregate_mode == 2:
-                self.gym.begin_aggregate(env_ptr, max_agg_bodies, max_agg_shapes, True)
+                self.gym.begin_aggregate(self.env_ptr, max_agg_bodies, max_agg_shapes, True)
 
-            cup_actor = self.gym.create_actor(env_ptr, cup_asset, cup_pose, "cup", i, 0)
-            spoon_actor = self.gym.create_actor(env_ptr, spoon_asset, spoon_pose, "spoon", i, 0)
-            shelf_actor = self.gym.create_actor(env_ptr, shelf_asset, shelf_pose, "shelf", i, 0)
-            table_actor = self.gym.create_actor(env_ptr, table_asset, table_pose, "table", i, 0)
-            box_actor = self.gym.create_actor(env_ptr, box_asset, box_pose, "box", i, 0)
+            cup_actor = self.gym.create_actor(self.env_ptr, cup_asset, cup_pose, "cup", i, 0)
+            spoon_actor = self.gym.create_actor(self.env_ptr, spoon_asset, spoon_pose, "spoon", i, 0)
+            shelf_actor = self.gym.create_actor(self.env_ptr, shelf_asset, shelf_pose, "shelf", i, 0)
+            table_actor = self.gym.create_actor(self.env_ptr, table_asset, table_pose, "table", i, 0)
+            box_actor = self.gym.create_actor(self.env_ptr, box_asset, box_pose, "box", i, 0)
+
             if self.aggregate_mode == 1:
-                self.gym.begin_aggregate(env_ptr, max_agg_bodies, max_agg_shapes, True)
+                self.gym.begin_aggregate(self.env_ptr, max_agg_bodies, max_agg_shapes, True)
             if self.aggregate_mode > 0:
-                self.gym.end_aggregate(env_ptr)
-            self.envs.append(env_ptr)
+                self.gym.end_aggregate(self.env_ptr)
+            self.envs.append(self.env_ptr)
             self.frankas.append(franka_actor)
             self.frankas_1.append(franka_actor_1)
             self.table.append(table_actor)
@@ -411,23 +421,44 @@ class DualFranka(VecTask):
             self.spoon.append(spoon_actor)
             self.shelf.append(shelf_actor)
 
-        self.hand_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_link7")
-        self.hand_handle_1 = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor_1, "panda_link7")
-        self.table_handle = self.gym.find_actor_rigid_body_handle(env_ptr, table_actor, "table")
-        self.lfinger_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_leftfinger")
-        self.rfinger_handle = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor, "panda_rightfinger")
-        self.lfinger_handle_1 = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor_1, "panda_leftfinger")
-        self.rfinger_handle_1 = self.gym.find_actor_rigid_body_handle(env_ptr, franka_actor_1, "panda_rightfinger")
-        self.cup_handle = self.gym.find_actor_rigid_body_handle(env_ptr, cup_actor, "base_link")
-        self.spoon_handle = self.gym.find_actor_rigid_body_handle(env_ptr, spoon_actor, "base_link")
-        self.shelf_handle = self.gym.find_actor_rigid_body_handle(env_ptr, shelf_actor, "base_link")
+        # add camera
+        self.set_camera()
+
+        self.hand_handle = self.gym.find_actor_rigid_body_handle(self.env_ptr, franka_actor, "panda_link7")
+        self.hand_handle_1 = self.gym.find_actor_rigid_body_handle(self.env_ptr, franka_actor_1, "panda_link7")
+        self.table_handle = self.gym.find_actor_rigid_body_handle(self.env_ptr, table_actor, "table")
+        self.lfinger_handle = self.gym.find_actor_rigid_body_handle(self.env_ptr, franka_actor, "panda_leftfinger")
+        self.rfinger_handle = self.gym.find_actor_rigid_body_handle(self.env_ptr, franka_actor, "panda_rightfinger")
+        self.lfinger_handle_1 = self.gym.find_actor_rigid_body_handle(self.env_ptr, franka_actor_1, "panda_leftfinger")
+        self.rfinger_handle_1 = self.gym.find_actor_rigid_body_handle(self.env_ptr, franka_actor_1, "panda_rightfinger")
+        self.cup_handle = self.gym.find_actor_rigid_body_handle(self.env_ptr, cup_actor, "base_link")
+        self.spoon_handle = self.gym.find_actor_rigid_body_handle(self.env_ptr, spoon_actor, "base_link")
+        self.shelf_handle = self.gym.find_actor_rigid_body_handle(self.env_ptr, shelf_actor, "base_link")
         if spoon_as_box:
-            self.spoon_handle = self.gym.find_actor_rigid_body_handle(env_ptr, spoon_actor, "box")
+            self.spoon_handle = self.gym.find_actor_rigid_body_handle(self.env_ptr, spoon_actor, "box")
         if shelf_as_box:
-            self.shelf_handle = self.gym.find_actor_rigid_body_handle(env_ptr, shelf_actor, "box")
+            self.shelf_handle = self.gym.find_actor_rigid_body_handle(self.env_ptr, shelf_actor, "box")
 
         self.init_data()
         # self.gym.get_sim_rigid_body_states(self.sim,gymapi.STATE_ALL)
+
+    def set_camera(self):
+        # set up the camera props
+        for i in range(self.num_Envs):
+            self.camera_props = gymapi.CameraProperties()
+            self.camera_props.horizontal_fov = 75.0
+            self.camera_props.width = 1920
+            self.camera_props.height = 1080
+            self.camera_props.enable_tensors = True
+            handle = self.gym.create_camera_sensor(self.envs[i], self.camera_props)
+            # handle=handle+1
+            # set up the camera locations (middle point between two Frankas, the height is 1.3m)
+            camera_location = gymapi.Vec3(-1, 1.3, -0.05)
+            # set up the point that the camera looking at (middle point between the cup and the spoon)
+            camera_location_view = gymapi.Vec3(-0.3, 0.5, 0.0)
+            self.gym.set_camera_location(handle, self.envs[i], camera_location, camera_location_view)
+            self.camera_handles[i].append(handle)
+            self.camera_handles.append([])
 
     def init_data(self):  # define some init data for simulation
         # get franka data form
@@ -535,7 +566,7 @@ class DualFranka(VecTask):
             self.spoon_up_axis = to_torch([0, 1, 0], device=self.device).repeat((self.num_envs, 1))  # +y
         # print('self.spoon_inward_axis: {}, self.gripper_up_axis: {}'.format(self.spoon_inward_axis,
         #                                                                         self.spoon_up_axis))
-        self.table_rot= to_torch([0, 0, 0, 1], device=self.device).repeat((self.num_envs, 1))
+        self.table_rot = to_torch([0, 0, 0, 1], device=self.device).repeat((self.num_envs, 1))
 
         # params for calculation
         self.franka_grasp_pos = torch.zeros_like(self.franka_local_grasp_pos)
@@ -567,11 +598,40 @@ class DualFranka(VecTask):
         # important
 
     ###########################################################
+    def take_picture(self):
+        count = 0
+#       for test
+        asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                  "../graphics_images/rgb_env%d_frame%d.png" % (count, self.index_of_simulation))
+        # rgb_filename = "graphics_images/rgb_env%d_frame%d.png" % (count,self.index_of_simulation)
+        # self.Image_rgba = self.gym.get_camera_image_gpu_tensor(self.sim, envs, self.camera_handles,
+        #                                                        gymapi.IMAGE_COLOR)
+        self.gym.write_camera_image_to_file(self.sim, self.envs[0], self.camera_handles[count][0], gymapi.IMAGE_COLOR,
+                                            asset_root)
+#       for collect
+#         for envs in self.envs:
+#             asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+#                                       "../graphics_images/rgb_env%d_frame%d.png" % (count, self.index_of_simulation))
+#             # rgb_filename = "graphics_images/rgb_env%d_frame%d.png" % (count,self.index_of_simulation)
+#             # self.Image_rgba = self.gym.get_camera_image_gpu_tensor(self.sim, envs, self.camera_handles,
+#             #                                                        gymapi.IMAGE_COLOR)
+#             self.gym.write_camera_image_to_file(self.sim, envs, self.camera_handles[count][0], gymapi.IMAGE_COLOR,
+#                                                 asset_root)
+#             print("successfully save pic graphics_images/rgb_env%d_frame%d.png" % (count, self.index_of_simulation))
+#             # self.torch_camera_tensor = gymtorch.wrap_tensor(self.Image_rgba)
+#             count += 1
+
     def compute_observations(self):
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_dof_state_tensor(self.sim)
         self.gym.refresh_net_contact_force_tensor(self.sim)
         self.gym.refresh_rigid_body_state_tensor(self.sim)
+        self.gym.step_graphics(self.sim)
+        self.gym.render_all_camera_sensors(self.sim)
+        self.gym.start_access_image_tensors(self.sim)
+        self.take_picture()
+        self.gym.end_access_image_tensors(self.sim)
+        self.index_of_simulation += 1
         hand_pos = self.rigid_body_states[:, self.hand_handle][:, 0:3]
         hand_rot = self.rigid_body_states[:, self.hand_handle][:, 3:7]
 
@@ -737,7 +797,7 @@ class DualFranka(VecTask):
         self.franka_dof_pos[env_ids, :] = pos
         self.franka_dof_vel[env_ids, :] = torch.zeros_like(self.franka_dof_vel[env_ids])
         self.franka_dof_targets[env_ids, :self.num_franka_dofs] = pos
-        
+
         # reset franka1
         pos_1 = tensor_clamp(
             self.franka_default_dof_pos_1.unsqueeze(0) + 0.1 * (
@@ -1233,7 +1293,7 @@ class DualFranka(VecTask):
 @torch.jit.script
 def compute_franka_reward(
         reset_buf, progress_buf, actions, franka_grasp_pos, cup_grasp_pos, franka_grasp_rot, franka_grasp_pos_1,
-        spoon_grasp_pos, franka_grasp_rot_1, cup_grasp_rot, spoon_grasp_rot,table_rot,
+        spoon_grasp_pos, franka_grasp_rot_1, cup_grasp_rot, spoon_grasp_rot, table_rot,
         cup_positions, spoon_positions, cup_orientations, spoon_orientations,
         spoon_linvels, cup_linvels,
         cup_inward_axis, cup_up_axis, franka_lfinger_pos, franka_rfinger_pos,
@@ -1243,7 +1303,9 @@ def compute_franka_reward(
         num_envs: int, dist_reward_scale: float, rot_reward_scale: float, around_handle_reward_scale: float,
         lift_reward_scale: float, finger_dist_reward_scale: float, action_penalty_scale: float, distX_offset: float,
         max_episode_length: float
-) -> Tuple[Tensor, Tensor, Dict[str, Union[Dict[str, Tuple[Tensor, Union[Tensor, float]]], Dict[str, Tuple[Tensor, float]], Dict[str, Tensor]]], Tensor, Tensor]:
+) -> Tuple[Tensor, Tensor, Dict[str, Union[
+    Dict[str, Tuple[Tensor, Union[Tensor, float]]], Dict[str, Tuple[Tensor, float]], Dict[
+        str, Tensor]]], Tensor, Tensor]:
     """
     Tuple[Tensor, Tensor, Dict[str, Union[Dict[str, Tuple[Tensor, float]],
                                            Dict[str, Tensor], Dict[str, Union[Tensor, Tuple[Tensor, float]]]]]]:
@@ -1285,7 +1347,7 @@ def compute_franka_reward(
     axis3_1 = tf_vector(franka_grasp_rot_1, gripper_up_axis_1)
     axis4_1 = tf_vector(cup_grasp_rot, cup_up_axis)
 
-    axistable=tf_vector(table_rot,cup_up_axis) #add ground axis
+    axistable = tf_vector(table_rot, cup_up_axis)  # add ground axis
 
     # compute the alignment(reward)
     # alignment of forward axis for gripper
@@ -1502,9 +1564,9 @@ def compute_franka_reward(
                                        finger_dist_reward_1)
     finger_dist_reward_1 = torch.where(lfinger_dist_1 > 0,
                                        torch.where(rfinger_dist_1 < 0,
-                                            torch.where(d_1 <= 0.02,
-                                                   (0.08 - tmp_1) * 100,
-                                                   finger_dist_reward_1),finger_dist_reward_1),
+                                                   torch.where(d_1 <= 0.02,
+                                                               (0.08 - tmp_1) * 100,
+                                                               finger_dist_reward_1), finger_dist_reward_1),
                                        finger_dist_reward_1)
     # </editor-fold>
 
@@ -1557,12 +1619,13 @@ def compute_franka_reward(
 
     dot_stage2 = torch.bmm(axis4_1.view(num_envs, 1, 3), axis4.view(num_envs, 3, 1)).squeeze(-1).squeeze(
         -1)  # spoon z with cup-y
-    dot_stage2_table=torch.bmm(axistable.view(num_envs, 1, 3), axis4_1.view(num_envs, 3, 1)).squeeze(-1).squeeze(
+    dot_stage2_table = torch.bmm(axistable.view(num_envs, 1, 3), axis4_1.view(num_envs, 3, 1)).squeeze(-1).squeeze(
         -1)  # spoon z with cup-y
-    rot_reward_stage2 = 0.5*(torch.sign(dot_stage2) * dot_stage2 ** 2+torch.sign(dot_stage2_table) * dot_stage2_table ** 2)
-    
+    rot_reward_stage2 = 0.5 * (
+            torch.sign(dot_stage2) * dot_stage2 ** 2 + torch.sign(dot_stage2_table) * dot_stage2_table ** 2)
+
     d_spoon_cup_y = torch.norm(franka_grasp_pos[:, 1] - franka_grasp_pos_1[:, 1], p=2, dim=-1)
-    dist_reward_stage2_y=torch.zeros_like(dist_reward)
+    dist_reward_stage2_y = torch.zeros_like(dist_reward)
     # dist_reward_stage2_y = torch.where(franka_grasp_pos[:, 1] > franka_grasp_pos_1[:, 1],
     #                                    torch.where(d_spoon_cup_y > 0.4, 1.0 / (1.0 + d_spoon_cup_y ** 2),
     #                                                dist_reward_stage2_y),
@@ -1572,19 +1635,21 @@ def compute_franka_reward(
     # ....................stage 3 reward....................................................................
     preset_h = 0.09
     cup_r = 0.025
-    spoon_tip_pos = quat_rotate_inverse(spoon_orientations,spoon_positions) - 0.5 * torch.tensor([0.15, 0.0, 0.0], device=tensor_device)
-    spoon_tip_pos = quat_rotate(spoon_orientations,spoon_tip_pos)
-    v1_s3 = quat_rotate_inverse(cup_orientations, spoon_tip_pos-cup_positions)   # relative spoon pos in cup
-    prestage_s3 = [ torch.gt(torch.tensor([cup_r, cup_r], device=tensor_device),v1_s3[:, [0,2]]).all(dim=-1) ,
-                    torch.lt(torch.tensor([-cup_r, -cup_r], device=tensor_device),v1_s3[:, [0,2]]).all(dim=-1) ,   # x,z in cup
-                    torch.logical_and(v1_s3[:, 1] - preset_h < 0,v1_s3[:, 1] > 0) ]   # spoon tip in cup
-    stage_s3 = torch.logical_and(v1_s3[:, 1] - 0.11 < 0,v1_s3[:, 1] > 0)
+    spoon_tip_pos = quat_rotate_inverse(spoon_orientations, spoon_positions) - 0.5 * torch.tensor([0.15, 0.0, 0.0],
+                                                                                                  device=tensor_device)
+    spoon_tip_pos = quat_rotate(spoon_orientations, spoon_tip_pos)
+    v1_s3 = quat_rotate_inverse(cup_orientations, spoon_tip_pos - cup_positions)  # relative spoon pos in cup
+    prestage_s3 = [torch.gt(torch.tensor([cup_r, cup_r], device=tensor_device), v1_s3[:, [0, 2]]).all(dim=-1),
+                   torch.lt(torch.tensor([-cup_r, -cup_r], device=tensor_device), v1_s3[:, [0, 2]]).all(dim=-1),
+                   # x,z in cup
+                   torch.logical_and(v1_s3[:, 1] - preset_h < 0, v1_s3[:, 1] > 0)]  # spoon tip in cup
+    stage_s3 = torch.logical_and(v1_s3[:, 1] - 0.11 < 0, v1_s3[:, 1] > 0)
     flag_range_s3 = torch.logical_and(prestage_s3[0], prestage_s3[1])
     flag_full_s3 = torch.logical_and(flag_range_s3, prestage_s3[2])
     h_s3 = torch.abs(v1_s3[:, 1] - preset_h)
-    h_reward_s3 = 2.0 / (1.0 + h_s3**2) * flag_range_s3
-    d_s3 = torch.norm(v1_s3[:, [0,2]] - torch.tensor([cup_r, cup_r], device=tensor_device), dim=-1)
-    d_reward_s3 = 2.0 / (1.0 + d_s3**2) * flag_range_s3
+    h_reward_s3 = 2.0 / (1.0 + h_s3 ** 2) * flag_range_s3
+    d_s3 = torch.norm(v1_s3[:, [0, 2]] - torch.tensor([cup_r, cup_r], device=tensor_device), dim=-1)
+    d_reward_s3 = 2.0 / (1.0 + d_s3 ** 2) * flag_range_s3
     spoon_v = torch.norm(spoon_linvels, dim=-1)
     spoon_v = torch.clamp(spoon_v - 0.049, min=0)
     cup_v = torch.norm(cup_linvels, dim=-1)
@@ -1599,28 +1664,29 @@ def compute_franka_reward(
     ## sum of rewards
     sf = 1  # spoon flag
     cf = 1  # cup flag
-    stage1 = 1 # stage1 flag
+    stage1 = 1  # stage1 flag
     stage2 = 1  # stage2 flag
     stage3 = 1  # stage3 flag
-    rewards = stage1*(dist_reward_scale * (dist_reward * sf + dist_reward_1 * cf) \
-              + rot_reward_scale * (rot_reward * sf + rot_reward_1 * cf) \
-              + around_handle_reward_scale * (around_handle_reward * sf + around_handle_reward_1 * cf) \
-              + finger_dist_reward_scale * (finger_dist_reward * sf + finger_dist_reward_1 * cf) \
-              + lift_reward_scale * (lift_reward * sf + lift_reward_1 * cf) \
-              - action_penalty_scale * action_penalty \
-              - spoon_fall_penalty)
-              
-    rewards = rewards + stage2 * ( dist_reward_stage2 * dist_reward_scale * 20 \
-                    + rot_reward_stage2 * rot_reward_scale * 20 \
-                    + dist_reward_stage2_y * dist_reward_scale * 20)
+    rewards = stage1 * (dist_reward_scale * (dist_reward * sf + dist_reward_1 * cf) \
+                        + rot_reward_scale * (rot_reward * sf + rot_reward_1 * cf) \
+                        + around_handle_reward_scale * (around_handle_reward * sf + around_handle_reward_1 * cf) \
+                        + finger_dist_reward_scale * (finger_dist_reward * sf + finger_dist_reward_1 * cf) \
+                        + lift_reward_scale * (lift_reward * sf + lift_reward_1 * cf) \
+                        - action_penalty_scale * action_penalty \
+                        - spoon_fall_penalty)
 
-    #TODO: add stage 3 reward
-    fulfill_s2 = torch.logical_and(spoon_positions[:,1]-0.4 > 0.15,    # spoon_y - table_height > x  (shelf height ignored)
-                    cup_positions[:,1]-0.4 > 0.15,    
-                    )
-    rewards = rewards + stage3 * fulfill_s2 *( h_reward_s3 * 20 \
-                    + d_reward_s3 * 20 \
-                    + v_reward_s3 * 20)
+    rewards = rewards + stage2 * (dist_reward_stage2 * dist_reward_scale * 20 \
+                                  + rot_reward_stage2 * rot_reward_scale * 20 \
+                                  + dist_reward_stage2_y * dist_reward_scale * 20)
+
+    # TODO: add stage 3 reward
+    fulfill_s2 = torch.logical_and(spoon_positions[:, 1] - 0.4 > 0.15,
+                                   # spoon_y - table_height > x  (shelf height ignored)
+                                   cup_positions[:, 1] - 0.4 > 0.15,
+                                   )
+    rewards = rewards + stage3 * fulfill_s2 * (h_reward_s3 * 20 \
+                                               + d_reward_s3 * 20 \
+                                               + v_reward_s3 * 20)
 
     # test args
     rewards_step = rewards.clone().detach()
