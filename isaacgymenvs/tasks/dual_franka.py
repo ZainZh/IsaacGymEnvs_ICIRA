@@ -259,6 +259,7 @@ class DualFranka(VecTask):
         self.franka_dof_lower_limits = []
         self.franka_dof_upper_limits = []
         self.camera_handles = [[]]
+        self.norm_depth_image=[[]]
         for i in range(self.num_franka_dofs):
             franka_dof_props['driveMode'][i] = gymapi.DOF_MODE_POS
             franka_dof_props_1['driveMode'][i] = gymapi.DOF_MODE_POS
@@ -599,27 +600,46 @@ class DualFranka(VecTask):
 
     ###########################################################
     def take_picture(self):
+
         count = 0
-#       for test
+        #       for test (take one picture and save for environment 1 in a simulation )
+        '''
         asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                   "../graphics_images/rgb_env%d_frame%d.png" % (count, self.index_of_simulation))
-        # rgb_filename = "graphics_images/rgb_env%d_frame%d.png" % (count,self.index_of_simulation)
-        # self.Image_rgba = self.gym.get_camera_image_gpu_tensor(self.sim, envs, self.camera_handles,
-        #                                                        gymapi.IMAGE_COLOR)
         self.gym.write_camera_image_to_file(self.sim, self.envs[0], self.camera_handles[count][0], gymapi.IMAGE_COLOR,
                                             asset_root)
-#       for collect
-#         for envs in self.envs:
-#             asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-#                                       "../graphics_images/rgb_env%d_frame%d.png" % (count, self.index_of_simulation))
-#             # rgb_filename = "graphics_images/rgb_env%d_frame%d.png" % (count,self.index_of_simulation)
-#             # self.Image_rgba = self.gym.get_camera_image_gpu_tensor(self.sim, envs, self.camera_handles,
-#             #                                                        gymapi.IMAGE_COLOR)
-#             self.gym.write_camera_image_to_file(self.sim, envs, self.camera_handles[count][0], gymapi.IMAGE_COLOR,
-#                                                 asset_root)
-#             print("successfully save pic graphics_images/rgb_env%d_frame%d.png" % (count, self.index_of_simulation))
-#             # self.torch_camera_tensor = gymtorch.wrap_tensor(self.Image_rgba)
-#             count += 1
+        '''
+
+
+        #     save picture frame(RGBA) collection
+        '''
+         for envs in self.envs:
+            asset_root = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                      "../graphics_images/rgb_env%d_frame%d.png" % (count, self.index_of_simulation))
+            # rgb_filename = "graphics_images/rgb_env%d_frame%d.png" % (count,self.index_of_simulation)
+            # self.Image_rgba = self.gym.get_camera_image_gpu_tensor(self.sim, envs, self.camera_handles,
+            #                                                        gymapi.IMAGE_COLOR)
+            self.gym.write_camera_image_to_file(self.sim, envs, self.camera_handles[count][0], gymapi.IMAGE_COLOR,
+                                                asset_root)
+            print("successfully save pic graphics_images/rgb_env%d_frame%d.png" % (count, self.index_of_simulation))
+            # self.torch_camera_tensor = gymtorch.wrap_tensor(self.Image_rgba)
+            count += 1
+        '''
+
+        #     for picture frame(RGB-D) collection
+        import torchvision
+        import torchvision.transforms as transforms
+
+        for i in range(self.num_Envs):
+            camera_np=self.gym.get_camera_image(self.sim, self.envs[i], self.camera_handles[count][0], gymapi.IMAGE_COLOR)
+            camera_tensor=self.gym.get_camera_image_gpu_tensor(self.sim, self.envs[i], self.camera_handles[count][0], gymapi.IMAGE_COLOR)
+            camera_tensor_grey=torchvision.transforms.functional.rgb_to_grayscale(camera_tensor, 3)
+            self.norm_depth_image[i].append(camera_tensor)
+            self.norm_depth_image.append([])
+
+            count += 1
+
+
 
     def compute_observations(self):
         self.gym.refresh_actor_root_state_tensor(self.sim)
@@ -628,9 +648,11 @@ class DualFranka(VecTask):
         self.gym.refresh_rigid_body_state_tensor(self.sim)
         self.gym.step_graphics(self.sim)
         self.gym.render_all_camera_sensors(self.sim)
+        # get pic's tensor
         self.gym.start_access_image_tensors(self.sim)
         self.take_picture()
         self.gym.end_access_image_tensors(self.sim)
+
         self.index_of_simulation += 1
         hand_pos = self.rigid_body_states[:, self.hand_handle][:, 0:3]
         hand_rot = self.rigid_body_states[:, self.hand_handle][:, 3:7]
