@@ -517,7 +517,7 @@ if __name__ == "__main__":
                     if auto_track_pose:
                         print('Disable target tracking')
                     else:
-                        print('Enable target tracking')
+                        print('Enable asdf target tracking')
                         reset_env()
                         ready_to_track()
                     auto_track_pose = ~auto_track_pose

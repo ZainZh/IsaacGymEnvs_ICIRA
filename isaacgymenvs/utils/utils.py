@@ -95,17 +95,17 @@ class HDF5DatasetWriter():
         self.idx = 0  # 用来进行计数
 
     def add(self, obs, action, reward, next_obs, done):
-        if isinstance(obs, torch.Tensor):
-            _action=action.cpu().clone().view(-1, self._action_size).numpy()
-            _obs=obs.cpu().clone().view(-1, self._obs_size).numpy()
-            _reward=reward.cpu().clone().view(-1, 1).numpy()
-            _next_obs=next_obs.cpu().clone().view(-1, self._obs_size).numpy()
-            _done=done.cpu().clone().view(-1, 1).numpy()
-        self.buffer["actions"].extend(_action)
-        self.buffer["observations"].extend(_obs)
-        self.buffer["next_observations"].extend(_next_obs)
-        self.buffer["rewards"].extend(_reward)
-        self.buffer["dones"].extend(_done)
+        # if isinstance(obs, torch.Tensor):
+        #     _action=action.cpu().clone().view(-1, self._action_size).numpy()
+        #     _obs=obs.cpu().clone().view(-1, self._obs_size).numpy()
+        #     _reward=reward.cpu().clone().view(-1, 1).numpy()
+        #     _next_obs=next_obs.cpu().clone().view(-1, self._obs_size).numpy()
+        #     _done=done.cpu().clone().view(-1, 1).numpy()
+        self.buffer["actions"].extend(action)
+        self.buffer["observations"].extend(obs)
+        self.buffer["next_observations"].extend(next_obs)
+        self.buffer["rewards"].extend(reward)
+        self.buffer["dones"].extend(done)
 
         # 查看是否需要将缓冲区的数据添加到磁盘中
         if len(self.buffer["actions"]) >= self.bufSize:

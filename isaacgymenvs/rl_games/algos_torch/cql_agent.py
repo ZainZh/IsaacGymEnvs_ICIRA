@@ -67,7 +67,7 @@ class CQLAgent(BaseAlgorithm):
         }
         self.model = self.network.build(net_config)
         self.model.to(self.sac_device)
-
+        print("Number of Agents", self.num_actors, "Batch Size", self.batch_size)
         self.actor_optimizer = torch.optim.Adam(self.model.sac_network.actor.parameters(),
                                                 lr=self.config['actor_lr'],
                                                 betas=self.config.get("actor_betas", [0.9, 0.999]))
@@ -213,9 +213,10 @@ class CQLAgent(BaseAlgorithm):
         state['actor_optimizer'] = self.actor_optimizer.state_dict()
         state['critic_optimizer'] = self.critic_optimizer.state_dict()
         state['log_alpha_optimizer'] = self.log_alpha_optimizer.state_dict()
+        ############################################################# cql add
         if self.with_lagrange:
             state['alpha_prime_optimizer'] = self.alpha_prime_optimizer.state_dict()
-
+        ##########################################################
         return state
 
     def get_weights(self):
@@ -243,9 +244,10 @@ class CQLAgent(BaseAlgorithm):
         self.actor_optimizer.load_state_dict(weights['actor_optimizer'])
         self.critic_optimizer.load_state_dict(weights['critic_optimizer'])
         self.log_alpha_optimizer.load_state_dict(weights['log_alpha_optimizer'])
+        #############################################cql add
         if self.with_lagrange:
             self.alpha_prime_optimizer.load_state_dict(weights['alpha_prime_optimizer'])
-
+        ########################################################
     def restore(self, fn):
         checkpoint = torch_ext.load_checkpoint(fn, map_location=self.device)
         self.set_full_state_weights(checkpoint)
@@ -295,6 +297,8 @@ class CQLAgent(BaseAlgorithm):
         cat_q2 = torch.cat(
             [q2_rand, current_Q2.unsqueeze(1), q2_next_actions, q2_curr_actions], 1
         )
+
+        # calculate the standard deviation of all elements
         std_q1 = torch.std(cat_q1, dim=1)
         std_q2 = torch.std(cat_q2, dim=1)
 
@@ -310,6 +314,7 @@ class CQLAgent(BaseAlgorithm):
                  q2_curr_actions - curr_log_pis.detach()], 1
             )
 
+        ## logsumexp= Log(Sum(Exp()))
         min_qf1_loss = torch.logsumexp(cat_q1 / self.temp, dim=1, ).mean() * self.min_q_weight * self.temp
         min_qf2_loss = torch.logsumexp(cat_q2 / self.temp, dim=1, ).mean() * self.min_q_weight * self.temp
 
@@ -392,10 +397,10 @@ class CQLAgent(BaseAlgorithm):
             actor_loss, entropy, alpha, alpha_loss = self.update_actor_and_alpha(obs, step)
 
         actor_loss_info = actor_loss, entropy, alpha, alpha_loss
-        
+
         if step % self.critic_target_update_frequency == 0:
             self.soft_update_params(self.model.sac_network.critic, self.model.sac_network.critic_target,
-                                self.critic_tau)
+                                    self.critic_tau)
         return actor_loss_info, critic1_loss, critic2_loss, min_qf1_loss, min_qf2_loss, std_q1, std_q2, alpha_prime_loss
 
     def preproc_obs(self, obs):
@@ -689,7 +694,7 @@ class CQLAgent(BaseAlgorithm):
 
     def regression(self, train_dataset, batch_size=256, total_epoch_num=570):
         from torch.utils.data import Dataset, DataLoader, random_split
-        
+
         self.init_tensors()
         self.algo_observer.after_init(self)
         self.last_mean_rewards = -100500
@@ -697,13 +702,13 @@ class CQLAgent(BaseAlgorithm):
         # rep_count = 0
         self.frame = 0
         # self.obs = self.env_reset()
-        
+
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=False, drop_last=True)
 
         print('\033[1;33mStart training\033[0m')  # add hint
 
         while self.epoch_num < total_epoch_num:
-            
+
             self.epoch_num += 1
             frame = self.epoch_num
             print('\033[1;32m---------------- Epoch {} ----------------\033[0m'.format(self.epoch_num))
@@ -726,7 +731,7 @@ class CQLAgent(BaseAlgorithm):
             for s in train_loader:
                 obs, reward, next_obs, done, action = s
                 not_done = 1.0 - done.float()
-                
+
                 # update
                 critic_loss, critic1_loss, critic2_loss, min_qf1_loss, min_qf2_loss, std_q1, std_q2, alpha_prime_loss \
                     = self.update_critic(obs, action, reward, next_obs, not_done, 0)
@@ -752,11 +757,10 @@ class CQLAgent(BaseAlgorithm):
                 obs, reward, next_obs, done, action = s
                 with torch.no_grad():
                     pred_action = self.act(obs.float(), self.env_info["action_space"].shape, sample=True)
-                    loss = torch.norm(pred_action-action)
+                    loss = torch.norm(pred_action - action)
                     eval_loss.append(loss)
-            mean_valid_loss = sum(eval_loss)/len(eval_loss)
+            mean_valid_loss = sum(eval_loss) / len(eval_loss)
             print(f'Epoch [{frame}/{total_epoch_num}]: Train loss: {actor_loss:.4f}, Valid loss: {mean_valid_loss:.4f}')
-
 
             self.writer.add_scalar('losses/a_loss', torch_ext.mean_list(actor_losses).item(), frame)
             self.writer.add_scalar('losses/c1_loss', torch_ext.mean_list(critic1_losses).item(), frame)
@@ -768,7 +772,7 @@ class CQLAgent(BaseAlgorithm):
             self.writer.add_scalar('losses/min_c2_loss', torch_ext.mean_list(min_qf2_losses).item(), frame)
             if self.with_lagrange:
                 self.writer.add_scalar('losses/alpha_prime_loss', torch_ext.mean_list(alpha_prime_losses).item(),
-                                        frame)
+                                       frame)
             # end cql
             self.writer.add_scalar('losses/entropy', torch_ext.mean_list(entropies).item(), frame)
             if alpha_losses[0] is not None:
@@ -786,7 +790,7 @@ class CQLAgent(BaseAlgorithm):
 
             if self.epoch_num >= total_epoch_num:
                 self.save(os.path.join(self.checkpoint_dir,
-                                        'reg_last' + str(self.epoch_num)))
+                                       'reg_last' + str(self.epoch_num)))
                 print('MAX EPOCHS NUM!')
 
             # </editor-fold>

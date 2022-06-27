@@ -259,7 +259,7 @@ class DualFranka(VecTask):
         self.franka_dof_lower_limits = []
         self.franka_dof_upper_limits = []
         self.camera_handles = [[]]
-        self.norm_depth_image=[[]]
+        self.norm_depth_image = [[]]
         for i in range(self.num_franka_dofs):
             franka_dof_props['driveMode'][i] = gymapi.DOF_MODE_POS
             franka_dof_props_1['driveMode'][i] = gymapi.DOF_MODE_POS
@@ -610,7 +610,6 @@ class DualFranka(VecTask):
                                             asset_root)
         '''
 
-
         #     save picture frame(RGBA) collection
         '''
          for envs in self.envs:
@@ -631,15 +630,13 @@ class DualFranka(VecTask):
         import torchvision.transforms as transforms
 
         for i in range(self.num_Envs):
-            camera_np=self.gym.get_camera_image(self.sim, self.envs[i], self.camera_handles[count][0], gymapi.IMAGE_COLOR)
-            camera_tensor=self.gym.get_camera_image_gpu_tensor(self.sim, self.envs[i], self.camera_handles[count][0], gymapi.IMAGE_COLOR)
-            camera_tensor_grey=torchvision.transforms.functional.rgb_to_grayscale(camera_tensor, 3)
+            camera_np = self.gym.get_camera_image(self.sim, self.envs[i], self.camera_handles[count][0], gymapi.IMAGE_COLOR)
+            camera_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, self.envs[i], self.camera_handles[count][0], gymapi.IMAGE_COLOR)
+            camera_tensor_grey = torchvision.transforms.functional.rgb_to_grayscale(camera_tensor, 3)
             self.norm_depth_image[i].append(camera_tensor)
             self.norm_depth_image.append([])
 
             count += 1
-
-
 
     def compute_observations(self):
         self.gym.refresh_actor_root_state_tensor(self.sim)
@@ -650,7 +647,7 @@ class DualFranka(VecTask):
         self.gym.render_all_camera_sensors(self.sim)
         # get pic's tensor
         self.gym.start_access_image_tensors(self.sim)
-        self.take_picture()
+        # self.take_picture()
         self.gym.end_access_image_tensors(self.sim)
 
         self.index_of_simulation += 1
@@ -700,6 +697,7 @@ class DualFranka(VecTask):
                             / (self.franka_dof_upper_limits - self.franka_dof_lower_limits) - 1.0)
         to_target = self.spoon_grasp_pos - self.franka_grasp_pos
         to_target_1 = self.cup_grasp_pos - self.franka_grasp_pos_1
+        # 9 9 9 9 3 3 7 7 9 9
         self.obs_buf = torch.cat((dof_pos_scaled, dof_pos_scaled_1,
                                   self.franka_dof_vel * self.dof_vel_scale, to_target,
                                   self.franka_dof_vel_1 * self.dof_vel_scale, to_target_1,
