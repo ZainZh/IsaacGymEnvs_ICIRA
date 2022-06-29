@@ -60,7 +60,7 @@ params:
     critic_target_update_frequency: 2
 
     # agent init
-    num_seed_steps: 20 # first few epochs, random play
+    num_seed_steps: 1 # first few epochs, random play
     # ? total steps: num_actors * num_steps_per_episode * num_seed_steps
     gamma: 0.99
     critic_tau: 0.005   # critic soft update tau

@@ -1,3 +1,5 @@
+from typing import List, Any
+
 from rl_games.algos_torch import torch_ext
 from rl_games.algos_torch.running_mean_std import RunningMeanStd
 from rl_games.common import vecenv
@@ -14,10 +16,13 @@ import torch.nn.functional as F
 import numpy as np
 import time
 import os
+import h5py
 
 
 # copied from SACAgent
 class CQLAgent(BaseAlgorithm):
+    distance: List[List[Any]]
+
     def __init__(self, base_name, params):
         self.config = config = params['config']
         print('----------------------------------')
@@ -109,6 +114,14 @@ class CQLAgent(BaseAlgorithm):
         self.with_lagrange = config['with_lagrange']
         self.temp = 1.0
         self.min_q_weight = config['min_q_weight']
+
+        # read one step replaybuffer
+        date_file = h5py.File('./reset_buffer/replay_buff.hdf5', 'r')
+        self.data_obs = torch.tensor(np.array(date_file['observations']), dtype=torch.float, device=self.device)
+        self.data_actions = torch.tensor(np.array(date_file['actions']), dtype=torch.float, device=self.device)
+        self.data_rewards = torch.tensor(np.array(date_file['rewards']), dtype=torch.float, device=self.device)
+        self.data_next_obs = torch.tensor(np.array(date_file['next_observations']), dtype=torch.float, device=self.device)
+        self.data_dones = torch.tensor(np.array(date_file['dones']), dtype=torch.float, device=self.device)
 
     def load_networks(self, params):
         builder = model_builder.ModelBuilder()
@@ -248,6 +261,7 @@ class CQLAgent(BaseAlgorithm):
         if self.with_lagrange:
             self.alpha_prime_optimizer.load_state_dict(weights['alpha_prime_optimizer'])
         ########################################################
+
     def restore(self, fn):
         checkpoint = torch_ext.load_checkpoint(fn, map_location=self.device)
         self.set_full_state_weights(checkpoint)
@@ -261,7 +275,7 @@ class CQLAgent(BaseAlgorithm):
     def set_train(self):
         self.model.train()
 
-    def update_critic(self, obs, action, reward, next_obs, not_done, step):
+    def update_critic(self, obs, action, reward, next_obs, not_done, step, obs_cql, action_cql, reward_cql, next_obs_cql, not_done_cql):
         with torch.no_grad():
             dist = self.model.actor(next_obs)
             next_action = dist.rsample()
@@ -272,30 +286,46 @@ class CQLAgent(BaseAlgorithm):
             target_Q = reward + (not_done * self.gamma * target_V)
             target_Q = target_Q.detach()
 
+        ## add replaybuffer
+        with torch.no_grad():
+            dist_cql = self.model.actor(next_obs_cql)
+            next_action_cql = dist_cql.rsample()
+            log_prob_cql = dist.log_prob(next_action_cql).sum(-1, keepdim=True)
+            target_Q1_cql, target_Q2_cql = self.model.critic_target(next_obs_cql, next_action_cql)
+            target_V_cql = torch.min(target_Q1_cql, target_Q2_cql) - self.alpha * log_prob_cql
+
+            target_Q_cql = reward_cql + (not_done_cql * self.gamma * target_V_cql)
+            target_Q_cql = target_Q_cql.detach()
+
         # get current Q estimates
         current_Q1, current_Q2 = self.model.critic(obs, action)
 
         critic1_loss = self.c_loss(current_Q1, target_Q)
         critic2_loss = self.c_loss(current_Q2, target_Q)
-        # critic_loss = critic1_loss + critic2_loss 
+        # critic_loss = critic1_loss + critic2_loss
+
+        ## add cql
+        current_Q1_cql, current_Q2_cql = self.model.critic(obs_cql, action_cql)
+        critic1_loss_cql = self.c_loss(current_Q1_cql, target_Q_cql)
+        critic2_loss_cql = self.c_loss(current_Q2_cql, target_Q_cql)
 
         # add CQL here
-        random_actions_tensor = torch.FloatTensor(current_Q2.shape[0] *
-                                                  self.num_random, action.shape[-1]).uniform_(-1, 1).to(self.sac_device)
-        curr_actions_tensor, curr_log_pis = self._get_policy_actions(obs, num_actions=self.num_random,
+        random_actions_tensor = torch.FloatTensor(current_Q2_cql.shape[0] *
+                                                  self.num_random, action_cql.shape[-1]).uniform_(-1, 1).to(self.sac_device)
+        curr_actions_tensor, curr_log_pis = self._get_policy_actions(obs_cql, num_actions=self.num_random,
                                                                      network=self.model.actor)
-        new_curr_actions_tensor, new_log_pis = self._get_policy_actions(next_obs, num_actions=self.num_random,
+        new_curr_actions_tensor, new_log_pis = self._get_policy_actions(next_obs_cql, num_actions=self.num_random,
                                                                         network=self.model.actor)
-        q1_rand, q2_rand = self._get_tensor_values(obs, random_actions_tensor, network=self.model.critic)
-        q1_curr_actions, q2_curr_actions = self._get_tensor_values(obs, curr_actions_tensor, network=self.model.critic)
-        q1_next_actions, q2_next_actions = self._get_tensor_values(obs, new_curr_actions_tensor,
+        q1_rand, q2_rand = self._get_tensor_values(obs_cql, random_actions_tensor, network=self.model.critic)
+        q1_curr_actions, q2_curr_actions = self._get_tensor_values(obs_cql, curr_actions_tensor, network=self.model.critic)
+        q1_next_actions, q2_next_actions = self._get_tensor_values(obs_cql, new_curr_actions_tensor,
                                                                    network=self.model.critic)
 
         cat_q1 = torch.cat(
-            [q1_rand, current_Q1.unsqueeze(1), q1_next_actions, q1_curr_actions], 1
+            [q1_rand, current_Q1_cql.unsqueeze(1), q1_next_actions, q1_curr_actions], 1
         )
         cat_q2 = torch.cat(
-            [q2_rand, current_Q2.unsqueeze(1), q2_next_actions, q2_curr_actions], 1
+            [q2_rand, current_Q2_cql.unsqueeze(1), q2_next_actions, q2_curr_actions], 1
         )
 
         # calculate the standard deviation of all elements
@@ -319,8 +349,8 @@ class CQLAgent(BaseAlgorithm):
         min_qf2_loss = torch.logsumexp(cat_q2 / self.temp, dim=1, ).mean() * self.min_q_weight * self.temp
 
         """Subtract the log likelihood of data"""
-        min_qf1_loss = min_qf1_loss - current_Q1.mean() * self.min_q_weight
-        min_qf2_loss = min_qf2_loss - current_Q2.mean() * self.min_q_weight
+        min_qf1_loss = min_qf1_loss - current_Q1_cql.mean() * self.min_q_weight
+        min_qf2_loss = min_qf2_loss - current_Q2_cql.mean() * self.min_q_weight
 
         if self.with_lagrange:
             alpha_prime = torch.clamp(self.log_alpha_prime.exp(), min=0.0, max=1000000.0)
@@ -385,13 +415,35 @@ class CQLAgent(BaseAlgorithm):
 
     def update(self, step):
         obs, action, reward, next_obs, done = self.replay_buffer.sample(self.batch_size)
-        not_done = ~done
+        obs_cql, action_cql, reward_cql, next_obs_cql, done_cql = self.replay_buffer.sample(self.batch_size)
 
+        not_done = ~done
         obs = self.preproc_obs(obs)
         next_obs = self.preproc_obs(next_obs)
+        '''
+        self.data_obs = torch.tensor(np.array(date_file['observations']), dtype=torch.float, device=self.device)
+        self.data_actions = torch.tensor(np.array(date_file['actions']), dtype=torch.float, device=self.device)
+        self.data_rewards = torch.tensor(np.array(date_file['rewards']), dtype=torch.float, device=self.device)
+        self.data_next_obs = torch.tensor(np.array(date_file['next_observations']), dtype=torch.float, device=self.device)
+        self.data_dones = torch.tensor(np.array(date_file['dones']), dtype=torch.float, device=self.device)
+        '''
+
+        # update obs, action, reward, next_obs, done from replay_buffer(one step)
+        data_tensor = self.data_actions.expand(action_cql.size(0), 849, 18)
+        current_actions = torch.unsqueeze(action_cql, 1)
+        dis = torch.norm((data_tensor - current_actions), dim=2)
+        min = torch.argmin(dis, axis=1)
+        # print(min.size())
+        # print(min, dis[min])
+        action_cql = self.data_actions[min]
+        obs_cql = self.data_obs[min]
+        reward_cql = self.data_rewards[min]
+        next_obs_cql = self.data_next_obs[min]
+        done_cql = self.data_dones[min]
+
         # add return value
         critic_loss, critic1_loss, critic2_loss, min_qf1_loss, min_qf2_loss, std_q1, std_q2, alpha_prime_loss \
-            = self.update_critic(obs, action, reward, next_obs, not_done, step)
+            = self.update_critic(obs, action, reward, next_obs, not_done, step, obs_cql, action_cql, reward_cql, next_obs_cql, done_cql)
 
         if step % self.actor_update_frequency == 0:
             actor_loss, entropy, alpha, alpha_loss = self.update_actor_and_alpha(obs, step)

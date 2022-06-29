@@ -423,7 +423,7 @@ class DualFranka(VecTask):
             self.shelf.append(shelf_actor)
 
         # add camera
-        self.set_camera()
+       # self.set_camera()
 
         self.hand_handle = self.gym.find_actor_rigid_body_handle(self.env_ptr, franka_actor, "panda_link7")
         self.hand_handle_1 = self.gym.find_actor_rigid_body_handle(self.env_ptr, franka_actor_1, "panda_link7")
