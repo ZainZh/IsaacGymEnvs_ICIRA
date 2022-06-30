@@ -6,8 +6,8 @@ rl_device: ${..rl_device}
 
 # if given, will override the device setting in gym. 
 env:
-#  numEnvs: ${resolve_default:4096,${...num_envs}}
-  numEnvs: ${resolve_default:10,${...num_envs}}
+  numEnvs: ${resolve_default:1024,${...num_envs}}
+  #numEnvs: ${resolve_default:10,${...num_envs}}
   numAgents: 1
   envSpacing: 2
   episodeLength: 1000   # max step
