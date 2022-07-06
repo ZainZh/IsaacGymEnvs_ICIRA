@@ -59,6 +59,8 @@ class A2CBase(BaseAlgorithm):
         if full_experiment_name:
             print(f'Exact experiment name requested from command line: {full_experiment_name}')
             self.experiment_name = full_experiment_name
+            self.experiment_name_left = full_experiment_name + '_left'
+            self.experiment_name_right = full_experiment_name + '_right'
         else:
             self.experiment_name = config['name'] + pbt_str + datetime.now().strftime("_%d-%H-%M-%S")
 
@@ -67,11 +69,19 @@ class A2CBase(BaseAlgorithm):
         self.cql_version = self.config.get('cql_version', 0)
         self.algo_observer = config['features']['observer']
         self.algo_observer.before_init(base_name, config, self.experiment_name)
+
+        # add new algo_observer
+        self.algo_observer_left = config['features']['observer']
+        self.algo_observer_left.before_init(base_name, config, self.experiment_name_left)
+        self.algo_observer_right = config['features']['observer']
+        self.algo_observer_right.before_init(base_name, config, self.experiment_name_right)
+
         self.load_networks(params)
         self.multi_gpu = config.get('multi_gpu', False)
         self.rank = 0
         self.rank_size = 1
         self.curr_frames = 0
+        self.multi_franka = self.config.get('multi_franka', False)
         if self.multi_gpu:
             from rl_games.distributed.hvd_wrapper import HorovodWrapper
             self.hvd = HorovodWrapper()
@@ -91,12 +101,21 @@ class A2CBase(BaseAlgorithm):
         self.env_config = config.get('env_config', {})
         self.num_actors = config['num_actors']
         self.env_name = config['env_name']
-
         self.vec_env = None
-        self.env_info = config.get('env_info')
-        if self.env_info is None:
-            self.vec_env = vecenv.create_vec_env(self.env_name, self.num_actors, **self.env_config)
-            self.env_info = self.vec_env.get_env_info()
+        if self.multi_franka:
+            self.env_info_left = config.get('env_info')
+            self.env_info_right = config.get('env_info')
+            if self.env_info_left is None:
+                self.vec_env_left = vecenv.create_vec_env(self.env_name, self.num_actors, **self.env_config)
+                self.env_info_left = self.vec_env_left.get_env_info()
+            if self.env_info_right is None:
+                self.vec_env_right = vecenv.create_vec_env(self.env_name, self.num_actors, **self.env_config)
+                self.env_info_right = self.vec_env_right.get_env_info()
+        else:
+            self.env_info = config.get('env_info')
+            if self.env_info is None:
+                self.vec_env = vecenv.create_vec_env(self.env_name, self.num_actors, **self.env_config)
+                self.env_info = self.vec_env.get_env_info()
 
         self.ppo_device = config.get('device', self.vec_env.env.device_id)  # or cuda:0?
         print('Env info:')
@@ -178,7 +197,16 @@ class A2CBase(BaseAlgorithm):
         print('current training device:', self.ppo_device)
         self.game_rewards = torch_ext.AverageMeter(self.value_size, self.games_to_track).to(self.ppo_device)
         self.game_lengths = torch_ext.AverageMeter(1, self.games_to_track).to(self.ppo_device)
+        # Todo: add two games rewards and lengths
+        self.game_rewards_left = torch_ext.AverageMeter(self.value_size, self.games_to_track).to(self.ppo_device)
+        self.game_lengths_left = torch_ext.AverageMeter(1, self.games_to_track).to(self.ppo_device)
+        self.game_rewards_right = torch_ext.AverageMeter(self.value_size, self.games_to_track).to(self.ppo_device)
+        self.game_lengths_right = torch_ext.AverageMeter(1, self.games_to_track).to(self.ppo_device)
+
         self.obs = None
+        # Todo: add two new obs
+        self.obs_left = None
+        self.obs_right = None
         self.games_num = self.config['minibatch_size'] // self.seq_len  # it is used only for current rnn implementation
         self.batch_size = self.horizon_length * self.num_actors * self.num_agents
         self.batch_size_envs = self.horizon_length * self.num_actors
@@ -192,13 +220,19 @@ class A2CBase(BaseAlgorithm):
         self.mixed_precision = self.config.get('mixed_precision', False)
         self.scaler = torch.cuda.amp.GradScaler(enabled=self.mixed_precision)
 
+        # add multi_franka param
+
         self.last_lr = self.config['learning_rate']
+        self.last_lr_left = self.config['learning_rate']
+        self.last_lr_right = self.config['learning_rate']
         self.frame = 0
         self.update_time = 0
         self.mean_rewards = self.last_mean_rewards = -100500
         self.play_time = 0
         self.epoch_num = 0
         self.curr_frames = 0
+        self.curr_frames_left = 0
+        self.curr_frames_right = 0
         # allows us to specify a folder where all experiments will reside
         self.train_dir = config.get('train_dir', 'runs')
 
@@ -215,6 +249,8 @@ class A2CBase(BaseAlgorithm):
         os.makedirs(self.summaries_dir, exist_ok=True)
 
         self.entropy_coef = self.config['entropy_coef']
+        self.entropy_coef_left = self.config['entropy_coef']
+        self.entropy_coef_right = self.config['entropy_coef']
 
         if self.rank == 0:
             writer = SummaryWriter(self.summaries_dir)
@@ -256,10 +292,21 @@ class A2CBase(BaseAlgorithm):
         # soft augmentation not yet supported
         assert not self.has_soft_aug
 
+    # Todo: split and combine Franka actions
+    def action_split(self, actions):
+        actions_left = actions[:, 0:9]
+        actions_right = actions[:, 9:18]
+        return actions_left, actions_right
+
+    def action_combine(self, actions_left, actions_right):
+        actions = torch.cat((actions_left, actions_right), 1)
+        return actions
+
     def trancate_gradients_and_step(self):
         if self.multi_gpu:
             self.optimizer.synchronize()
 
+        # self.truncate_grads is True
         if self.truncate_grads:
             self.scaler.unscale_(self.optimizer)
             nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_norm)
@@ -388,13 +435,24 @@ class A2CBase(BaseAlgorithm):
             'has_central_value': self.has_central_value,
             'use_action_masks': self.use_action_masks
         }
+
         self.experience_buffer = ExperienceBuffer(self.env_info, algo_info, self.ppo_device)
+        # Todo add two experience buffer
+        self.experience_buffer_left = ExperienceBuffer(self.env_info, algo_info, self.ppo_device)
+        self.experience_buffer_right = ExperienceBuffer(self.env_info, algo_info, self.ppo_device)
 
         val_shape = (self.horizon_length, batch_size, self.value_size)
         current_rewards_shape = (batch_size, self.value_size)
         self.current_rewards = torch.zeros(current_rewards_shape, dtype=torch.float32, device=self.ppo_device)
         self.current_lengths = torch.zeros(batch_size, dtype=torch.float32, device=self.ppo_device)
         self.dones = torch.ones((batch_size,), dtype=torch.uint8, device=self.ppo_device)
+        # Todo add two current_rewards and dones
+        self.current_rewards_left = torch.zeros(current_rewards_shape, dtype=torch.float32, device=self.ppo_device)
+        self.current_lengths_left = torch.zeros(batch_size, dtype=torch.float32, device=self.ppo_device)
+        self.current_rewards_right = torch.zeros(current_rewards_shape, dtype=torch.float32, device=self.ppo_device)
+        self.current_lengths_right = torch.zeros(batch_size, dtype=torch.float32, device=self.ppo_device)
+        self.dones_left = torch.ones((batch_size,), dtype=torch.uint8, device=self.ppo_device)
+        self.dones_right = torch.ones((batch_size,), dtype=torch.uint8, device=self.ppo_device)
 
         if self.is_rnn:
             self.rnn_states = self.model.get_default_rnn_state()
@@ -448,6 +506,7 @@ class A2CBase(BaseAlgorithm):
 
     def env_step(self, actions):
         actions = self.preprocess_actions(actions)
+        # Todo
         obs, rewards, dones, infos = self.vec_env.step(actions)
 
         if self.is_tensor_obses:
@@ -461,6 +520,7 @@ class A2CBase(BaseAlgorithm):
                 dones).to(self.ppo_device), infos
 
     def env_reset(self):
+        # Todo: need to update
         obs = self.vec_env.reset()
         obs = self.obs_to_tensors(obs)
         return obs
@@ -501,10 +561,20 @@ class A2CBase(BaseAlgorithm):
 
     def clear_stats(self):
         batch_size = self.num_agents * self.num_actors
-        self.game_rewards.clear()
-        self.game_lengths.clear()
-        self.mean_rewards = self.last_mean_rewards = -100500
-        self.algo_observer.after_clear_stats()
+        if self.multi_franka == False:
+            self.game_rewards.clear()
+            self.game_lengths.clear()
+            self.mean_rewards = self.last_mean_rewards = -100500
+            self.algo_observer.after_clear_stats()
+        else:
+            self.game_rewards_left.clear()
+            self.game_lengths_left.clear()
+            self.game_rewards_right.clear()
+            self.game_lengths_right.clear()
+            self.algo_observer_left.after_clear_stats()
+            self.algo_observer_right.after_clear_stats()
+            # Todo: need more consideration
+            self.mean_rewards = self.last_mean_rewards = -100500
 
     def update_epoch(self):
         pass
@@ -609,7 +679,6 @@ class A2CBase(BaseAlgorithm):
 
     def play_steps(self):
         update_list = self.update_list
-
         step_time = 0.0
 
         for n in range(self.horizon_length):
@@ -668,8 +737,134 @@ class A2CBase(BaseAlgorithm):
         batch_dict['returns'] = swap_and_flatten01(mb_returns)
         batch_dict['played_frames'] = self.batch_size
         batch_dict['step_time'] = step_time
-
         return batch_dict
+
+    def play_steps_multi(self):
+        update_list = self.update_list
+        # Todo: add lists
+        update_list_left = self.update_list
+        update_list_right = self.update_list
+        step_time = 0.0
+
+        for n in range(self.horizon_length):
+            if self.use_action_masks:
+                masks = self.vec_env.get_action_masks()
+                res_dict = self.get_masked_action_values(self.obs, masks)
+            else:
+                # res_dict = self.get_action_values(self.obs)
+                # Todo: add dic
+                res_dict_left = self.get_action_values(self.obs_left)
+                res_dict_right = self.get_action_values(self.obs_right)
+
+            # self.experience_buffer.update_data('obses', n, self.obs['obs'])
+            # self.experience_buffer.update_data('dones', n, self.dones)
+
+            # Todo: add informations
+            self.experience_buffer_left.update_data('obses_left', n, self.obs_left['obs'])
+            self.experience_buffer_left.update_data('dones_left', n, self.dones_left)
+            self.experience_buffer_right.update_data('obses_right', n, self.obs_right['obs'])
+            self.experience_buffer_right.update_data('dones_right', n, self.dones_right)
+            #
+            # for k in update_list:
+            #     self.experience_buffer.update_data(k, n, res_dict[k])
+            # if self.has_central_value:
+            #     self.experience_buffer.update_data('states', n, self.obs['states'])
+
+            # Todo: add informations
+            for k in update_list_left:
+                self.experience_buffer_left.update_data(k, n, res_dict_left[k])
+            if self.has_central_value:
+                self.experience_buffer_left.update_data('states', n, self.obs_left['states'])
+
+            for k in update_list_right:
+                self.experience_buffer_right.update_data(k, n, res_dict_right[k])
+            if self.has_central_value:
+                self.experience_buffer_right.update_data('states', n, self.obs_right['states'])
+
+            step_time_start = time.time()
+            # Todo: add another franka arm actions
+            actions_left, actions_right = self.action_split(res_dict['actions'])
+            self.obs_left, rewards_left, self.dones_left, infos_left = self.env_step(actions_left)
+            self.obs_right, rewards_right, self.dones_right, infos_right = self.env_step(actions_right)
+
+            #  self.obs, rewards, self.dones, infos = self.env_step(res_dict['actions'])
+            step_time_end = time.time()
+
+            step_time += (step_time_end - step_time_start)
+
+            # shaped_rewards = self.rewards_shaper(rewards)
+            shaped_rewards_left = self.rewards_shaper(rewards_left)
+            shaped_rewards_right = self.rewards_shaper(rewards_right)
+
+            # if self.value_bootstrap and 'time_outs' in infos:
+            #     shaped_rewards += self.gamma * res_dict['values'] * self.cast_obs(infos['time_outs']).unsqueeze(
+            #         1).float()
+            if self.value_bootstrap and 'time_outs' in infos_left:
+                shaped_rewards_left += self.gamma * res_dict_left['values'] * self.cast_obs(infos_left['time_outs']).unsqueeze(
+                    1).float()
+            if self.value_bootstrap and 'time_outs' in infos_right:
+                shaped_rewards_right += self.gamma * res_dict_right['values'] * self.cast_obs(infos_right['time_outs']).unsqueeze(
+                    1).float()
+
+            # self.experience_buffer.update_data('rewards', n, shaped_rewards)
+            self.experience_buffer_left.update_data('rewards', n, shaped_rewards_left)
+            self.experience_buffer_right.update_data('rewards', n, shaped_rewards_right)
+
+            # self.current_rewards += rewards
+            # self.current_lengths += 1
+            self.current_rewards_left += rewards_left
+            self.current_lengths_left += 1
+            self.current_rewards_right += rewards_right
+            self.current_lengths_right += 1
+            all_done_indices = self.dones.nonzero(as_tuple=False)
+            # env_done_indices = self.dones.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
+            env_done_indices_left = self.dones_left.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
+            env_done_indices_right = self.dones_right.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
+
+            # self.game_rewards.update(self.current_rewards[env_done_indices])
+            # self.game_lengths.update(self.current_lengths[env_done_indices])
+            # self.algo_observer.process_infos(infos, env_done_indices)
+
+            self.game_rewards_left.update(self.current_rewards_left[env_done_indices_left])
+            self.game_lengths_left.update(self.current_lengths_left[env_done_indices_left])
+            self.game_rewards_right.update(self.current_rewards_right[env_done_indices_right])
+            self.game_lengths_right.update(self.current_lengths_right[env_done_indices_right])
+            self.algo_observer_left.process_infos(infos_left, env_done_indices_left)
+            self.algo_observer_right.process_infos(infos_left, env_done_indices_left)
+            not_dones_left = 1.0 - self.dones_left.float()
+            not_dones_right = 1.0 - self.dones_right.float()
+            self.current_rewards_left = self.current_rewards_left * not_dones_left.unsqueeze(1)
+            self.current_lengths_left = self.current_lengths_left * not_dones_left
+            self.current_rewards_right = self.current_rewards_right * not_dones_right.unsqueeze(1)
+            self.current_lengths_right = self.current_lengths_right * not_dones_right
+
+        last_values_left = self.get_values(self.obs_left)
+        last_values_right = self.get_values(self.obs_right)
+        fdones_left = self.dones_left.float()
+        fdones_right = self.dones_right.float()
+        mb_fdones_left = self.experience_buffer_left.tensor_dict['dones'].float()
+        mb_values_left = self.experience_buffer_left.tensor_dict['values']
+        mb_rewards_left = self.experience_buffer_left.tensor_dict['rewards']
+        mb_fdones_right = self.experience_buffer_right.tensor_dict['dones'].float()
+        mb_values_right = self.experience_buffer_right.tensor_dict['values']
+        mb_rewards_right = self.experience_buffer_right.tensor_dict['rewards']
+        mb_advs_left = self.discount_values(fdones_left, last_values_left, mb_fdones_left, mb_values_left, mb_rewards_left)
+        mb_returns_left = mb_advs_left + mb_values_left
+        mb_advs_right = self.discount_values(fdones_right, last_values_right, mb_fdones_right, mb_values_right, mb_rewards_right)
+        mb_returns_right = mb_advs_right + mb_values_right
+
+        # Todo: add other batch_dict for another arm
+        batch_dict_left = self.experience_buffer_left.get_transformed_list(swap_and_flatten01, self.tensor_list_left)
+        batch_dict_left['returns'] = swap_and_flatten01(mb_returns_left)
+        batch_dict_left['played_frames'] = self.batch_size
+        batch_dict_left['step_time'] = step_time
+
+        batch_dict_right = self.experience_buffer_right.get_transformed_list(swap_and_flatten01, self.tensor_list_right)
+        batch_dict_right['returns'] = swap_and_flatten01(mb_returns_right)
+        batch_dict_right['played_frames'] = self.batch_size
+        batch_dict_right['step_time'] = step_time
+
+        return batch_dict_left, batch_dict_right
 
     def play_steps_rnn(self):
         update_list = self.update_list
@@ -751,6 +946,7 @@ class A2CBase(BaseAlgorithm):
         batch_dict['rnn_states'] = states
         batch_dict['step_time'] = step_time
         return batch_dict
+
 
 # 755-984 Discrete
 class DiscreteA2CBase(A2CBase):
@@ -936,6 +1132,7 @@ class DiscreteA2CBase(A2CBase):
 
                 self.algo_observer.after_print_stats(frame, epoch_num, total_time)
 
+                #
                 if self.game_rewards.current_size > 0:
                     mean_rewards = self.game_rewards.get_mean()
                     mean_lengths = self.game_lengths.get_mean()
@@ -982,8 +1179,12 @@ class DiscreteA2CBase(A2CBase):
             if should_exit:
                 return self.last_mean_rewards, epoch_num
 
+
 ### 984_continuous
 class ContinuousA2CBase(A2CBase):
+
+    # ToDo: add split Datasets function
+
     def __init__(self, base_name, params):
         A2CBase.__init__(self, base_name, params)
         self.is_discrete = False
@@ -998,6 +1199,7 @@ class ContinuousA2CBase(A2CBase):
         self.actions_high = torch.from_numpy(action_space.high.copy()).float().to(self.ppo_device)
 
     def preprocess_actions(self, actions):
+
         if self.clip_actions:
             clamped_actions = torch.clamp(actions, -1.0, 1.0)
             rescaled_actions = rescale_actions(self.actions_low, self.actions_high, clamped_actions)
@@ -1013,6 +1215,10 @@ class ContinuousA2CBase(A2CBase):
         A2CBase.init_tensors(self)
         self.update_list = ['actions', 'neglogpacs', 'values', 'mus', 'sigmas']
         self.tensor_list = self.update_list + ['obses', 'states', 'dones']
+        self.update_list_left = ['actions', 'neglogpacs', 'values', 'mus', 'sigmas']
+        self.tensor_list_left = self.update_list_left + ['obses', 'states', 'dones']
+        self.update_list_right = ['actions', 'neglogpacs', 'values', 'mus', 'sigmas']
+        self.tensor_list_right = self.update_list_right + ['obses', 'states', 'dones']
 
     def train_epoch(self):
         super().train_epoch()
@@ -1077,14 +1283,103 @@ class ContinuousA2CBase(A2CBase):
         return batch_dict[
                    'step_time'], play_time, update_time, total_time, a_losses, c_losses, b_losses, entropies, kls, last_lr, lr_mul
 
+    def train_epoch_multi(self):
+        super().train_epoch_multi()
+        self.set_eval()
+        play_time_start = time.time()
+        with torch.no_grad():
+            # self.is_rnn is False
+            if self.is_rnn:
+                batch_dict = self.play_steps_rnn()
+            else:
+                batch_dict_left, batch_dict_right = self.play_steps_multi()
+
+        play_time_end = time.time()
+        update_time_start = time.time()
+        rnn_masks = batch_dict.get('rnn_masks', None)
+
+        self.set_train()
+        self.curr_frames_left = batch_dict_left.pop('played_frames')
+        self.curr_frames_right = batch_dict_right.pop('played_frames')
+        self.prepare_dataset(batch_dict_left)
+        self.prepare_dataset(batch_dict_right)
+        self.algo_observer_left.after_steps()
+        self.algo_observer_right.after_steps()
+        if self.has_central_value:
+            self.train_central_value()
+        # Todo: init another franka's losses
+        a_losses_left = []
+        c_losses_left = []
+        b_losses_left = []
+        entropies_left = []
+        kls_left = []
+        a_losses_right = []
+        c_losses_right = []
+        b_losses_right = []
+        entropies_right = []
+        kls_right = []
+        for mini_ep in range(0, self.mini_epochs_num):
+            ep_kls_left = []
+            ep_kls_right = []
+            # Todo: add another arm actions into self.train_actor_critic
+            for i in range(len(self.dataset_left)):
+                a_loss_left, c_loss_left, entropy_left, kl_left, last_lr_left, lr_mul_left, cmu_left, csigma_left, b_loss_left = self.train_actor_critic(
+                    self.dataset_left[i])
+                a_loss_right, c_loss_right, entropy_right, kl_right, last_lr_right, lr_mul_right, cmu_right, csigma_right, b_loss_right = self.train_actor_critic(
+                    self.dataset_right[i])
+                a_losses_left.append(a_loss_left)
+                c_losses_left.append(c_loss_left)
+                ep_kls_left.append(kl_left)
+                entropies_left.append(entropy_left)
+                if self.bounds_loss_coef is not None:
+                    b_losses_left.append(b_loss_left)
+
+                a_losses_right.append(a_loss_right)
+                c_losses_right.append(c_loss_right)
+                ep_kls_right.append(kl_right)
+                entropies_right.append(entropy_right)
+                if self.bounds_loss_coef is not None:
+                    b_losses_right.append(b_loss_right)
+                self.dataset_left.update_mu_sigma(cmu_left, csigma_left)
+                self.dataset_right.update_mu_sigma(cmu_right, csigma_right)
+
+            av_kls_left = torch_ext.mean_list(ep_kls_left)
+            av_kls_right = torch_ext.mean_list(ep_kls_right)
+
+            if self.multi_gpu:
+                av_kls_left = self.hvd.average_value(av_kls_left, 'ep_kls')
+                av_kls_right = self.hvd.average_value(av_kls_right, 'ep_kls')
+            self.last_lr_left, self.entropy_coef_left = self.scheduler.update(self.last_lr_left, self.entropy_coef_left, self.epoch_num, 0,
+                                                                              av_kls_left.item())
+            self.last_lr_right, self.entropy_coef_right = self.scheduler.update(self.last_lr_right, self.entropy_coef_right, self.epoch_num, 0,
+                                                                                av_kls_right.item())
+            self.update_lr(self.last_lr_left)
+            self.update_lr(self.last_lr_right)
+
+            kls_left.append(av_kls_left)
+            kls_right.append(av_kls_right)
+            self.diagnostics.mini_epoch(self, mini_ep)
+            if self.normalize_input:
+                self.model.running_mean_std.eval()  # don't need to update statstics more than one miniepoch
+
+        update_time_end = time.time()
+        play_time = play_time_end - play_time_start
+        update_time = update_time_end - update_time_start
+        total_time = update_time_end - play_time_start
+
+        # Todo: return two arm's loss and other params.
+
+        return batch_dict_left[
+                   'step_time'], play_time, update_time, total_time,\
+               a_losses_left, c_losses_left, b_losses_left, entropies_left, kls_left, last_lr_left, lr_mul_left, \
+               a_losses_right, c_losses_right, b_losses_right, entropies_right, kls_right, last_lr_right, lr_mul_right
+
     def prepare_dataset(self, batch_dict):
         obses = batch_dict['obses']
         returns = batch_dict['returns']
         dones = batch_dict['dones']
         values = batch_dict['values']
         actions = batch_dict['actions']
-        actions_left = actions[:, 0:9]
-        actions_right = actions[:, 9:18]
         neglogpacs = batch_dict['neglogpacs']
 
         mus = batch_dict['mus']
@@ -1116,8 +1411,6 @@ class ContinuousA2CBase(A2CBase):
                     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         dataset_dict = {}
-        dataset_dict_left = {}
-        dataset_dict_right = {}
         dataset_dict['old_values'] = values
         dataset_dict['old_logp_actions'] = neglogpacs
         dataset_dict['advantages'] = advantages
@@ -1131,6 +1424,8 @@ class ContinuousA2CBase(A2CBase):
         dataset_dict['sigma'] = sigmas
 
         self.dataset.update_values_dict(dataset_dict)
+        self.dataset_left.update_values_dict(dataset_dict)
+        self.dataset_right.update_values_dict(dataset_dict)
 
         if self.has_central_value:
             dataset_dict = {}
@@ -1158,7 +1453,13 @@ class ContinuousA2CBase(A2CBase):
         while True:
             epoch_num = self.update_epoch()
             print('\033[1;32m---------------- Epoch {} ----------------\033[0m'.format(epoch_num))
-            step_time, play_time, update_time, sum_time, a_losses, c_losses, b_losses, entropies, kls, last_lr, lr_mul = self.train_epoch()
+            # Todo: add other train epoch
+            if self.multi_franka:
+                step_time, play_time, update_time, sum_time, \
+                a_losses_left, c_losses_left, b_losses_left, entropies_left, kls_left, last_lr_left, lr_mul_left,\
+                a_losses_right, c_losses_right, b_losses_right, entropies_right, kls_right, last_lr_right, lr_mul_right = self.train_epoch_multi()
+            else:
+                step_time, play_time, update_time, sum_time, a_losses, c_losses, b_losses, entropies, kls, last_lr, lr_mul = self.train_epoch()
             total_time += sum_time
             frame = self.frame // self.num_agents
 
