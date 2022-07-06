@@ -707,7 +707,7 @@ class DualFranka(VecTask):
         return self.obs_buf
 
     def compute_reward(self):
-        self.rew_buf[:], self.reset_buf[:], self.reward_dict, self.gripped, self.gripped_1 = compute_franka_reward(
+        self.rew_buf[:], self.reset_buf[:], self.reward_dict, self.gripped, self.gripped_1, self.left_reward_stage1[:],self.right_reward_stage1[:] = compute_franka_reward(
             self.reset_buf, self.progress_buf, self.actions,
             self.franka_grasp_pos, self.cup_grasp_pos, self.franka_grasp_rot,
             self.franka_grasp_pos_1, self.spoon_grasp_pos, self.franka_grasp_rot_1,
@@ -1323,9 +1323,7 @@ def compute_franka_reward(
         num_envs: int, dist_reward_scale: float, rot_reward_scale: float, around_handle_reward_scale: float,
         lift_reward_scale: float, finger_dist_reward_scale: float, action_penalty_scale: float, distX_offset: float,
         max_episode_length: float
-) -> Tuple[Tensor, Tensor, Dict[str, Union[
-    Dict[str, Tuple[Tensor, Union[Tensor, float]]], Dict[str, Tuple[Tensor, float]], Dict[
-        str, Tensor]]], Tensor, Tensor]:
+) -> Tuple[Tensor, Tensor, Dict[str, Union[Dict[str, Tuple[Tensor, Union[Tensor, float]]], Dict[str, Tuple[Tensor, float]], Dict[str, Tensor]]], Tensor, Tensor, Tensor, Tensor]:
     """
     Tuple[Tensor, Tensor, Dict[str, Union[Dict[str, Tuple[Tensor, float]],
                                            Dict[str, Tensor], Dict[str, Union[Tensor, Tuple[Tensor, float]]]]]]:
@@ -1694,7 +1692,20 @@ def compute_franka_reward(
                         + lift_reward_scale * (lift_reward * sf + lift_reward_1 * cf) \
                         - action_penalty_scale * action_penalty \
                         - spoon_fall_penalty)
-
+    left_reward_stage1 =  stage1 * (dist_reward_scale * (dist_reward * sf ) \
+                        + rot_reward_scale * (rot_reward * sf ) \
+                        + around_handle_reward_scale * (around_handle_reward * sf) \
+                        + finger_dist_reward_scale * (finger_dist_reward * sf ) \
+                        + lift_reward_scale * (lift_reward * sf ) \
+                        - action_penalty_scale * action_penalty \
+                        - spoon_fall_penalty)
+    right_reward_stage1 = stage1 * (dist_reward_scale * (dist_reward_1 * cf) \
+                        + rot_reward_scale * (rot_reward_1 * cf) \
+                        + around_handle_reward_scale * (around_handle_reward_1 * cf) \
+                        + finger_dist_reward_scale * (finger_dist_reward_1 * cf) \
+                        + lift_reward_scale * (lift_reward_1 * cf) \
+                        - action_penalty_scale * action_penalty \
+                        - spoon_fall_penalty)
     rewards = rewards + stage2 * (dist_reward_stage2 * dist_reward_scale * 20 \
                                   + rot_reward_stage2 * rot_reward_scale * 20 \
                                   + dist_reward_stage2_y * dist_reward_scale * 20)
@@ -1839,7 +1850,7 @@ def compute_franka_reward(
         'bonus': rewards_bonus,
     }
 
-    return rewards, reset_buf, rewards_dict, gripped, gripped_1
+    return rewards, reset_buf, rewards_dict, gripped, gripped_1,left_reward_stage1,right_reward_stage1
 
 
 # compute

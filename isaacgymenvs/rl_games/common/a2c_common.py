@@ -102,20 +102,10 @@ class A2CBase(BaseAlgorithm):
         self.num_actors = config['num_actors']
         self.env_name = config['env_name']
         self.vec_env = None
-        if self.multi_franka:
-            self.env_info_left = config.get('env_info')
-            self.env_info_right = config.get('env_info')
-            if self.env_info_left is None:
-                self.vec_env_left = vecenv.create_vec_env(self.env_name, self.num_actors, **self.env_config)
-                self.env_info_left = self.vec_env_left.get_env_info()
-            if self.env_info_right is None:
-                self.vec_env_right = vecenv.create_vec_env(self.env_name, self.num_actors, **self.env_config)
-                self.env_info_right = self.vec_env_right.get_env_info()
-        else:
-            self.env_info = config.get('env_info')
-            if self.env_info is None:
-                self.vec_env = vecenv.create_vec_env(self.env_name, self.num_actors, **self.env_config)
-                self.env_info = self.vec_env.get_env_info()
+        self.env_info = config.get('env_info')
+        if self.env_info is None:
+            self.vec_env = vecenv.create_vec_env(self.env_name, self.num_actors, **self.env_config)
+            self.env_info = self.vec_env.get_env_info()
 
         self.ppo_device = config.get('device', self.vec_env.env.device_id)  # or cuda:0?
         print('Env info:')
@@ -586,6 +576,9 @@ class A2CBase(BaseAlgorithm):
         pass
 
     def train_epoch(self):
+        self.vec_env.set_train_info(self.frame, self)
+
+    def train_epoch_multi(self):
         self.vec_env.set_train_info(self.frame, self)
 
     def train_actor_critic(self, obs_dict, opt_step=True):
