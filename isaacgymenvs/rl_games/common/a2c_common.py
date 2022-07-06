@@ -43,6 +43,7 @@ def rescale_actions(low, high, action):
     return scaled_action
 
 
+# 45-755 A2CBase
 class A2CBase(BaseAlgorithm):
     def __init__(self, base_name, params):
         self.config = config = params['config']
@@ -751,7 +752,7 @@ class A2CBase(BaseAlgorithm):
         batch_dict['step_time'] = step_time
         return batch_dict
 
-
+# 755-984 Discrete
 class DiscreteA2CBase(A2CBase):
     def __init__(self, base_name, params):
         A2CBase.__init__(self, base_name, params)
@@ -981,7 +982,7 @@ class DiscreteA2CBase(A2CBase):
             if should_exit:
                 return self.last_mean_rewards, epoch_num
 
-
+### 984_continuous
 class ContinuousA2CBase(A2CBase):
     def __init__(self, base_name, params):
         A2CBase.__init__(self, base_name, params)
@@ -1082,8 +1083,12 @@ class ContinuousA2CBase(A2CBase):
         dones = batch_dict['dones']
         values = batch_dict['values']
         actions = batch_dict['actions']
+        actions_left = actions[:, 0:9]
+        actions_right = actions[:, 9:18]
         neglogpacs = batch_dict['neglogpacs']
+
         mus = batch_dict['mus']
+
         sigmas = batch_dict['sigmas']
         rnn_states = batch_dict.get('rnn_states', None)
         rnn_masks = batch_dict.get('rnn_masks', None)
@@ -1111,6 +1116,8 @@ class ContinuousA2CBase(A2CBase):
                     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         dataset_dict = {}
+        dataset_dict_left = {}
+        dataset_dict_right = {}
         dataset_dict['old_values'] = values
         dataset_dict['old_logp_actions'] = neglogpacs
         dataset_dict['advantages'] = advantages
