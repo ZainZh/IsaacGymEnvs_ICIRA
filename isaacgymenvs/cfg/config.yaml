@@ -54,7 +54,8 @@ defaults:
   - task: DualFranka    # set default to our task
 #  - task: FrankaCabinet
   #- train: ${task}SAC
-  - train: ${task}PPO
+#  - train: ${task}PPO
+  - train: ${task}MultiPPO
  # - train: ${task}CQL   # if use CQL need to use this suffix
   - hydra/job_logging: disabled
 

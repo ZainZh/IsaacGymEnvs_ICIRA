@@ -1325,7 +1325,6 @@ class ContinuousA2CBase(A2CBase):
         for mini_ep in range(0, self.mini_epochs_num):
             ep_kls_left = []
             ep_kls_right = []
-            # Todo: add another arm actions into self.train_actor_critic
             for i in range(len(self.dataset_left)):
                 a_loss_left, c_loss_left, entropy_left, kl_left, last_lr_left, lr_mul_left, cmu_left, csigma_left, b_loss_left = self.train_actor_critic(
                     self.dataset_left[i])
