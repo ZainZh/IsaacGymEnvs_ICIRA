@@ -32,6 +32,7 @@ env:
   fingerDistRewardScale: 5.0
   actionPenaltyScale: 0.01
 
+
   asset:
     assetRoot: "../../assets"
     franka_asset_file: "urdf/franka_description/robots/franka_panda.urdf"

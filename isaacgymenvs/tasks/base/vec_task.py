@@ -88,11 +88,11 @@ class Env(ABC):
         self.num_actions = config["env"]["numActions"]
 
         self.control_freq_inv = config["env"].get("controlFrequencyInv", 1)
-
         self.obs_space = spaces.Box(np.ones(self.num_obs) * -np.Inf, np.ones(self.num_obs) * np.Inf)
         self.state_space = spaces.Box(np.ones(self.num_states) * -np.Inf, np.ones(self.num_states) * np.Inf)
 
         self.act_space = spaces.Box(np.ones(self.num_actions) * -1., np.ones(self.num_actions) * 1.)
+
 
         self.clip_obs = config["env"].get("clipObservations", np.Inf)
         self.clip_actions = config["env"].get("clipActions", np.Inf)
@@ -112,6 +112,16 @@ class Env(ABC):
             Observations are dict of observations (currently only one member called 'obs')
         """
 
+    @abc.abstractmethod
+    def step_multi(self, actions: torch.Tensor) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor, Dict[str, Any], torch.Tensor , torch.Tensor]:
+        """Step the physics of the environment.
+
+        Args:
+            actions: actions to apply
+        Returns:
+            Observations, rewards, resets, info
+            Observations are dict of observations (currently only one member called 'obs')
+        """
     @abc.abstractmethod
     def reset(self)-> Dict[str, torch.Tensor]:
         """Reset the environment.
@@ -245,6 +255,10 @@ class VecTask(Env):
             (self.num_envs, self.num_states), device=self.device, dtype=torch.float)
         self.rew_buf = torch.zeros(
             self.num_envs, device=self.device, dtype=torch.float)
+        self.left_reward_stage1 = torch.zeros(
+            self.num_envs, device=self.device, dtype=torch.float)
+        self.right_reward_stage1 = torch.zeros(
+            self.num_envs, device=self.device, dtype=torch.float)
         self.reset_buf = torch.ones(
             self.num_envs, device=self.device, dtype=torch.long)
         self.timeout_buf = torch.zeros(
@@ -336,6 +350,54 @@ class VecTask(Env):
 
         return self.obs_dict, self.rew_buf.to(self.rl_device), self.reset_buf.to(self.rl_device), self.extras
 
+    def step_multi(self, actions: torch.Tensor) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor, Dict[str, Any], torch.Tensor , torch.Tensor]:
+        """Step the physics of the environment.
+
+        Args:
+            actions: actions to apply
+        Returns:
+            Observations, rewards, resets, info
+            Observations are dict of observations (currently only one member called 'obs')
+        """
+
+        # randomize actions
+        if self.dr_randomizations.get('actions', None):
+            actions = self.dr_randomizations['actions']['noise_lambda'](actions)
+
+        action_tensor = torch.clamp(actions, -self.clip_actions, self.clip_actions)
+        # apply actions
+        self.pre_physics_step(action_tensor)
+
+        # step physics and render each frame
+        for i in range(self.control_freq_inv):
+            self.render()
+            self.gym.simulate(self.sim)
+
+        # to fix!
+        if self.device == 'cpu':
+            self.gym.fetch_results(self.sim, True)
+
+        # fill time out buffer
+        self.timeout_buf = torch.where(self.progress_buf >= self.max_episode_length - 1, torch.ones_like(self.timeout_buf), torch.zeros_like(self.timeout_buf))
+
+        # compute observations, rewards, resets, ...
+        self.post_physics_step()
+
+        # randomize observations
+        if self.dr_randomizations.get('observations', None):
+            self.obs_buf = self.dr_randomizations['observations']['noise_lambda'](self.obs_buf)
+
+        self.extras["time_outs"] = self.timeout_buf.to(self.rl_device)
+
+        self.obs_dict["obs"] = torch.clamp(self.obs_buf, -self.clip_obs, self.clip_obs).to(self.rl_device)
+
+        # asymmetric actor-critic
+        if self.num_states > 0:
+            self.obs_dict["states"] = self.get_state()
+
+        return self.obs_dict, self.rew_buf.to(self.rl_device), self.reset_buf.to(self.rl_device), self.extras,\
+               self.left_reward_stage1.to(self.rl_device), self.right_reward_stage1.to(self.rl_device)
+
     def zero_actions(self) -> torch.Tensor:
         """Returns a buffer with zero actions.
 
@@ -364,7 +426,25 @@ class VecTask(Env):
         # asymmetric actor-critic
         if self.num_states > 0:
             self.obs_dict["states"] = self.get_state()
+
         self.step(zero_actions)
+
+        return self.obs_dict
+
+    def reset_multi(self):
+        """Is called only once when environment starts to provide the first observations.
+        Doesn't calculate observations. Actual reset and observation calculation need to be implemented by user.
+        Returns:
+            Observation dictionary
+        """
+        zero_actions = self.zero_actions()
+        self.obs_dict["obs"] = torch.clamp(self.obs_buf, -self.clip_obs, self.clip_obs).to(self.rl_device)
+
+        # asymmetric actor-critic
+        if self.num_states > 0:
+            self.obs_dict["states"] = self.get_state()
+
+        self.step_multi(zero_actions)
 
         return self.obs_dict
 
