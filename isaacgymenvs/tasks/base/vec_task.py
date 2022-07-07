@@ -112,8 +112,8 @@ class Env(ABC):
             Observations are dict of observations (currently only one member called 'obs')
         """
 
-    @abc.abstractmethod
-    def step_multi(self, actions: torch.Tensor) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor, Dict[str, Any], torch.Tensor , torch.Tensor]:
+    # @abc.abstractmethod
+    # def step_multi(self, actions: torch.Tensor) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor, Dict[str, Any], torch.Tensor , torch.Tensor]:
         """Step the physics of the environment.
 
         Args:
@@ -122,6 +122,8 @@ class Env(ABC):
             Observations, rewards, resets, info
             Observations are dict of observations (currently only one member called 'obs')
         """
+
+
     @abc.abstractmethod
     def reset(self)-> Dict[str, torch.Tensor]:
         """Reset the environment.
@@ -210,6 +212,8 @@ class VecTask(Env):
         self.allocate_buffers()
 
         self.obs_dict = {}
+        self.obs_dict_left = {}
+        self.obs_dict_right = {}
 
     def set_viewer(self):
         """Create the viewer."""

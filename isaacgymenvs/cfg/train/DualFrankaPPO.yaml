@@ -1,7 +1,7 @@
 params:
   seed: ${...seed}
   algo:
-    name: a2c_continuous_multi
+    name: a2c_continuous
 
   model:
     name: continuous_a2c_logstd
