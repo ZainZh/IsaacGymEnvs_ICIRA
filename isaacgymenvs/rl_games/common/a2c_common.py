@@ -319,8 +319,9 @@ class A2CBase(BaseAlgorithm):
             network = builder.load(params['config']['central_value_config'])
             self.config['central_value_config']['network'] = network
 
-    def write_stats(self, total_time, epoch_num, step_time, play_time, update_time, a_losses, c_losses, entropies, kls,
-                    last_lr, lr_mul, frame, scaled_time, scaled_play_time, curr_frames):
+    def write_stats(self, total_time, epoch_num, step_time, play_time, update_time, a_losses_left, c_losses_left, entropies_left, kls_left,
+                    last_lr_left, lr_mul_left, a_losses_right, c_losses_right, entropies_right, kls_right,
+                    last_lr_right, lr_mul_right, frame, scaled_time, scaled_play_time, curr_frames):
         # do we need scaled time?
         self.diagnostics.send_info(self.writer)
         self.writer.add_scalar('performance/step_inference_rl_update_fps', curr_frames / scaled_time, frame)
@@ -329,15 +330,23 @@ class A2CBase(BaseAlgorithm):
         self.writer.add_scalar('performance/rl_update_time', update_time, frame)
         self.writer.add_scalar('performance/step_inference_time', play_time, frame)
         self.writer.add_scalar('performance/step_time', step_time, frame)
-        self.writer.add_scalar('losses/a_loss', torch_ext.mean_list(a_losses).item(), frame)
-        self.writer.add_scalar('losses/c_loss', torch_ext.mean_list(c_losses).item(), frame)
 
-        self.writer.add_scalar('losses/entropy', torch_ext.mean_list(entropies).item(), frame)
-        self.writer.add_scalar('info/last_lr', last_lr * lr_mul, frame)
-        self.writer.add_scalar('info/lr_mul', lr_mul, frame)
-        self.writer.add_scalar('info/e_clip', self.e_clip * lr_mul, frame)
-        self.writer.add_scalar('info/kl', torch_ext.mean_list(kls).item(), frame)
-        self.writer.add_scalar('info/epochs', epoch_num, frame)
+        self.writer.add_scalar('losses/a_loss_left', torch_ext.mean_list(a_losses_left).item(), frame)
+        self.writer.add_scalar('losses/c_loss_left', torch_ext.mean_list(c_losses_left).item(), frame)
+        self.writer.add_scalar('losses/entropy_left', torch_ext.mean_list(entropies_left).item(), frame)
+        self.writer.add_scalar('info/last_lr_left', last_lr_left * lr_mul_left, frame)
+        self.writer.add_scalar('info/lr_mul_left', lr_mul_left, frame)
+        self.writer.add_scalar('info/e_clip_left', self.e_clip * lr_mul_left, frame)
+        self.writer.add_scalar('info/kl_left', torch_ext.mean_list(kls_left).item(), frame)
+
+        self.writer.add_scalar('losses/a_loss_right', torch_ext.mean_list(a_losses_right).item(), frame)
+        self.writer.add_scalar('losses/c_loss_right', torch_ext.mean_list(c_losses_right).item(), frame)
+        self.writer.add_scalar('losses/entropy_right', torch_ext.mean_list(entropies_right).item(), frame)
+        self.writer.add_scalar('info/last_lr_right', last_lr_right * lr_mul_right, frame)
+        self.writer.add_scalar('info/lr_mul_right', lr_mul_right, frame)
+        self.writer.add_scalar('info/e_clip_right', self.e_clip * lr_mul_right, frame)
+        self.writer.add_scalar('info/kl_right', torch_ext.mean_list(kls_right).item(), frame)
+        self.writer.add_scalar('info/epochs_right', epoch_num, frame)
         self.algo_observer.after_print_stats(frame, epoch_num, total_time)
 
     def set_eval(self):
@@ -440,7 +449,6 @@ class A2CBase(BaseAlgorithm):
         self.current_lengths_left = torch.zeros(batch_size, dtype=torch.float32, device=self.ppo_device)
         self.current_rewards_right = torch.zeros(current_rewards_shape, dtype=torch.float32, device=self.ppo_device)
         self.current_lengths_right = torch.zeros(batch_size, dtype=torch.float32, device=self.ppo_device)
-
 
         if self.is_rnn:
             self.rnn_states = self.model.get_default_rnn_state()
@@ -836,7 +844,7 @@ class A2CBase(BaseAlgorithm):
             self.current_rewards_right = self.current_rewards_right * not_dones.unsqueeze(1)
             self.current_lengths_right = self.current_lengths_right * not_dones
 
-        last_values= self.get_values(self.obs)
+        last_values = self.get_values(self.obs)
         fdones = self.dones.float()
         mb_fdones_left = self.experience_buffer_left.tensor_dict['dones'].float()
         mb_values_left = self.experience_buffer_left.tensor_dict['values']
@@ -1481,45 +1489,62 @@ class ContinuousA2CBase(A2CBase):
                     print(
                         f'fps step: {fps_step:.1f} fps step and policy inference: {fps_step_inference:.1f} fps total: {fps_total:.1f} epoch: {epoch_num}/{self.max_epochs}')
 
-                self.write_stats(total_time, epoch_num, step_time, play_time, update_time, a_losses, c_losses,
-                                 entropies, kls, last_lr, lr_mul, frame, scaled_time, scaled_play_time, curr_frames)
-                if len(b_losses) > 0:
-                    self.writer.add_scalar('losses/bounds_loss', torch_ext.mean_list(b_losses).item(), frame)
+                self.write_stats(total_time, epoch_num, step_time, play_time, update_time, a_losses_left, c_losses_left,
+                                 entropies_left, kls_left, last_lr_left, lr_mul_left, a_losses_right, c_losses_right,
+                                 entropies_right, kls_right, last_lr_right, lr_mul_right, frame, scaled_time, scaled_play_time, curr_frames)
+                if len(b_losses_left) > 0:
+                    self.writer.add_scalar('losses/bounds_loss_left', torch_ext.mean_list(b_losses).item(), frame)
+                if len(b_losses_right) > 0:
+                    self.writer.add_scalar('losses/bounds_loss_left', torch_ext.mean_list(b_losses).item(), frame)
 
                 if self.has_soft_aug:
                     self.writer.add_scalar('losses/aug_loss', np.mean(aug_losses), frame)
 
-                if self.game_rewards.current_size > 0:
-                    mean_rewards = self.game_rewards.get_mean()
-                    mean_lengths = self.game_lengths.get_mean()
-                    self.mean_rewards = mean_rewards[0]
-
+                if self.game_rewards_left.current_size > 0:
+                    mean_rewards_left = self.game_rewards_left.get_mean()
+                    mean_lengths_left = self.game_lengths_left.get_mean()
+                    self.mean_rewards_left = mean_rewards_left[0]
+                    print('mean_rewards_left: {}, mean_length_left: {}'.format(self.mean_rewards_left, mean_lengths_left))
+                if self.game_rewards_right.current_size > 0:
+                    mean_rewards_right = self.game_rewards_right.get_mean()
+                    mean_lengths_right = self.game_lengths_right.get_mean()
+                    self.mean_rewards_right = mean_rewards_right[0]
                     # print('current length: {}'.format(self.current_lengths))
                     # print('current rewards: {}'.format(self.current_rewards / self.current_lengths))
-                    print('mean_rewards: {}, mean_length: {}'.format(self.mean_rewards, mean_lengths))
+                    print('mean_rewards_right: {}, mean_length_right: {}'.format(self.mean_rewards_right, mean_lengths_right))
 
                     for i in range(self.value_size):
                         rewards_name = 'rewards' if i == 0 else 'rewards{0}'.format(i)
-                        self.writer.add_scalar(rewards_name + '/step'.format(i), mean_rewards[i], frame)
-                        self.writer.add_scalar(rewards_name + '/iter'.format(i), mean_rewards[i], epoch_num)
-                        self.writer.add_scalar(rewards_name + '/time'.format(i), mean_rewards[i], total_time)
+                        self.writer.add_scalar(rewards_name + '/step'.format(i), mean_rewards_left[i], frame)
+                        self.writer.add_scalar(rewards_name + '/iter'.format(i), mean_rewards_left[i], epoch_num)
+                        self.writer.add_scalar(rewards_name + '/time'.format(i), mean_rewards_left[i], total_time)
+                        self.writer.add_scalar(rewards_name + '/step'.format(i), mean_rewards_right[i], frame)
+                        self.writer.add_scalar(rewards_name + '/iter'.format(i), mean_rewards_right[i], epoch_num)
+                        self.writer.add_scalar(rewards_name + '/time'.format(i), mean_rewards_right[i], total_time)
 
-                    self.writer.add_scalar('episode_lengths/step', mean_lengths, frame)
-                    self.writer.add_scalar('episode_lengths/iter', mean_lengths, epoch_num)
-                    self.writer.add_scalar('episode_lengths/time', mean_lengths, total_time)
+                    self.writer.add_scalar('episode_lengths_left/step', mean_lengths_left, frame)
+                    self.writer.add_scalar('episode_lengths_left/iter', mean_lengths_left, epoch_num)
+                    self.writer.add_scalar('episode_lengths_left/time', mean_lengths_left, total_time)
+                    self.writer.add_scalar('episode_lengths_right/step', mean_lengths_right, frame)
+                    self.writer.add_scalar('episode_lengths_right/iter', mean_lengths_right, epoch_num)
+                    self.writer.add_scalar('episode_lengths_right/time', mean_lengths_right, total_time)
+                    self.writer.add_scalar('episode_lengths_all/step', mean_lengths_left + mean_lengths_right, frame)
+                    self.writer.add_scalar('episode_lengths_all/iter', mean_lengths_left + mean_lengths_right, epoch_num)
+                    self.writer.add_scalar('episode_lengths_allo/time', mean_lengths_left + mean_lengths_right, total_time)
 
                     if self.has_self_play_config:
                         self.self_play_manager.update(self)
 
-                    checkpoint_name = self.config['name'] + '_ep_' + str(epoch_num) + '_rew_' + str(mean_rewards[0])
+                    checkpoint_name = self.config['name'] + '_ep_' + str(epoch_num) + '_rew_' + str(mean_rewards_left[0] + mean_rewards_right[0])
 
                     if self.save_freq > 0:
-                        if (epoch_num % self.save_freq == 0) and (mean_rewards[0] <= self.last_mean_rewards):
+                        if (epoch_num % self.save_freq == 0) and (mean_rewards_left[0] + mean_rewards_right[0] <= self.last_mean_rewards):
                             self.save(os.path.join(self.nn_dir, 'last_' + checkpoint_name))
 
-                    if mean_rewards[0] > self.last_mean_rewards and epoch_num >= self.save_best_after:
-                        print('saving next best rewards: ', mean_rewards)
-                        self.last_mean_rewards = mean_rewards[0]
+                    if mean_rewards_left[0] + mean_rewards_right[0] > self.last_mean_rewards and epoch_num >= self.save_best_after:
+                        print('saving next best left rewards: ', mean_rewards_left[0])
+                        print('saving next best right rewards: ', mean_rewards_right[0])
+                        self.last_mean_rewards = mean_rewards_left[0] + mean_rewards_right[0]
                         self.save(os.path.join(self.nn_dir, self.config['name']))
                         if self.last_mean_rewards > self.config['score_to_win']:
                             print('Network won!')
@@ -1529,7 +1554,7 @@ class ContinuousA2CBase(A2CBase):
                 if epoch_num > self.max_epochs:
                     self.save(os.path.join(self.nn_dir,
                                            'last_' + self.config['name'] + 'ep' + str(epoch_num) + 'rew' + str(
-                                               mean_rewards)))
+                                               mean_rewards_left + mean_rewards_right)))
                     print('MAX EPOCHS NUM!')
                     should_exit = True
 
