@@ -98,10 +98,14 @@ class PpoMultiPlayerContinuous(BasePlayer):
             'normalize_value': self.normalize_value,
             'normalize_input': self.normalize_input,
         }
-        self.model = self.network.build(config)
-        self.model.to(self.device)
-        self.model.eval()
-        self.is_rnn = self.model.is_rnn()
+        self.model_left = self.network.build(config)
+        self.model_right = self.network.build(config)
+        self.model_left.to(self.device)
+        self.model_right.to(self.device)
+        self.model_left.eval()
+        self.model_right.eval()
+        self.is_rnn_left = self.model_left.is_rnn()
+        self.is_rnn_right = self.model_right.is_rnn()
 
     def get_action(self, obs, is_determenistic = False):
         if self.has_batch_dimension == False:
@@ -132,9 +136,11 @@ class PpoMultiPlayerContinuous(BasePlayer):
 
     def restore(self, fn):
         checkpoint = torch_ext.load_checkpoint(fn)
-        self.model.load_state_dict(checkpoint['model'])
+        self.model_left.load_state_dict(checkpoint['model'])
+        self.model_right.load_state_dict(checkpoint['model'])
         if self.normalize_input and 'running_mean_std' in checkpoint:
-            self.model.running_mean_std.load_state_dict(checkpoint['running_mean_std'])
+            self.model_left.running_mean_std.load_state_dict(checkpoint['running_mean_std'])
+            self.model_right.running_mean_std.load_state_dict(checkpoint['running_mean_std'])
 
     def reset(self):
         self.init_rnn()
