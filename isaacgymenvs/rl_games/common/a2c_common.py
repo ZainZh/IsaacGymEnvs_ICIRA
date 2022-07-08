@@ -1523,96 +1523,6 @@ class ContinuousA2CBase(A2CBase):
         return batch_dict[
                    'step_time'], play_time, update_time, total_time, a_losses, c_losses, b_losses, entropies, kls, last_lr, lr_mul
 
-    def train_epoch_multi(self):
-        super().train_epoch_multi()
-        self.set_eval()
-        play_time_start = time.time()
-        with torch.no_grad():
-            # self.is_rnn is False
-            if self.is_rnn:
-                batch_dict = self.play_steps_rnn()
-            else:
-                batch_dict_left, batch_dict_right = self.play_steps_multi()
-
-        play_time_end = time.time()
-        update_time_start = time.time()
-        # rnn_masks = batch_dict.get('rnn_masks', None)
-
-        self.set_train()
-        self.curr_frames_left = batch_dict_left.pop('played_frames')
-        self.curr_frames_right = batch_dict_right.pop('played_frames')
-        self.prepare_dataset(batch_dict_left)
-        self.prepare_dataset(batch_dict_right)
-        self.algo_observer_left.after_steps()
-        self.algo_observer_right.after_steps()
-        if self.has_central_value:
-            self.train_central_value()
-        # Todo: init another franka's losses
-        a_losses_left = []
-        c_losses_left = []
-        b_losses_left = []
-        entropies_left = []
-        kls_left = []
-        a_losses_right = []
-        c_losses_right = []
-        b_losses_right = []
-        entropies_right = []
-        kls_right = []
-        for mini_ep in range(0, self.mini_epochs_num):
-            ep_kls_left = []
-            ep_kls_right = []
-            for i in range(len(self.dataset_left)):
-                a_loss_left, c_loss_left, entropy_left, kl_left, last_lr_left, lr_mul_left, cmu_left, csigma_left, b_loss_left = self.train_actor_critic(
-                    self.dataset_left[i])
-                a_loss_right, c_loss_right, entropy_right, kl_right, last_lr_right, lr_mul_right, cmu_right, csigma_right, b_loss_right = self.train_actor_critic(
-                    self.dataset_right[i])
-                a_losses_left.append(a_loss_left)
-                c_losses_left.append(c_loss_left)
-                ep_kls_left.append(kl_left)
-                entropies_left.append(entropy_left)
-                if self.bounds_loss_coef is not None:
-                    b_losses_left.append(b_loss_left)
-
-                a_losses_right.append(a_loss_right)
-                c_losses_right.append(c_loss_right)
-                ep_kls_right.append(kl_right)
-                entropies_right.append(entropy_right)
-                if self.bounds_loss_coef is not None:
-                    b_losses_right.append(b_loss_right)
-                self.dataset_left.update_mu_sigma(cmu_left, csigma_left)
-                self.dataset_right.update_mu_sigma(cmu_right, csigma_right)
-
-            av_kls_left = torch_ext.mean_list(ep_kls_left)
-            av_kls_right = torch_ext.mean_list(ep_kls_right)
-
-            if self.multi_gpu:
-                av_kls_left = self.hvd.average_value(av_kls_left, 'ep_kls')
-                av_kls_right = self.hvd.average_value(av_kls_right, 'ep_kls')
-            self.last_lr_left, self.entropy_coef_left = self.scheduler.update(self.last_lr_left, self.entropy_coef_left, self.epoch_num, 0,
-                                                                              av_kls_left.item())
-            self.last_lr_right, self.entropy_coef_right = self.scheduler.update(self.last_lr_right, self.entropy_coef_right, self.epoch_num, 0,
-                                                                                av_kls_right.item())
-            self.update_lr(self.last_lr_left)
-            self.update_lr(self.last_lr_right)
-
-            kls_left.append(av_kls_left)
-            kls_right.append(av_kls_right)
-            self.diagnostics.mini_epoch(self, mini_ep)
-            if self.normalize_input:
-                self.model.running_mean_std.eval()  # don't need to update statstics more than one miniepoch
-
-        update_time_end = time.time()
-        play_time = play_time_end - play_time_start
-        update_time = update_time_end - update_time_start
-        total_time = update_time_end - play_time_start
-
-        # Todo: return two arm's loss and other params.
-
-        return batch_dict_left[
-                   'step_time'], play_time, update_time, total_time, \
-               a_losses_left, c_losses_left, b_losses_left, entropies_left, kls_left, last_lr_left, lr_mul_left, \
-               a_losses_right, c_losses_right, b_losses_right, entropies_right, kls_right, last_lr_right, lr_mul_right
-
     def prepare_dataset(self, batch_dict):
         obses = batch_dict['obses']
         returns = batch_dict['returns']
@@ -2039,7 +1949,8 @@ class ContinuousMultiA2CBase(A2CBase):
             kls_right.append(av_kls_right)
             self.diagnostics.mini_epoch(self, mini_ep)
             if self.normalize_input:
-                self.model.running_mean_std.eval()  # don't need to update statstics more than one miniepoch
+                self.model_left.running_mean_std.eval()  # don't need to update statstics more than one miniepoch
+                self.model_right.running_mean_std.eval()  # don't need to update statstics more than one miniepoch
 
         update_time_end = time.time()
         play_time = play_time_end - play_time_start
