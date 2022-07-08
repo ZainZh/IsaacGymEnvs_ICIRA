@@ -107,6 +107,15 @@ class PpoMultiPlayerContinuous(BasePlayer):
         self.is_rnn_left = self.model_left.is_rnn()
         self.is_rnn_right = self.model_right.is_rnn()
 
+    def action_split(self, actions):
+        actions_left = actions[:, 0:9]
+        actions_right = actions[:, 9:18]
+        return actions_left, actions_right
+
+    def action_combine(self, actions_left, actions_right):
+        actions = torch.cat((actions_left, actions_right), 1)
+        return actions
+
     def get_action(self, obs, is_determenistic = False):
         if self.has_batch_dimension == False:
             obs = unsqueeze_obs(obs)
@@ -118,14 +127,21 @@ class PpoMultiPlayerContinuous(BasePlayer):
             'rnn_states' : self.states
         }
         with torch.no_grad():
-            res_dict = self.model(input_dict)
-        mu = res_dict['mus']
-        action = res_dict['actions']
-        self.states = res_dict['rnn_states']
+            res_dict_left = self.model_left(input_dict)
+            res_dict_right = self.model_right(input_dict)
+        mu_left = res_dict_left['mus']
+        mu_right = res_dict_right['mus']
+        action_left = res_dict_left['actions']
+        action_right = res_dict_right['actions']
+        self.states = res_dict_right['rnn_states']
         if is_determenistic:
-            current_action = mu
+            mu_left_left,mu_left_right=self.action_split(mu_left)
+            mu_right_left,mu_right_right=self.action_split(mu_right)
+            current_action = self.action_combine(mu_left_left,mu_right_right)
         else:
-            current_action = action
+            action_left_left, action_left_right = self.action_split(action_left)
+            action_right_left, action_right_right = self.action_split(action_right)
+            current_action = self.action_combine(action_left_left,action_right_right)
         if self.has_batch_dimension == False:
             current_action = torch.squeeze(current_action.detach())
 
@@ -136,14 +152,14 @@ class PpoMultiPlayerContinuous(BasePlayer):
 
     def restore(self, fn):
         checkpoint = torch_ext.load_checkpoint(fn)
-        self.model_left.load_state_dict(checkpoint['model'])
-        self.model_right.load_state_dict(checkpoint['model'])
+        self.model_left.load_state_dict(checkpoint[0]['model'])
+        self.model_right.load_state_dict(checkpoint[1]['model'])
         if self.normalize_input and 'running_mean_std' in checkpoint:
             self.model_left.running_mean_std.load_state_dict(checkpoint['running_mean_std'])
             self.model_right.running_mean_std.load_state_dict(checkpoint['running_mean_std'])
 
     def reset(self):
-        self.init_rnn()
+        self.init_rnn_multi()
 
 class PpoPlayerDiscrete(BasePlayer):
     def __init__(self, params):

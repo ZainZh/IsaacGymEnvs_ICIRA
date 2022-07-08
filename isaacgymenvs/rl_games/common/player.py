@@ -3,10 +3,11 @@ import gym
 import numpy as np
 import torch
 from rl_games.common import env_configurations
-from rl_games.algos_torch import  model_builder
+from rl_games.algos_torch import model_builder
 from utils.utils import HDF5DatasetWriter
 import os
 from datetime import datetime
+
 
 class BasePlayer(object):
     def __init__(self, params):
@@ -52,14 +53,15 @@ class BasePlayer(object):
 
         # add
         self.if_write_hdf5 = self.config.get('save_hdf5_when_play', False)
+        self.multi_franka = self.config.get('multi_franka', False)
         a = self.config.get('save_hdf5_when_play')
 
         if self.if_write_hdf5:
             file_time = datetime.now().strftime("%m%d-%H-%M-%S")
-            output_path = os.path.join(self.config['save_hdf5_folder'], file_time+'.hdf5')
-            self.hdf5_writer = HDF5DatasetWriter(output_path, action_size=self.action_space.shape[0], obs_size=self.observation_space.shape[0], bufSize=1000, maxSize=None)
+            output_path = os.path.join(self.config['save_hdf5_folder'], file_time + '.hdf5')
+            self.hdf5_writer = HDF5DatasetWriter(output_path, action_size=self.action_space.shape[0], obs_size=self.observation_space.shape[0], bufSize=1000,
+                                                 maxSize=None)
             print('\033[1;33mWrite HDF5 offline dataset, path=>{}\033[0m'.format(output_path))
-
 
     def load_networks(self, params):
         builder = model_builder.ModelBuilder()
@@ -118,7 +120,7 @@ class BasePlayer(object):
         if isinstance(obs, torch.Tensor):
             self.is_tensor_obses = True
         elif isinstance(obs, np.ndarray):
-            assert(self.observation_space.dtype != np.int8)
+            assert (self.observation_space.dtype != np.int8)
             if self.observation_space.dtype == np.uint8:
                 obs = torch.ByteTensor(obs).to(self.device)
             else:
@@ -165,6 +167,12 @@ class BasePlayer(object):
             self.states = [torch.zeros((s.size()[0], self.batch_size, s.size(
             )[2]), dtype=torch.float32).to(self.device) for s in rnn_states]
 
+    def init_rnn_multi(self):
+        if self.is_rnn_left:
+            rnn_states = self.model_left.get_default_rnn_state()
+            self.states = [torch.zeros((s.size()[0], self.batch_size, s.size(
+            )[2]), dtype=torch.float32).to(self.device) for s in rnn_states]
+
     def run(self):
         n_games = self.games_num
         render = self.render_env
@@ -181,14 +189,16 @@ class BasePlayer(object):
         op_agent = getattr(self.env, "create_agent", None)
         if op_agent:
             agent_inited = True
-            #print('setting agent weights for selfplay')
+            # print('setting agent weights for selfplay')
             # self.env.create_agent(self.env.config)
             # self.env.set_weights(range(8),self.get_weights())
 
         if has_masks_func:
             has_masks = self.env.has_action_mask()
-
-        need_init_rnn = self.is_rnn
+        if self.multi_franka:
+            need_init_rnn = self.is_rnn_left
+        else:
+            need_init_rnn = self.is_rnn
         for _ in range(n_games):
             if games_played >= n_games:
                 break
@@ -198,8 +208,12 @@ class BasePlayer(object):
             batch_size = self.get_batch_size(obses, batch_size)
 
             if need_init_rnn:
-                self.init_rnn()
-                need_init_rnn = False
+                if self.multi_franka:
+                    self.init_rnn_multi()
+                    need_init_rnn = False
+                else:
+                    self.init_rnn()
+                    need_init_rnn = False
 
             cr = torch.zeros(batch_size, dtype=torch.float32)
             steps = torch.zeros(batch_size, dtype=torch.float32)
@@ -232,9 +246,14 @@ class BasePlayer(object):
                 games_played += done_count
 
                 if done_count > 0:
-                    if self.is_rnn:
-                        for s in self.states:
-                            s[:, all_done_indices, :] = s[:,all_done_indices, :] * 0.0
+                    if self.multi_franka:
+                        if self.is_rnn_left:
+                            for s in self.states:
+                                s[:, all_done_indices, :] = s[:, all_done_indices, :] * 0.0
+                    else:
+                        if self.is_rnn:
+                            for s in self.states:
+                                s[:, all_done_indices, :] = s[:, all_done_indices, :] * 0.0
 
                     cur_rewards = cr[done_indices].sum().item()
                     cur_steps = steps[done_indices].sum().item()
@@ -255,16 +274,16 @@ class BasePlayer(object):
 
                     if self.print_stats:
                         if print_game_res:
-                            print('reward:', cur_rewards/done_count,
-                                  'steps:', cur_steps/done_count, 'w:', game_res)
+                            print('reward:', cur_rewards / done_count,
+                                  'steps:', cur_steps / done_count, 'w:', game_res)
                         else:
-                            print('reward:', cur_rewards/done_count,
-                                  'steps:', cur_steps/done_count)
+                            print('reward:', cur_rewards / done_count,
+                                  'steps:', cur_steps / done_count)
 
                     sum_game_res += game_res
-                    if batch_size//self.num_agents == 1 or games_played >= n_games:
+                    if batch_size // self.num_agents == 1 or games_played >= n_games:
                         break
-            
+
             if self.if_write_hdf5:
                 self.hdf5_writer.flush()
 
