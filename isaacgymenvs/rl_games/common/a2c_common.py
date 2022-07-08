@@ -2253,7 +2253,7 @@ class ContinuousMultiA2CBase(A2CBase):
             if self.multi_gpu:
                 self.hvd.sync_stats(self)
             # cleaning memory to optimize space
-            self.dataset.update_values_dict(None)
+
             self.dataset_left.update_values_dict(None)
             self.dataset_right.update_values_dict(None)
             should_exit = False
@@ -2276,9 +2276,9 @@ class ContinuousMultiA2CBase(A2CBase):
                                  entropies_left, kls_left, last_lr_left, lr_mul_left, a_losses_right, c_losses_right,
                                  entropies_right, kls_right, last_lr_right, lr_mul_right, frame, scaled_time, scaled_play_time, curr_frames)
                 if len(b_losses_left) > 0:
-                    self.writer.add_scalar('losses/bounds_loss_left', torch_ext.mean_list(b_losses).item(), frame)
+                    self.writer.add_scalar('losses/bounds_loss_left', torch_ext.mean_list(b_losses_left).item(), frame)
                 if len(b_losses_right) > 0:
-                    self.writer.add_scalar('losses/bounds_loss_left', torch_ext.mean_list(b_losses).item(), frame)
+                    self.writer.add_scalar('losses/bounds_loss_left', torch_ext.mean_list(b_losses_right).item(), frame)
 
                 if self.has_soft_aug:
                     self.writer.add_scalar('losses/aug_loss', np.mean(aug_losses), frame)
