@@ -432,6 +432,9 @@ def get_env_info(env):
     print(result_shapes)
     return result_shapes
 
+
+
+
 def get_obs_and_action_spaces_from_config(config):
     env_config = config.get('env_config', {})
     env = configurations[config['env_name']]['env_creator'](**env_config)

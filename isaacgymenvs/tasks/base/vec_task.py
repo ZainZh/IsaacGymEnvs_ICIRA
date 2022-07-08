@@ -86,12 +86,17 @@ class Env(ABC):
         self.num_observations = config["env"]["numObservations"]
         self.num_states = config["env"].get("numStates", 0)
         self.num_actions = config["env"]["numActions"]
+        self.multifranka=config["env"]["multifranka"]
 
         self.control_freq_inv = config["env"].get("controlFrequencyInv", 1)
         self.obs_space = spaces.Box(np.ones(self.num_obs) * -np.Inf, np.ones(self.num_obs) * np.Inf)
         self.state_space = spaces.Box(np.ones(self.num_states) * -np.Inf, np.ones(self.num_states) * np.Inf)
 
-        self.act_space = spaces.Box(np.ones(self.num_actions) * -1., np.ones(self.num_actions) * 1.)
+        if self.multifranka:
+            self.act_space = spaces.Box(np.ones(int(self.num_actions/2)) * -1., np.ones(int(self.num_actions/2)) * 1.)
+        else:
+            self.act_space = spaces.Box(np.ones(self.num_actions) * -1., np.ones(self.num_actions) * 1.)
+
 
 
         self.clip_obs = config["env"].get("clipObservations", np.Inf)

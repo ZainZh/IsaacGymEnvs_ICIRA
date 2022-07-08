@@ -190,3 +190,20 @@ class RLGPUEnv(vecenv.IVecEnv):
             print(info['action_space'], info['observation_space'])
 
         return info
+
+    def get_env_info_multi(self):
+        info = {}
+
+        info['action_space'] = self.env.action_space
+
+        info['observation_space'] = self.env.observation_space
+        if hasattr(self.env, "amp_observation_space"):
+            info['amp_observation_space'] = self.env.amp_observation_space
+
+        if self.env.num_states > 0:
+            info['state_space'] = self.env.state_space
+            print(info['action_space'], info['observation_space'], info['state_space'])
+        else:
+            print(info['action_space'], info['observation_space'])
+
+        return info

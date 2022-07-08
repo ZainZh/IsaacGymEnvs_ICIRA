@@ -7,7 +7,7 @@ params:
     name: continuous_a2c_logstd
 
   network:
-    name: actor_critic
+    name: actor_multi_critic
     separate: False
 
     space:
@@ -30,11 +30,11 @@ params:
       regularizer:
         name: None
 
-  load_checkpoint: ${if:${...checkpoint},True,False} # flag which sets whether to load the checkpoint
+  load_checkpoint: ${if:${...checkpoint},True,False} # flag which ets whether to load the checkpoint
   load_path: ${...checkpoint} # path to the checkpoint to load
 
   config:
-    name: ${resolve_default:DualFrankaPPO_0708,${....experiment}}
+    name: ${resolve_default:DualFrankaPPO_0708_1,${....experiment}}
     full_experiment_name: ${.name}
     env_name: rlgpu
     ppo: True

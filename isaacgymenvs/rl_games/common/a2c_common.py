@@ -106,7 +106,10 @@ class A2CBase(BaseAlgorithm):
         self.env_info = config.get('env_info')
         if self.env_info is None:
             self.vec_env = vecenv.create_vec_env(self.env_name, self.num_actors, **self.env_config)
-            self.env_info = self.vec_env.get_env_info()
+            if self.multi_franka:
+                self.env_info = self.vec_env.get_env_info_multi()
+            else:
+                self.env_info = self.vec_env.get_env_info()
 
         self.ppo_device = config.get('device', self.vec_env.env.device_id)  # or cuda:0?
         print('Env info:')
@@ -573,6 +576,7 @@ class A2CBase(BaseAlgorithm):
 
         self.experience_buffer = ExperienceBuffer(self.env_info, algo_info, self.ppo_device)
         # Todo add two experience buffer
+
         self.experience_buffer_left = ExperienceBuffer(self.env_info, algo_info, self.ppo_device)
         self.experience_buffer_right = ExperienceBuffer(self.env_info, algo_info, self.ppo_device)
 
@@ -1766,7 +1770,8 @@ class ContinuousMultiA2CBase(A2CBase):
 
             # self.experience_buffer.update_data('obses', n, self.obs['obs'])
             # self.experience_buffer.update_data('dones', n, self.dones)
-
+            res_dict_left['actions']=res_dict_left['actions'][:,0:9]
+            res_dict_right['actions'] = res_dict_right['actions'][:, 9:18]
             # Todo: add informations
             self.experience_buffer_left.update_data('obses', n, self.obs['obs'])
             self.experience_buffer_left.update_data('dones', n, self.dones)
@@ -1792,9 +1797,8 @@ class ContinuousMultiA2CBase(A2CBase):
             step_time_start = time.time()
 
             # split actions from two dics and combine actions_left in dic1 with actions_right in dic2
-            actions_left_left, actions_right_left = self.action_split(res_dict_left['actions'])
-            actions_left_right, actions_right_right = self.action_split(res_dict_right['actions'])
-            actions_new = self.action_combine(actions_left_left, actions_right_right)
+
+            actions_new = self.action_combine(res_dict_left['actions'],res_dict_right['actions'])
 
             # Todo: add another franka arm actions
             self.obs, rewards, self.dones, infos, rewards_left, rewards_right = self.env_step(actions_new)
@@ -2287,13 +2291,15 @@ class ContinuousMultiA2CBase(A2CBase):
                     mean_rewards_left = self.game_rewards_left.get_mean()
                     mean_lengths_left = self.game_lengths_left.get_mean()
                     self.mean_rewards_left = mean_rewards_left[0]
+                    if self.mean_rewards_left>13000:
+                        print("self.mean_rewards_left>13000")
                     print('mean_rewards_left: {}, mean_length_left: {}'.format(self.mean_rewards_left, mean_lengths_left))
                 if self.game_rewards_right.current_size > 0:
                     mean_rewards_right = self.game_rewards_right.get_mean()
                     mean_lengths_right = self.game_lengths_right.get_mean()
                     self.mean_rewards_right = mean_rewards_right[0]
                     # print('current length: {}'.format(self.current_lengths))
-                    # print('current rewards: {}'.format(self.current_rewards / self.current_lengths))
+                    # print('current rewards: {}'.format(self.current_rewards / self.current_lengths)
                     print('mean_rewards_right: {}, mean_length_right: {}'.format(self.mean_rewards_right, mean_lengths_right))
 
                     for i in range(self.value_size):
