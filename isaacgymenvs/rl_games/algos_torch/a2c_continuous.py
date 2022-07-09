@@ -221,7 +221,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         a2c_common.ContinuousMultiA2CBase.__init__(self, base_name, params)
         obs_shape = self.obs_shape
         build_config = {
-            'actions_num': self.actions_num,
+            'actions_num': int(self.actions_num/2),
             'input_shape': obs_shape,
             'num_seqs': self.num_actors * self.num_agents,
             'value_size': self.env_info.get('value_size', 1),

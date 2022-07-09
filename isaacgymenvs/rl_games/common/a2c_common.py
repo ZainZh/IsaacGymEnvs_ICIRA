@@ -121,7 +121,7 @@ class A2CBase(BaseAlgorithm):
         self.is_train = config.get('is_train', True)
 
         self.central_value_config = self.config.get('central_value_config', None)
-        self.has_central_value = self.central_value_config is not None #False
+        self.has_central_value = self.central_value_config is not None  # False
         self.truncate_grads = self.config.get('truncate_grads', False)
 
         if self.has_central_value:
@@ -173,7 +173,7 @@ class A2CBase(BaseAlgorithm):
         self.normalize_advantage = config['normalize_advantage']
         self.normalize_rms_advantage = config.get('normalize_rms_advantage', False)
         self.normalize_input = self.config['normalize_input']
-        self.normalize_value = self.config.get('normalize_value', False) #True
+        self.normalize_value = self.config.get('normalize_value', False)  # True
         self.truncate_grads = self.config.get('truncate_grads', False)
         self.has_phasic_policy_gradients = False
 
@@ -600,7 +600,7 @@ class A2CBase(BaseAlgorithm):
                 num_seqs = self.horizon_length // self.seq_len
                 assert ((self.horizon_length * total_agents // self.num_minibatches) % self.seq_len == 0)
                 self.mb_rnn_states_left = [torch.zeros((num_seqs, s.size()[0], total_agents, s.size()[2]), dtype=torch.float32,
-                                                  device=self.ppo_device) for s in self.rnn_states_left]
+                                                       device=self.ppo_device) for s in self.rnn_states_left]
             if self.is_rnn_right:
                 self.rnn_states_right = self.model.get_default_rnn_state()
                 self.rnn_states_right = [s.to(self.ppo_device) for s in self.rnn_states_right]
@@ -609,7 +609,7 @@ class A2CBase(BaseAlgorithm):
                 num_seqs = self.horizon_length // self.seq_len
                 assert ((self.horizon_length * total_agents // self.num_minibatches) % self.seq_len == 0)
                 self.mb_rnn_states_right = [torch.zeros((num_seqs, s.size()[0], total_agents, s.size()[2]), dtype=torch.float32,
-                                                  device=self.ppo_device) for s in self.rnn_states_right]
+                                                        device=self.ppo_device) for s in self.rnn_states_right]
         else:
             if self.is_rnn:
                 self.rnn_states = self.model.get_default_rnn_state()
@@ -776,7 +776,7 @@ class A2CBase(BaseAlgorithm):
 
     def get_full_state_weights(self):
         if self.multi_franka:
-            state_left,state_right = self.get_weights()
+            state_left, state_right = self.get_weights()
             state_left['epoch'] = self.epoch_num
             state_right['epoch'] = self.epoch_num
             state_left['optimizer'] = self.optimizer_left.state_dict()
@@ -797,7 +797,7 @@ class A2CBase(BaseAlgorithm):
                 state_left['env_state'] = env_state
                 state_right['env_state'] = env_state
 
-            return state_left,state_right
+            return state_left, state_right
         else:
             state = self.get_weights()
             state['epoch'] = self.epoch_num
@@ -839,7 +839,7 @@ class A2CBase(BaseAlgorithm):
             state_left, state_right = self.get_stats_weights()
             state_left['model'] = self.model_left.state_dict()
             state_right['model'] = self.model_right.state_dict()
-            return state_left,state_right
+            return state_left, state_right
         else:
             state = self.get_stats_weights()
             state['model'] = self.model.state_dict()
@@ -922,8 +922,6 @@ class A2CBase(BaseAlgorithm):
                 obs_batch = obs_batch.float() / 255.0
         return obs_batch
 
-
-
     def play_steps(self):
         update_list = self.update_list
         step_time = 0.0
@@ -985,130 +983,6 @@ class A2CBase(BaseAlgorithm):
         batch_dict['played_frames'] = self.batch_size
         batch_dict['step_time'] = step_time
         return batch_dict
-
-    def play_steps_multi(self):
-        update_list = self.update_list
-        # Todo: add lists
-        update_list_left = self.update_list
-        update_list_right = self.update_list
-        step_time = 0.0
-
-        for n in range(self.horizon_length):
-            if self.use_action_masks:
-                masks = self.vec_env.get_action_masks()
-                res_dict = self.get_masked_action_values(self.obs, masks)
-            else:
-                res_dict_left = self.get_action_values_left(self.obs)
-                res_dict_right = self.get_action_values(self.obs)
-
-            # self.experience_buffer.update_data('obses', n, self.obs['obs'])
-            # self.experience_buffer.update_data('dones', n, self.dones)
-
-            # Todo: add informations
-            self.experience_buffer_left.update_data('obses', n, self.obs['obs'])
-            self.experience_buffer_left.update_data('dones', n, self.dones)
-            self.experience_buffer_right.update_data('obses', n, self.obs['obs'])
-            self.experience_buffer_right.update_data('dones', n, self.dones)
-
-            # for k in update_list:
-            #     self.experience_buffer.update_data(k, n, res_dict[k])
-            # if self.has_central_value:
-            #     self.experience_buffer.update_data('states', n, self.obs['states'])
-
-            # Todo: add informations
-            for k in update_list_left:
-                self.experience_buffer_left.update_data(k, n, res_dict_left[k])
-            if self.has_central_value:
-                self.experience_buffer_left.update_data('states', n, self.obs['states'])
-
-            for k in update_list_right:
-                self.experience_buffer_right.update_data(k, n, res_dict_right[k])
-            if self.has_central_value:
-                self.experience_buffer_right.update_data('states', n, self.obs['states'])
-
-            step_time_start = time.time()
-
-            # split actions from two dics and combine actions_left in dic1 with actions_right in dic2
-            actions_left_left, actions_right_left = self.action_split(res_dict_left['actions'])
-            actions_left_right, actions_right_right = self.action_split(res_dict_right['actions'])
-            actions_new = self.action_combine(actions_left_left, actions_right_right)
-
-            # Todo: add another franka arm actions
-            self.obs, rewards, self.dones, infos, rewards_left, rewards_right = self.env_step(actions_new)
-
-            #  self.obs, rewards, self.dones, infos = self.env_step(res_dict['actions'])
-            step_time_end = time.time()
-
-            step_time += (step_time_end - step_time_start)
-
-            # shaped_rewards = self.rewards_shaper(rewards)
-            shaped_rewards_left = self.rewards_shaper(rewards_left)
-            shaped_rewards_right = self.rewards_shaper(rewards_right)
-
-            # if self.value_bootstrap and 'time_outs' in infos:
-            #     shaped_rewards += self.gamma * res_dict['values'] * self.cast_obs(infos['time_outs']).unsqueeze(
-            #         1).float()
-            if self.value_bootstrap and 'time_outs' in infos:
-                shaped_rewards_left += self.gamma * res_dict_left['values'] * self.cast_obs(infos['time_outs']).unsqueeze(
-                    1).float()
-            if self.value_bootstrap and 'time_outs' in infos:
-                shaped_rewards_right += self.gamma * res_dict_right['values'] * self.cast_obs(infos['time_outs']).unsqueeze(
-                    1).float()
-
-            # self.experience_buffer.update_data('rewards', n, shaped_rewards)
-            self.experience_buffer_left.update_data('rewards', n, shaped_rewards_left)
-            self.experience_buffer_right.update_data('rewards', n, shaped_rewards_right)
-
-            # self.current_rewards += rewards
-            # self.current_lengths += 1
-            self.current_rewards_left += rewards_left
-            self.current_lengths_left += 1
-            self.current_rewards_right += rewards_right
-            self.current_lengths_right += 1
-            all_done_indices = self.dones.nonzero(as_tuple=False)
-            env_done_indices = self.dones.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
-
-            # self.game_rewards.update(self.current_rewards[env_done_indices])
-            # self.game_lengths.update(self.current_lengths[env_done_indices])
-            # self.algo_observer.process_infos(infos, env_done_indices)
-
-            self.game_rewards_left.update(self.current_rewards_left[env_done_indices])
-            self.game_lengths_left.update(self.current_lengths_left[env_done_indices])
-            self.game_rewards_right.update(self.current_rewards_right[env_done_indices])
-            self.game_lengths_right.update(self.current_lengths_right[env_done_indices])
-            self.algo_observer_left.process_infos(infos, env_done_indices)
-            self.algo_observer_right.process_infos(infos, env_done_indices)
-            not_dones = 1.0 - self.dones.float()
-            self.current_rewards_left = self.current_rewards_left * not_dones.unsqueeze(1)
-            self.current_lengths_left = self.current_lengths_left * not_dones
-            self.current_rewards_right = self.current_rewards_right * not_dones.unsqueeze(1)
-            self.current_lengths_right = self.current_lengths_right * not_dones
-
-        last_values = self.get_values(self.obs)
-        fdones = self.dones.float()
-        mb_fdones_left = self.experience_buffer_left.tensor_dict['dones'].float()
-        mb_values_left = self.experience_buffer_left.tensor_dict['values']
-        mb_rewards_left = self.experience_buffer_left.tensor_dict['rewards']
-        mb_fdones_right = self.experience_buffer_right.tensor_dict['dones'].float()
-        mb_values_right = self.experience_buffer_right.tensor_dict['values']
-        mb_rewards_right = self.experience_buffer_right.tensor_dict['rewards']
-        mb_advs_left = self.discount_values(fdones, last_values, mb_fdones_left, mb_values_left, mb_rewards_left)
-        mb_returns_left = mb_advs_left + mb_values_left
-        mb_advs_right = self.discount_values(fdones, last_values, mb_fdones_right, mb_values_right, mb_rewards_right)
-        mb_returns_right = mb_advs_right + mb_values_right
-
-        # Todo: add other batch_dict for another arm
-        batch_dict_left = self.experience_buffer_left.get_transformed_list(swap_and_flatten01, self.tensor_list_left)
-        batch_dict_left['returns'] = swap_and_flatten01(mb_returns_left)
-        batch_dict_left['played_frames'] = self.batch_size
-        batch_dict_left['step_time'] = step_time
-
-        batch_dict_right = self.experience_buffer_right.get_transformed_list(swap_and_flatten01, self.tensor_list_right)
-        batch_dict_right['returns'] = swap_and_flatten01(mb_returns_right)
-        batch_dict_right['played_frames'] = self.batch_size
-        batch_dict_right['step_time'] = step_time
-
-        return batch_dict_left, batch_dict_right
 
     def play_steps_rnn(self):
         # update_list = self.update_list
@@ -1702,8 +1576,8 @@ class ContinuousA2CBase(A2CBase):
 
                 if epoch_num > self.max_epochs:
                     self.save_multi(os.path.join(self.nn_dir,
-                                           'last_' + self.config['name'] + 'ep' + str(epoch_num) + 'rew' + str(
-                                               mean_rewards_left + mean_rewards_right)))
+                                                 'last_' + self.config['name'] + 'ep' + str(epoch_num) + 'rew' + str(
+                                                     mean_rewards_left + mean_rewards_right)))
                     print('MAX EPOCHS NUM!')
                     should_exit = True
 
@@ -1725,7 +1599,7 @@ class ContinuousMultiA2CBase(A2CBase):
         A2CBase.__init__(self, base_name, params)
         self.is_discrete = False
         action_space = self.env_info['action_space']
-        self.actions_num = action_space.shape[0]
+        self.actions_num = action_space.shape[0] * 2
         self.bounds_loss_coef = self.config.get('bounds_loss_coef', None)
 
         self.clip_actions = self.config.get('clip_actions', True)
@@ -1733,6 +1607,8 @@ class ContinuousMultiA2CBase(A2CBase):
         # todo introduce device instead of cuda()
         self.actions_low = torch.from_numpy(action_space.low.copy()).float().to(self.ppo_device)
         self.actions_high = torch.from_numpy(action_space.high.copy()).float().to(self.ppo_device)
+        self.actions_low = torch.cat((self.actions_low, self.actions_low), 0)
+        self.actions_high = torch.cat((self.actions_high, self.actions_high), 0)
 
     def preprocess_actions(self, actions):
 
@@ -1770,8 +1646,7 @@ class ContinuousMultiA2CBase(A2CBase):
 
             # self.experience_buffer.update_data('obses', n, self.obs['obs'])
             # self.experience_buffer.update_data('dones', n, self.dones)
-            res_dict_left['actions']=res_dict_left['actions'][:,0:9]
-            res_dict_right['actions'] = res_dict_right['actions'][:, 9:18]
+
             # Todo: add informations
             self.experience_buffer_left.update_data('obses', n, self.obs['obs'])
             self.experience_buffer_left.update_data('dones', n, self.dones)
@@ -1798,7 +1673,7 @@ class ContinuousMultiA2CBase(A2CBase):
 
             # split actions from two dics and combine actions_left in dic1 with actions_right in dic2
 
-            actions_new = self.action_combine(res_dict_left['actions'],res_dict_right['actions'])
+            actions_new = self.action_combine(res_dict_left['actions'], res_dict_right['actions'])
 
             # Todo: add another franka arm actions
             self.obs, rewards, self.dones, infos, rewards_left, rewards_right = self.env_step(actions_new)
@@ -2021,9 +1896,7 @@ class ContinuousMultiA2CBase(A2CBase):
         dataset_dict['mu'] = mus
         dataset_dict['sigma'] = sigmas
 
-
         self.dataset_left.update_values_dict(dataset_dict)
-
 
         if self.has_central_value:
             dataset_dict = {}
@@ -2089,7 +1962,6 @@ class ContinuousMultiA2CBase(A2CBase):
         dataset_dict['mu'] = mus
         dataset_dict['sigma'] = sigmas
 
-
         self.dataset_right.update_values_dict(dataset_dict)
 
         if self.has_central_value:
@@ -2102,6 +1974,7 @@ class ContinuousMultiA2CBase(A2CBase):
             dataset_dict['dones'] = dones
             dataset_dict['rnn_masks'] = rnn_masks
             self.central_value_net.update_dataset(dataset_dict)
+
     def play_steps_rnn_multi(self):
         # update_list = self.update_list
         update_list_left = self.update_list_left
@@ -2227,9 +2100,7 @@ class ContinuousMultiA2CBase(A2CBase):
         batch_dict_right['rnn_states'] = states_right
         batch_dict_left['step_time'] = step_time
         batch_dict_right['step_time'] = step_time
-        return batch_dict_left,batch_dict_right
-
-
+        return batch_dict_left, batch_dict_right
 
     def train(self):
         self.init_tensors()
@@ -2291,7 +2162,7 @@ class ContinuousMultiA2CBase(A2CBase):
                     mean_rewards_left = self.game_rewards_left.get_mean()
                     mean_lengths_left = self.game_lengths_left.get_mean()
                     self.mean_rewards_left = mean_rewards_left[0]
-                    if self.mean_rewards_left>13000:
+                    if self.mean_rewards_left > 13000:
                         print("self.mean_rewards_left>13000")
                     print('mean_rewards_left: {}, mean_length_left: {}'.format(self.mean_rewards_left, mean_lengths_left))
                 if self.game_rewards_right.current_size > 0:
