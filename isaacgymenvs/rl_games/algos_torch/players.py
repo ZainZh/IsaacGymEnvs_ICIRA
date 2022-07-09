@@ -84,6 +84,8 @@ class PpoMultiPlayerContinuous(BasePlayer):
         self.actions_num = self.action_space.shape[0]
         self.actions_low = torch.from_numpy(self.action_space.low.copy()).float().to(self.device)
         self.actions_high = torch.from_numpy(self.action_space.high.copy()).float().to(self.device)
+        self.actions_low = torch.cat((self.actions_low, self.actions_low), 0)
+        self.actions_high = torch.cat((self.actions_high, self.actions_high), 0)
         self.mask = [False]
 
         self.normalize_input = self.config['normalize_input']
@@ -135,13 +137,9 @@ class PpoMultiPlayerContinuous(BasePlayer):
         action_right = res_dict_right['actions']
         self.states = res_dict_right['rnn_states']
         if is_determenistic:
-            mu_left_left,mu_left_right=self.action_split(mu_left)
-            mu_right_left,mu_right_right=self.action_split(mu_right)
-            current_action = self.action_combine(mu_left_left,mu_right_right)
+            current_action = self.action_combine(mu_left,mu_right)
         else:
-            action_left_left, action_left_right = self.action_split(action_left)
-            action_right_left, action_right_right = self.action_split(action_right)
-            current_action = self.action_combine(action_left_left,action_right_right)
+            current_action = self.action_combine(action_left,action_rightt)
         if self.has_batch_dimension == False:
             current_action = torch.squeeze(current_action.detach())
 
