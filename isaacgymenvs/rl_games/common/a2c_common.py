@@ -687,7 +687,13 @@ class A2CBase(BaseAlgorithm):
         else:
             if self.value_size == 1:
                 rewards = np.expand_dims(rewards, axis=1)
-            return self.obs_to_tensors(obs), torch.from_numpy(rewards).to(self.ppo_device).float(), torch.from_numpy(
+                left_reward = np.expand_dims(left_reward, axis=1)
+                right_reward= np.expand_dims(right_reward, axis=1)
+            if self.multi_franka:
+                return self.obs_to_tensors(obs), rewards.to(self.ppo_device), dones.to(self.ppo_device), infos, \
+                       left_reward.to(self.ppo_device), right_reward.to(self.ppo_device)
+            else:
+              return self.obs_to_tensors(obs), torch.from_numpy(rewards).to(self.ppo_device).float(), torch.from_numpy(
                 dones).to(self.ppo_device), infos
 
     def env_reset(self):
@@ -738,10 +744,10 @@ class A2CBase(BaseAlgorithm):
             self.mean_rewards = self.last_mean_rewards = -100500
             self.algo_observer.after_clear_stats()
         else:
-            self.game_rewards_left.clear()
-            self.game_lengths_left.clear()
-            self.game_rewards_right.clear()
-            self.game_lengths_right.clear()
+            self.game_rewards_left.clear_left()
+            self.game_lengths_left.clear_left()
+            self.game_rewards_right.clear_right()
+            self.game_lengths_right.clear_right()
             self.algo_observer_left.after_clear_stats()
             self.algo_observer_right.after_clear_stats()
             # Todo: need more consideration
@@ -1524,13 +1530,13 @@ class ContinuousA2CBase(A2CBase):
                     self.writer.add_scalar('losses/aug_loss', np.mean(aug_losses), frame)
 
                 if self.game_rewards_left.current_size > 0:
-                    mean_rewards_left = self.game_rewards_left.get_mean()
-                    mean_lengths_left = self.game_lengths_left.get_mean()
+                    mean_rewards_left = self.game_rewards_left.get_mean_left()
+                    mean_lengths_left = self.game_lengths_left.get_mean_left()
                     self.mean_rewards_left = mean_rewards_left[0]
                     print('mean_rewards_left: {}, mean_length_left: {}'.format(self.mean_rewards_left, mean_lengths_left))
                 if self.game_rewards_right.current_size > 0:
-                    mean_rewards_right = self.game_rewards_right.get_mean()
-                    mean_lengths_right = self.game_lengths_right.get_mean()
+                    mean_rewards_right = self.game_rewards_right.get_mean_right()
+                    mean_lengths_right = self.game_lengths_right.get_mean_right()
                     self.mean_rewards_right = mean_rewards_right[0]
                     # print('current length: {}'.format(self.current_lengths))
                     # print('current rewards: {}'.format(self.current_rewards / self.current_lengths))
@@ -1648,10 +1654,10 @@ class ContinuousMultiA2CBase(A2CBase):
             # self.experience_buffer.update_data('dones', n, self.dones)
 
             # Todo: add informations
-            self.experience_buffer_left.update_data('obses', n, self.obs['obs'])
-            self.experience_buffer_left.update_data('dones', n, self.dones)
-            self.experience_buffer_right.update_data('obses', n, self.obs['obs'])
-            self.experience_buffer_right.update_data('dones', n, self.dones)
+            self.experience_buffer_left.update_data_left('obses', n, self.obs['obs'])
+            self.experience_buffer_left.update_data_left('dones', n, self.dones)
+            self.experience_buffer_right.update_data_right('obses', n, self.obs['obs'])
+            self.experience_buffer_right.update_data_right('dones', n, self.dones)
 
             # for k in update_list:
             #     self.experience_buffer.update_data(k, n, res_dict[k])
@@ -1660,14 +1666,14 @@ class ContinuousMultiA2CBase(A2CBase):
 
             # Todo: add informations
             for k in update_list_left:
-                self.experience_buffer_left.update_data(k, n, res_dict_left[k])
+                self.experience_buffer_left.update_data_left(k, n, res_dict_left[k])
             if self.has_central_value:
-                self.experience_buffer_left.update_data('states', n, self.obs['states'])
+                self.experience_buffer_left.update_data_left('states', n, self.obs['states'])
 
             for k in update_list_right:
-                self.experience_buffer_right.update_data(k, n, res_dict_right[k])
+                self.experience_buffer_right.update_data_right(k, n, res_dict_right[k])
             if self.has_central_value:
-                self.experience_buffer_right.update_data('states', n, self.obs['states'])
+                self.experience_buffer_right.update_data_right('states', n, self.obs['states'])
 
             step_time_start = time.time()
 
@@ -1698,8 +1704,8 @@ class ContinuousMultiA2CBase(A2CBase):
                     1).float()
 
             # self.experience_buffer.update_data('rewards', n, shaped_rewards)
-            self.experience_buffer_left.update_data('rewards', n, shaped_rewards_left)
-            self.experience_buffer_right.update_data('rewards', n, shaped_rewards_right)
+            self.experience_buffer_left.update_data_left('rewards', n, shaped_rewards_left)
+            self.experience_buffer_right.update_data_right('rewards', n, shaped_rewards_right)
 
             # self.current_rewards += rewards
             # self.current_lengths += 1
@@ -1714,10 +1720,10 @@ class ContinuousMultiA2CBase(A2CBase):
             # self.game_lengths.update(self.current_lengths[env_done_indices])
             # self.algo_observer.process_infos(infos, env_done_indices)
 
-            self.game_rewards_left.update(self.current_rewards_left[env_done_indices])
-            self.game_lengths_left.update(self.current_lengths_left[env_done_indices])
-            self.game_rewards_right.update(self.current_rewards_right[env_done_indices])
-            self.game_lengths_right.update(self.current_lengths_right[env_done_indices])
+            self.game_rewards_left.update_left(self.current_rewards_left[env_done_indices])
+            self.game_lengths_left.update_left(self.current_lengths_left[env_done_indices])
+            self.game_rewards_right.update_right(self.current_rewards_right[env_done_indices])
+            self.game_lengths_right.update_right(self.current_lengths_right[env_done_indices])
             self.algo_observer_left.process_infos(infos, env_done_indices)
             self.algo_observer_right.process_infos(infos, env_done_indices)
             not_dones = 1.0 - self.dones.float()
@@ -1741,12 +1747,12 @@ class ContinuousMultiA2CBase(A2CBase):
         mb_returns_right = mb_advs_right + mb_values_right
 
         # Todo: add other batch_dict for another arm
-        batch_dict_left = self.experience_buffer_left.get_transformed_list(swap_and_flatten01, self.tensor_list_left)
+        batch_dict_left = self.experience_buffer_left.get_transformed_list_left(swap_and_flatten01, self.tensor_list_left)
         batch_dict_left['returns'] = swap_and_flatten01(mb_returns_left)
         batch_dict_left['played_frames'] = self.batch_size
         batch_dict_left['step_time'] = step_time
 
-        batch_dict_right = self.experience_buffer_right.get_transformed_list(swap_and_flatten01, self.tensor_list_right)
+        batch_dict_right = self.experience_buffer_right.get_transformed_list_right(swap_and_flatten01, self.tensor_list_right)
         batch_dict_right['returns'] = swap_and_flatten01(mb_returns_right)
         batch_dict_right['played_frames'] = self.batch_size
         batch_dict_right['step_time'] = step_time
@@ -1864,10 +1870,10 @@ class ContinuousMultiA2CBase(A2CBase):
             values = self.value_mean_std_left(values)
             returns = self.value_mean_std_left(returns)
             self.value_mean_std_left.eval()
-            self.value_mean_std_right.train()
-            values = self.value_mean_std_right(values)
-            returns = self.value_mean_std_right(returns)
-            self.value_mean_std_right.eval()
+            # self.value_mean_std_right.train()
+            # values = self.value_mean_std_right(values)
+            # returns = self.value_mean_std_right(returns)
+            # self.value_mean_std_right.eval()
 
         advantages = torch.sum(advantages, axis=1)
 
@@ -1926,10 +1932,10 @@ class ContinuousMultiA2CBase(A2CBase):
         advantages = returns - values
 
         if self.normalize_value:
-            self.value_mean_std_left.train()
-            values = self.value_mean_std_left(values)
-            returns = self.value_mean_std_left(returns)
-            self.value_mean_std_left.eval()
+            # self.value_mean_std_left.train()
+            # values = self.value_mean_std_left(values)
+            # returns = self.value_mean_std_left(returns)
+            # self.value_mean_std_left.eval()
             self.value_mean_std_right.train()
             values = self.value_mean_std_right(values)
             returns = self.value_mean_std_right(returns)
@@ -2001,15 +2007,15 @@ class ContinuousMultiA2CBase(A2CBase):
                 res_dict_right = self.get_action_values_right(self.obs)
             self.rnn_states_left = res_dict_left['rnn_states']
             self.rnn_states_right = res_dict_right['rnn_states']
-            self.experience_buffer_left.update_data('obses', n, self.obs['obs'])
-            self.experience_buffer_left.update_data('dones', n, self.dones.byte())
-            self.experience_buffer_right.update_data('obses', n, self.obs['obs'])
-            self.experience_buffer_right.update_data('dones', n, self.dones.byte())
+            self.experience_buffer_left.update_data_left('obses', n, self.obs['obs'])
+            self.experience_buffer_left.update_data_left('dones', n, self.dones.byte())
+            self.experience_buffer_right.update_data_right('obses', n, self.obs['obs'])
+            self.experience_buffer_right.update_data_right('dones', n, self.dones.byte())
 
             for k in update_list_left:
-                self.experience_buffer_left.update_data(k, n, res_dict_left[k])
+                self.experience_buffer_left.update_data_left(k, n, res_dict_left[k])
             for k in update_list_right:
-                self.experience_buffer_right.update_data(k, n, res_dict_right[k])
+                self.experience_buffer_right.update_data_right(k, n, res_dict_right[k])
             if self.has_central_value:
                 self.experience_buffer.update_data('states', n, self.obs['states'])
 
@@ -2034,8 +2040,8 @@ class ContinuousMultiA2CBase(A2CBase):
                 shaped_rewards_right += self.gamma * res_dict_right['values'] * self.cast_obs(infos['time_outs']).unsqueeze(
                     1).float()
 
-            self.experience_buffer_left.update_data('rewards', n, shaped_rewards_left)
-            self.experience_buffer_right.update_data('rewards', n, shaped_rewards_right)
+            self.experience_buffer_left.update_data_left('rewards', n, shaped_rewards_left)
+            self.experience_buffer_right.update_data_right('rewards', n, shaped_rewards_right)
 
             self.current_rewards_left += rewards_left
             self.current_rewards_right += rewards_right
@@ -2051,10 +2057,10 @@ class ContinuousMultiA2CBase(A2CBase):
                 if self.has_central_value:
                     self.central_value_net.post_step_rnn(all_done_indices)
 
-            self.game_rewards_left.update(self.current_rewards_left[env_done_indices])
-            self.game_rewards_right.update(self.current_rewards_right[env_done_indices])
-            self.game_lengths_left.update(self.current_lengths_left[env_done_indices])
-            self.game_lengths_right.update(self.current_lengths_right[env_done_indices])
+            self.game_rewards_left.update_left(self.current_rewards_left[env_done_indices])
+            self.game_rewards_right.update_right(self.current_rewards_right[env_done_indices])
+            self.game_lengths_left.update_left(self.current_lengths_left[env_done_indices])
+            self.game_lengths_right.update_right(self.current_lengths_right[env_done_indices])
             self.algo_observer_left.process_infos(infos, env_done_indices)
             self.algo_observer_right.process_infos(infos, env_done_indices)
 
@@ -2080,8 +2086,8 @@ class ContinuousMultiA2CBase(A2CBase):
         mb_advs_right = self.discount_values(fdones, last_values_right, mb_fdones_right, mb_values_right, mb_rewards_right)
         mb_returns_left = mb_advs_left + mb_values_left
         mb_returns_right = mb_advs_right + mb_values_right
-        batch_dict_left = self.experience_buffer_left.get_transformed_list(swap_and_flatten01, self.tensor_list_left)
-        batch_dict_right = self.experience_buffer_right.get_transformed_list(swap_and_flatten01, self.tensor_list_right)
+        batch_dict_left = self.experience_buffer_left.get_transformed_list_left(swap_and_flatten01, self.tensor_list_left)
+        batch_dict_right = self.experience_buffer_right.get_transformed_list_right(swap_and_flatten01, self.tensor_list_right)
         batch_dict_left['returns'] = swap_and_flatten01(mb_returns_left)
         batch_dict_right['returns'] = swap_and_flatten01(mb_returns_right)
         batch_dict_left['played_frames'] = self.batch_size
@@ -2159,15 +2165,15 @@ class ContinuousMultiA2CBase(A2CBase):
                     self.writer.add_scalar('losses/aug_loss', np.mean(aug_losses), frame)
 
                 if self.game_rewards_left.current_size > 0:
-                    mean_rewards_left = self.game_rewards_left.get_mean()
-                    mean_lengths_left = self.game_lengths_left.get_mean()
+                    mean_rewards_left = self.game_rewards_left.get_mean_left()
+                    mean_lengths_left = self.game_lengths_left.get_mean_left()
                     self.mean_rewards_left = mean_rewards_left[0]
                     if self.mean_rewards_left > 13000:
                         print("self.mean_rewards_left>13000")
                     print('mean_rewards_left: {}, mean_length_left: {}'.format(self.mean_rewards_left, mean_lengths_left))
                 if self.game_rewards_right.current_size > 0:
-                    mean_rewards_right = self.game_rewards_right.get_mean()
-                    mean_lengths_right = self.game_lengths_right.get_mean()
+                    mean_rewards_right = self.game_rewards_right.get_mean_right()
+                    mean_lengths_right = self.game_lengths_right.get_mean_right()
                     self.mean_rewards_right = mean_rewards_right[0]
                     # print('current length: {}'.format(self.current_lengths))
                     # print('current rewards: {}'.format(self.current_rewards / self.current_lengths)

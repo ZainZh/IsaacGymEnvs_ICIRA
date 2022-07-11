@@ -318,6 +318,8 @@ class ExperienceBuffer:
             self.actions_num = self.action_space.shape[0]
             self.is_continuous = True
         self.tensor_dict = {}
+        self.tensor_dict_left = {}
+        self.tensor_dict_right = {}
         self._init_from_env_info(self.env_info)
 
         self.aux_tensor_dict = aux_tensor_dict
@@ -328,6 +330,7 @@ class ExperienceBuffer:
         obs_base_shape = self.obs_base_shape
         state_base_shape = self.state_base_shape
 
+        # tensor_dict
         self.tensor_dict['obses'] = self._create_tensor_from_space(env_info['observation_space'], obs_base_shape)
         if self.has_central_value:
             self.tensor_dict['states'] = self._create_tensor_from_space(env_info['state_space'], state_base_shape)
@@ -346,6 +349,51 @@ class ExperienceBuffer:
             self.tensor_dict['mus'] = self._create_tensor_from_space(gym.spaces.Box(low=0, high=1,shape=self.actions_shape, dtype=np.float32), obs_base_shape)
             self.tensor_dict['sigmas'] = self._create_tensor_from_space(gym.spaces.Box(low=0, high=1,shape=self.actions_shape, dtype=np.float32), obs_base_shape)
 
+        #tensor_dict_left
+        self.tensor_dict_left['obses'] = self._create_tensor_from_space(env_info['observation_space'], obs_base_shape)
+        if self.has_central_value:
+            self.tensor_dict_left['states'] = self._create_tensor_from_space(env_info['state_space'], state_base_shape)
+
+        val_space = gym.spaces.Box(low=0, high=1, shape=(env_info.get('value_size', 1),))
+        self.tensor_dict_left['rewards'] = self._create_tensor_from_space(val_space, obs_base_shape)
+        self.tensor_dict_left['values'] = self._create_tensor_from_space(val_space, obs_base_shape)
+        self.tensor_dict_left['neglogpacs'] = self._create_tensor_from_space(gym.spaces.Box(low=0, high=1, shape=(), dtype=np.float32), obs_base_shape)
+        self.tensor_dict_left['dones'] = self._create_tensor_from_space(gym.spaces.Box(low=0, high=1, shape=(), dtype=np.uint8), obs_base_shape)
+        if self.is_discrete or self.is_multi_discrete:
+            self.tensor_dict_left['actions'] = self._create_tensor_from_space(gym.spaces.Box(low=0, high=1, shape=self.actions_shape, dtype=np.long), obs_base_shape)
+        if self.use_action_masks:
+            self.tensor_dict_left['action_masks'] = self._create_tensor_from_space(
+                gym.spaces.Box(low=0, high=1, shape=self.actions_shape + (np.sum(self.actions_num),), dtype=np.bool), obs_base_shape)
+        if self.is_continuous:
+            self.tensor_dict_left['actions'] = self._create_tensor_from_space(gym.spaces.Box(low=0, high=1, shape=self.actions_shape, dtype=np.float32),
+                                                                         obs_base_shape)
+            self.tensor_dict_left['mus'] = self._create_tensor_from_space(gym.spaces.Box(low=0, high=1, shape=self.actions_shape, dtype=np.float32), obs_base_shape)
+            self.tensor_dict_left['sigmas'] = self._create_tensor_from_space(gym.spaces.Box(low=0, high=1, shape=self.actions_shape, dtype=np.float32),
+                                                                        obs_base_shape)
+
+        # tensor_dict_right
+        self.tensor_dict_right['obses'] = self._create_tensor_from_space(env_info['observation_space'], obs_base_shape)
+        if self.has_central_value:
+            self.tensor_dict_right['states'] = self._create_tensor_from_space(env_info['state_space'], state_base_shape)
+
+        val_space = gym.spaces.Box(low=0, high=1, shape=(env_info.get('value_size', 1),))
+        self.tensor_dict_right['rewards'] = self._create_tensor_from_space(val_space, obs_base_shape)
+        self.tensor_dict_right['values'] = self._create_tensor_from_space(val_space, obs_base_shape)
+        self.tensor_dict_right['neglogpacs'] = self._create_tensor_from_space(gym.spaces.Box(low=0, high=1, shape=(), dtype=np.float32), obs_base_shape)
+        self.tensor_dict_right['dones'] = self._create_tensor_from_space(gym.spaces.Box(low=0, high=1, shape=(), dtype=np.uint8), obs_base_shape)
+        if self.is_discrete or self.is_multi_discrete:
+            self.tensor_dict_right['actions'] = self._create_tensor_from_space(gym.spaces.Box(low=0, high=1, shape=self.actions_shape, dtype=np.long),
+                                                                         obs_base_shape)
+        if self.use_action_masks:
+            self.tensor_dict_right['action_masks'] = self._create_tensor_from_space(
+                gym.spaces.Box(low=0, high=1, shape=self.actions_shape + (np.sum(self.actions_num),), dtype=np.bool), obs_base_shape)
+        if self.is_continuous:
+            self.tensor_dict_right['actions'] = self._create_tensor_from_space(gym.spaces.Box(low=0, high=1, shape=self.actions_shape, dtype=np.float32),
+                                                                         obs_base_shape)
+            self.tensor_dict_right['mus'] = self._create_tensor_from_space(gym.spaces.Box(low=0, high=1, shape=self.actions_shape, dtype=np.float32),
+                                                                     obs_base_shape)
+            self.tensor_dict_right['sigmas'] = self._create_tensor_from_space(gym.spaces.Box(low=0, high=1, shape=self.actions_shape, dtype=np.float32),
+                                                                        obs_base_shape)
     def _init_from_aux_dict(self, tensor_dict):
         obs_base_shape = self.obs_base_shape
         for k,v in tensor_dict.items():
@@ -378,6 +426,20 @@ class ExperienceBuffer:
         else:
             self.tensor_dict[name][index,:] = val
 
+    def update_data_left(self, name, index, val):
+        if type(val) is dict:
+            for k,v in val.items():
+                self.tensor_dict_left[name][k][index,:] = v
+        else:
+            self.tensor_dict_left[name][index,:] = val
+
+    def update_data_right(self, name, index, val):
+        if type(val) is dict:
+            for k,v in val.items():
+                self.tensor_dict_right[name][k][index,:] = v
+        else:
+            self.tensor_dict_right[name][index,:] = val
+
 
     def update_data_rnn(self, name, indices,play_mask, val):
         if type(val) is dict:
@@ -385,6 +447,20 @@ class ExperienceBuffer:
                 self.tensor_dict[name][k][indices,play_mask] = v
         else:
             self.tensor_dict[name][indices,play_mask] = val
+
+    def update_data_rnn_left(self, name, indices,play_mask, val):
+        if type(val) is dict:
+            for k,v in val:
+                self.tensor_dict_left[name][k][indices,play_mask] = v
+        else:
+            self.tensor_dict_left[name][indices,play_mask] = val
+
+    def update_data_rnn_right(self, name, indices,play_mask, val):
+        if type(val) is dict:
+            for k,v in val:
+                self.tensor_dict_right[name][k][indices,play_mask] = v
+        else:
+            self.tensor_dict_right[name][indices,play_mask] = val
 
     def get_transformed(self, transform_op):
         res_dict = {}
@@ -413,4 +489,36 @@ class ExperienceBuffer:
             else:
                 res_dict[k] = transform_op(v)
         
+        return res_dict
+
+    def get_transformed_list_left(self, transform_op, tensor_list):
+        res_dict = {}
+        for k in tensor_list:
+            v = self.tensor_dict_left.get(k)
+            if v is None:
+                continue
+            if type(v) is dict:
+                transformed_dict = {}
+                for kd,vd in v.items():
+                    transformed_dict[kd] = transform_op(vd)
+                res_dict[k] = transformed_dict
+            else:
+                res_dict[k] = transform_op(v)
+
+        return res_dict
+
+    def get_transformed_list_right(self, transform_op, tensor_list):
+        res_dict = {}
+        for k in tensor_list:
+            v = self.tensor_dict_right.get(k)
+            if v is None:
+                continue
+            if type(v) is dict:
+                transformed_dict = {}
+                for kd,vd in v.items():
+                    transformed_dict[kd] = transform_op(vd)
+                res_dict[k] = transformed_dict
+            else:
+                res_dict[k] = transform_op(v)
+
         return res_dict

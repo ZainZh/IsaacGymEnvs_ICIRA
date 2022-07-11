@@ -324,7 +324,11 @@ class AverageMeter(nn.Module):
         super(AverageMeter, self).__init__()
         self.max_size = max_size
         self.current_size = 0
+        self.current_size_left = 0
+        self.current_size_right = 0
         self.register_buffer("mean", torch.zeros(in_shape, dtype = torch.float32))
+        self.register_buffer("mean_left", torch.zeros(in_shape, dtype = torch.float32))
+        self.register_buffer("mean_right", torch.zeros(in_shape, dtype = torch.float32))
 
     def update(self, values):
         size = values.size()[0]
@@ -337,15 +341,52 @@ class AverageMeter(nn.Module):
         self.current_size = size_sum
         self.mean = (self.mean * old_size + new_mean * size) / size_sum
 
+    def update_left(self, values):
+        size = values.size()[0]
+        if size == 0:
+            return
+        new_mean = torch.mean(values.float(), dim=0)
+        size = np.clip(size, 0, self.max_size)
+        old_size = min(self.max_size - size, self.current_size_left)
+        size_sum = old_size + size
+        self.current_size_left = size_sum
+        self.mean_left = (self.mean_left * old_size + new_mean * size) / size_sum
+
+    def update_right(self, values):
+        size = values.size()[0]
+        if size == 0:
+            return
+        new_mean = torch.mean(values.float(), dim=0)
+        size = np.clip(size, 0, self.max_size)
+        old_size = min(self.max_size - size, self.current_size_right)
+        size_sum = old_size + size
+        self.current_size = size_sum
+        self.mean_right = (self.mean_right * old_size + new_mean * size) / size_sum
+
+
     def clear(self):
         self.current_size = 0
         self.mean.fill_(0)
+
+    def clear_left(self):
+        self.current_size_left = 0
+        self.mean_left.fill_(0)
+
+    def clear_right(self):
+        self.current_size_right = 0
+        self.mean_right.fill_(0)
 
     def __len__(self):
         return self.current_size
 
     def get_mean(self):
         return self.mean.squeeze(0).cpu().numpy()
+
+    def get_mean_left(self):
+        return self.mean_left.squeeze(0).cpu().numpy()
+
+    def get_mean_right(self):
+        return self.mean_right.squeeze(0).cpu().numpy()
 
 
 class IdentityRNN(nn.Module):
