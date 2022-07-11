@@ -1896,7 +1896,7 @@ class ContinuousMultiA2CBase(A2CBase):
         advantages = torch.sum(advantages, axis=1)
 
         if self.normalize_advantage:
-            if self.is_rnn_left and self.is_rnn_right:
+            if self.is_rnn_left:
                 if self.normalize_rms_advantage:
                     advantages = self.advantage_mean_std(advantages, mask=rnn_masks)
                 else:
@@ -1962,7 +1962,7 @@ class ContinuousMultiA2CBase(A2CBase):
         advantages = torch.sum(advantages, axis=1)
 
         if self.normalize_advantage:
-            if self.is_rnn_left and self.is_rnn_right:
+            if self.is_rnn_right:
                 if self.normalize_rms_advantage:
                     advantages = self.advantage_mean_std(advantages, mask=rnn_masks)
                 else:
