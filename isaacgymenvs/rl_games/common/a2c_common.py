@@ -31,6 +31,7 @@ def swap_and_flatten01(arr):
     swap and then flatten axes 0 and 1
     """
     if arr is None:
+
         return arr
     s = arr.size()
     return arr.transpose(0, 1).reshape(s[0] * s[1], *s[2:])
@@ -2109,6 +2110,7 @@ class ContinuousMultiA2CBase(A2CBase):
         return batch_dict_left, batch_dict_right
 
     def train(self):
+        global mean_reward_left, mean_length_left, mean_reward_right, mean_length_right
         self.init_tensors()
         self.last_mean_rewards = -100500
         start_time = time.time()
