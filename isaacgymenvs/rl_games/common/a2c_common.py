@@ -603,7 +603,7 @@ class A2CBase(BaseAlgorithm):
                 self.mb_rnn_states_left = [torch.zeros((num_seqs, s.size()[0], total_agents, s.size()[2]), dtype=torch.float32,
                                                        device=self.ppo_device) for s in self.rnn_states_left]
             if self.is_rnn_right:
-                self.rnn_states_right = self.model.get_default_rnn_state()
+                self.rnn_states_right = self.model_right.get_default_rnn_state()
                 self.rnn_states_right = [s.to(self.ppo_device) for s in self.rnn_states_right]
 
                 total_agents = self.num_agents * self.num_actors
