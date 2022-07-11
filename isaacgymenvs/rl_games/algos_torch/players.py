@@ -136,10 +136,11 @@ class PpoMultiPlayerContinuous(BasePlayer):
         action_left = res_dict_left['actions']
         action_right = res_dict_right['actions']
         self.states = res_dict_right['rnn_states']
+
         if is_determenistic:
             current_action = self.action_combine(mu_left,mu_right)
         else:
-            current_action = self.action_combine(action_left,action_rightt)
+            current_action = self.action_combine(action_left,action_right)
         if self.has_batch_dimension == False:
             current_action = torch.squeeze(current_action.detach())
 
