@@ -2165,52 +2165,52 @@ class ContinuousMultiA2CBase(A2CBase):
                     self.writer.add_scalar('losses/aug_loss', np.mean(aug_losses), frame)
 
                 if self.game_rewards_left.current_size > 0:
-                    mean_rewards_left = self.game_rewards_left.get_mean_left()
-                    mean_lengths_left = self.game_lengths_left.get_mean_left()
-                    self.mean_rewards_left = mean_rewards_left[0]
+                    mean_reward_left = self.game_rewards_left.get_mean_left()
+                    mean_length_left = self.game_lengths_left.get_mean_left()
+                    self.mean_rewards_left = mean_reward_left[0]
                     if self.mean_rewards_left > 13000:
                         print("self.mean_rewards_left>13000")
-                    print('mean_rewards_left: {}, mean_length_left: {}'.format(self.mean_rewards_left, mean_lengths_left))
+                    print('mean_rewards_left: {}, mean_length_left: {}'.format(self.mean_rewards_left, mean_length_left))
                 if self.game_rewards_right.current_size > 0:
-                    mean_rewards_right = self.game_rewards_right.get_mean_right()
-                    mean_lengths_right = self.game_lengths_right.get_mean_right()
-                    self.mean_rewards_right = mean_rewards_right[0]
+                    mean_reward_right = self.game_rewards_right.get_mean_right()
+                    mean_length_right = self.game_lengths_right.get_mean_right()
+                    self.mean_rewards_right = mean_reward_right[0]
                     # print('current length: {}'.format(self.current_lengths))
                     # print('current rewards: {}'.format(self.current_rewards / self.current_lengths)
-                    print('mean_rewards_right: {}, mean_length_right: {}'.format(self.mean_rewards_right, mean_lengths_right))
+                    print('mean_rewards_right: {}, mean_length_right: {}'.format(self.mean_rewards_right, mean_length_right))
 
                     for i in range(self.value_size):
                         rewards_name = 'rewards' if i == 0 else 'rewards{0}'.format(i)
-                        self.writer.add_scalar(rewards_name + '/step'.format(i), mean_rewards_left[i], frame)
-                        self.writer.add_scalar(rewards_name + '/iter'.format(i), mean_rewards_left[i], epoch_num)
-                        self.writer.add_scalar(rewards_name + '/time'.format(i), mean_rewards_left[i], total_time)
-                        self.writer.add_scalar(rewards_name + '/step'.format(i), mean_rewards_right[i], frame)
-                        self.writer.add_scalar(rewards_name + '/iter'.format(i), mean_rewards_right[i], epoch_num)
-                        self.writer.add_scalar(rewards_name + '/time'.format(i), mean_rewards_right[i], total_time)
+                        self.writer.add_scalar(rewards_name + '/step'.format(i), mean_reward_left[i], frame)
+                        self.writer.add_scalar(rewards_name + '/iter'.format(i), mean_reward_left[i], epoch_num)
+                        self.writer.add_scalar(rewards_name + '/time'.format(i), mean_reward_left[i], total_time)
+                        self.writer.add_scalar(rewards_name + '/step'.format(i), mean_reward_right[i], frame)
+                        self.writer.add_scalar(rewards_name + '/iter'.format(i), mean_reward_right[i], epoch_num)
+                        self.writer.add_scalar(rewards_name + '/time'.format(i), mean_reward_right[i], total_time)
 
-                    self.writer.add_scalar('episode_lengths_left/step', mean_lengths_left, frame)
-                    self.writer.add_scalar('episode_lengths_left/iter', mean_lengths_left, epoch_num)
-                    self.writer.add_scalar('episode_lengths_left/time', mean_lengths_left, total_time)
-                    self.writer.add_scalar('episode_lengths_right/step', mean_lengths_right, frame)
-                    self.writer.add_scalar('episode_lengths_right/iter', mean_lengths_right, epoch_num)
-                    self.writer.add_scalar('episode_lengths_right/time', mean_lengths_right, total_time)
-                    self.writer.add_scalar('episode_lengths_all/step', mean_lengths_left + mean_lengths_right, frame)
-                    self.writer.add_scalar('episode_lengths_all/iter', mean_lengths_left + mean_lengths_right, epoch_num)
-                    self.writer.add_scalar('episode_lengths_allo/time', mean_lengths_left + mean_lengths_right, total_time)
+                    self.writer.add_scalar('episode_lengths_left/step', mean_length_left, frame)
+                    self.writer.add_scalar('episode_lengths_left/iter', mean_length_left, epoch_num)
+                    self.writer.add_scalar('episode_lengths_left/time', mean_length_left, total_time)
+                    self.writer.add_scalar('episode_lengths_right/step', mean_length_right, frame)
+                    self.writer.add_scalar('episode_lengths_right/iter', mean_length_right, epoch_num)
+                    self.writer.add_scalar('episode_lengths_right/time', mean_length_right, total_time)
+                    self.writer.add_scalar('episode_lengths_all/step', mean_length_left + mean_length_right, frame)
+                    self.writer.add_scalar('episode_lengths_all/iter', mean_length_left + mean_length_right, epoch_num)
+                    self.writer.add_scalar('episode_lengths_allo/time', mean_length_left + mean_length_right, total_time)
 
                     if self.has_self_play_config:
                         self.self_play_manager.update(self)
 
-                    checkpoint_name = self.config['name'] + '_ep_' + str(epoch_num) + '_rew_' + str(mean_rewards_left[0] + mean_rewards_right[0])
+                    checkpoint_name = self.config['name'] + '_ep_' + str(epoch_num) + '_rew_' + str(mean_reward_left[0] + mean_reward_right[0])
 
                     if self.save_freq > 0:
-                        if (epoch_num % self.save_freq == 0) and (mean_rewards_left[0] + mean_rewards_right[0] <= self.last_mean_rewards):
+                        if (epoch_num % self.save_freq == 0) and (mean_reward_left[0] + mean_reward_right[0] <= self.last_mean_rewards):
                             self.save(os.path.join(self.nn_dir, 'last_' + checkpoint_name))
 
-                    if mean_rewards_left[0] + mean_rewards_right[0] > self.last_mean_rewards and epoch_num >= self.save_best_after:
-                        print('saving next best left rewards: ', mean_rewards_left[0])
-                        print('saving next best right rewards: ', mean_rewards_right[0])
-                        self.last_mean_rewards = mean_rewards_left[0] + mean_rewards_right[0]
+                    if mean_reward_left[0] + mean_reward_right[0] > self.last_mean_rewards and epoch_num >= self.save_best_after:
+                        print('saving next best left rewards: ', mean_reward_left[0])
+                        print('saving next best right rewards: ', mean_reward_right[0])
+                        self.last_mean_rewards = mean_reward_left[0] + mean_reward_right[0]
                         self.save(os.path.join(self.nn_dir, self.config['name']))
                         if self.last_mean_rewards > self.config['score_to_win']:
                             print('Network won!')
@@ -2220,7 +2220,7 @@ class ContinuousMultiA2CBase(A2CBase):
                 if epoch_num > self.max_epochs:
                     self.save(os.path.join(self.nn_dir,
                                            'last_' + self.config['name'] + 'ep' + str(epoch_num) + 'rew' + str(
-                                               mean_rewards_left + mean_rewards_right)))
+                                               mean_reward_left + mean_reward_right)))
                     print('MAX EPOCHS NUM!')
                     should_exit = True
 
