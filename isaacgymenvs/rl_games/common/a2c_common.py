@@ -2021,11 +2021,7 @@ class ContinuousMultiA2CBase(A2CBase):
                 self.experience_buffer.update_data('states', n, self.obs['states'])
 
             step_time_start = time.time()
-            # split actions from two dics and combine actions_left in dic1 with actions_right in dic2
-            actions_left_left, actions_right_left = self.action_split(res_dict_left['actions'])
-            actions_left_right, actions_right_right = self.action_split(res_dict_right['actions'])
-            actions_new = self.action_combine(actions_left_left, actions_right_right)
-
+            actions_new = self.action_combine(res_dict_left['actions'], res_dict_right['actions'])
             # Todo: add another franka arm actions
             self.obs, rewards, self.dones, infos, rewards_left, rewards_right = self.env_step(actions_new)
             step_time_end = time.time()
