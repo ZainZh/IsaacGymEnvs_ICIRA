@@ -67,8 +67,6 @@ class A2CAgent(a2c_common.ContinuousA2CBase):
 
         self.use_experimental_cv = self.config.get('use_experimental_cv', True)
         self.dataset = datasets.PPODataset(self.batch_size, self.minibatch_size, self.is_discrete, self.is_rnn, self.ppo_device, self.seq_len)
-        self.dataset_left = datasets.PPODataset(self.batch_size, self.minibatch_size, self.is_discrete, self.is_rnn, self.ppo_device, self.seq_len)
-        self.dataset_right = datasets.PPODataset(self.batch_size, self.minibatch_size, self.is_discrete, self.is_rnn, self.ppo_device, self.seq_len)
         if self.normalize_value:
             self.value_mean_std = self.central_value_net.model.value_mean_std if self.has_central_value else self.model.value_mean_std
 
@@ -264,8 +262,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
         self.use_experimental_cv = self.config.get('use_experimental_cv', True)
         # self.dataset = datasets.PPODataset(self.batch_size, self.minibatch_size, self.is_discrete, self.is_rnn, self.ppo_device, self.seq_len)
-        self.dataset_left = datasets.PPODataset(self.batch_size, self.minibatch_size, self.is_discrete, self.is_rnn_left, self.ppo_device, self.seq_len)
-        self.dataset_right = datasets.PPODataset(self.batch_size, self.minibatch_size, self.is_discrete, self.is_rnn_right, self.ppo_device, self.seq_len)
+        self.dataset_left = datasets.PPODataset_left(self.batch_size, self.minibatch_size, self.is_discrete, self.is_rnn_left, self.ppo_device, self.seq_len)
+        self.dataset_right = datasets.PPODataset_right(self.batch_size, self.minibatch_size, self.is_discrete, self.is_rnn_right, self.ppo_device, self.seq_len)
         if self.normalize_value:
             self.value_mean_std_left = self.central_value_net.model.value_mean_std if self.has_central_value else self.model_left.value_mean_std
             self.value_mean_std_right = self.central_value_net.model.value_mean_std if self.has_central_value else self.model_right.value_mean_std
