@@ -119,14 +119,14 @@ class PPODataset_left(Dataset):
         self.special_names = ['rnn_states']
 
     def update_values_dict(self, values_dict):
-        self.values_dict = values_dict
+        self.values_dict_left = values_dict
 
 
     def update_mu_sigma(self, mu, sigma):
         start = self.last_range[0]
         end = self.last_range[1]
-        self.values_dict['mu'][start:end] = mu
-        self.values_dict['sigma'][start:end] = sigma
+        self.values_dict_left['mu'][start:end] = mu
+        self.values_dict_left['sigma'][start:end] = sigma
 
 
     def __len__(self):
@@ -139,7 +139,7 @@ class PPODataset_left(Dataset):
         end = gend * self.seq_len
         self.last_range = (start, end)
         input_dict = {}
-        for k,v in self.values_dict.items():
+        for k,v in self.values_dict_left.items():
             if k not in self.special_names:
                 if isinstance(v, dict):
                     v_dict = {kd:vd[start:end] for kd, vd in v.items()}
@@ -150,7 +150,7 @@ class PPODataset_left(Dataset):
                     else:
                         input_dict[k] = None
 
-        rnn_states = self.values_dict['rnn_states']
+        rnn_states = self.values_dict_left['rnn_states']
         input_dict['rnn_states'] = [s[:, gstart:gend, :].contiguous() for s in rnn_states]
 
         return input_dict
@@ -160,7 +160,7 @@ class PPODataset_left(Dataset):
         end = (idx + 1) * self.minibatch_size
         self.last_range = (start, end)
         input_dict = {}
-        for k,v in self.values_dict.items():
+        for k,v in self.values_dict_left.items():
             if k not in self.special_names and v is not None:
                 if type(v) is dict:
                     v_dict = { kd:vd[start:end] for kd, vd in v.items() }
@@ -198,14 +198,14 @@ class PPODataset_right(Dataset):
         self.special_names = ['rnn_states']
 
     def update_values_dict(self, values_dict):
-        self.values_dict = values_dict
+        self.values_dict_right = values_dict
 
 
     def update_mu_sigma(self, mu, sigma):
         start = self.last_range[0]
         end = self.last_range[1]
-        self.values_dict['mu'][start:end] = mu
-        self.values_dict['sigma'][start:end] = sigma
+        self.values_dict_right['mu'][start:end] = mu
+        self.values_dict_right['sigma'][start:end] = sigma
 
     def __len__(self):
         return self.length
@@ -217,7 +217,7 @@ class PPODataset_right(Dataset):
         end = gend * self.seq_len
         self.last_range = (start, end)
         input_dict = {}
-        for k,v in self.values_dict.items():
+        for k,v in self.values_dict_right.items():
             if k not in self.special_names:
                 if isinstance(v, dict):
                     v_dict = {kd:vd[start:end] for kd, vd in v.items()}
@@ -228,7 +228,7 @@ class PPODataset_right(Dataset):
                     else:
                         input_dict[k] = None
 
-        rnn_states = self.values_dict['rnn_states']
+        rnn_states = self.values_dict_right['rnn_states']
         input_dict['rnn_states'] = [s[:, gstart:gend, :].contiguous() for s in rnn_states]
 
         return input_dict
@@ -238,7 +238,7 @@ class PPODataset_right(Dataset):
         end = (idx + 1) * self.minibatch_size
         self.last_range = (start, end)
         input_dict = {}
-        for k,v in self.values_dict.items():
+        for k,v in self.values_dict_right.items():
             if k not in self.special_names and v is not None:
                 if type(v) is dict:
                     v_dict = { kd:vd[start:end] for kd, vd in v.items() }
