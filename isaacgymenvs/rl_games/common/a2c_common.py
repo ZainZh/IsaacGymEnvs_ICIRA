@@ -1736,12 +1736,12 @@ class ContinuousMultiA2CBase(A2CBase):
         last_values_left = self.get_values_left(self.obs)
         last_values_right = self.get_values_right(self.obs)
         fdones = self.dones.float()
-        mb_fdones_left = self.experience_buffer_left.tensor_dict['dones'].float()
-        mb_values_left = self.experience_buffer_left.tensor_dict['values']
-        mb_rewards_left = self.experience_buffer_left.tensor_dict['rewards']
-        mb_fdones_right = self.experience_buffer_right.tensor_dict['dones'].float()
-        mb_values_right = self.experience_buffer_right.tensor_dict['values']
-        mb_rewards_right = self.experience_buffer_right.tensor_dict['rewards']
+        mb_fdones_left = self.experience_buffer_left.tensor_dict_left['dones'].float()
+        mb_values_left = self.experience_buffer_left.tensor_dict_left['values']
+        mb_rewards_left = self.experience_buffer_left.tensor_dict_left['rewards']
+        mb_fdones_right = self.experience_buffer_right.tensor_dict_right['dones'].float()
+        mb_values_right = self.experience_buffer_right.tensor_dict_right['values']
+        mb_rewards_right = self.experience_buffer_right.tensor_dict_right['rewards']
         mb_advs_left = self.discount_values(fdones, last_values_left, mb_fdones_left, mb_values_left, mb_rewards_left)
         mb_returns_left = mb_advs_left + mb_values_left
         mb_advs_right = self.discount_values(fdones, last_values_right, mb_fdones_right, mb_values_right, mb_rewards_right)
@@ -2072,13 +2072,13 @@ class ContinuousMultiA2CBase(A2CBase):
         last_values_right = self.get_values_right(self.obs)
 
         fdones = self.dones.float()
-        mb_fdones_left = self.experience_buffer_left.tensor_dict['dones'].float()
-        mb_fdones_right = self.experience_buffer_right.tensor_dict['dones'].float()
+        mb_fdones_left = self.experience_buffer_left.tensor_dict_left['dones'].float()
+        mb_fdones_right = self.experience_buffer_right.tensor_dict_right['dones'].float()
 
-        mb_values_left = self.experience_buffer_left.tensor_dict['values']
-        mb_values_right = self.experience_buffer_right.tensor_dict['values']
-        mb_rewards_left = self.experience_buffer_left.tensor_dict['rewards']
-        mb_rewards_right = self.experience_buffer_right.tensor_dict['rewards']
+        mb_values_left = self.experience_buffer_left.tensor_dict_left['values']
+        mb_values_right = self.experience_buffer_right.tensor_dict_right['values']
+        mb_rewards_left = self.experience_buffer_left.tensor_dict_left['rewards']
+        mb_rewards_right = self.experience_buffer_right.tensor_dict_right['rewards']
         mb_advs_left = self.discount_values(fdones, last_values_left, mb_fdones_left, mb_values_left, mb_rewards_left)
         mb_advs_right = self.discount_values(fdones, last_values_right, mb_fdones_right, mb_values_right, mb_rewards_right)
         mb_returns_left = mb_advs_left + mb_values_left
