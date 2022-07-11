@@ -1517,8 +1517,6 @@ class ContinuousA2CBase(A2CBase):
                 self.hvd.sync_stats(self)
             # cleaning memory to optimize space
             self.dataset.update_values_dict(None)
-            self.dataset_left.update_values_dict(None)
-            self.dataset_right.update_values_dict(None)
             should_exit = False
 
             if self.rank == 0:
@@ -1832,8 +1830,8 @@ class ContinuousMultiA2CBase(A2CBase):
                 entropies_right.append(entropy_right)
                 if self.bounds_loss_coef is not None:
                     b_losses_right.append(b_loss_right)
-                self.dataset_left.update_mu_sigma(cmu_left, csigma_left)
-                self.dataset_right.update_mu_sigma(cmu_right, csigma_right)
+                self.dataset_left.update_mu_sigma_left(cmu_left, csigma_left)
+                self.dataset_right.update_mu_sigma_right(cmu_right, csigma_right)
 
             av_kls_left = torch_ext.mean_list(ep_kls_left)
             av_kls_right = torch_ext.mean_list(ep_kls_right)
@@ -1920,7 +1918,7 @@ class ContinuousMultiA2CBase(A2CBase):
         dataset_dict['mu'] = mus
         dataset_dict['sigma'] = sigmas
 
-        self.dataset_left.update_values_dict(dataset_dict)
+        self.dataset_left.update_values_dict_left(dataset_dict)
 
         if self.has_central_value:
             dataset_dict = {}
@@ -1986,7 +1984,7 @@ class ContinuousMultiA2CBase(A2CBase):
         dataset_dict['mu'] = mus
         dataset_dict['sigma'] = sigmas
 
-        self.dataset_right.update_values_dict(dataset_dict)
+        self.dataset_right.update_values_dict_right(dataset_dict)
 
         if self.has_central_value:
             dataset_dict = {}
@@ -2150,8 +2148,8 @@ class ContinuousMultiA2CBase(A2CBase):
                 self.hvd.sync_stats(self)
             # cleaning memory to optimize space
 
-            self.dataset_left.update_values_dict(None)
-            self.dataset_right.update_values_dict(None)
+            self.dataset_left.update_values_dict_left(None)
+            self.dataset_right.update_values_dict_right(None)
             should_exit = False
 
             if self.rank == 0:
