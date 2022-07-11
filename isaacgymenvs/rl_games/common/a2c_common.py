@@ -415,6 +415,23 @@ class A2CBase(BaseAlgorithm):
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = lr
 
+    def update_lr_left(self, lr):
+        if self.multi_gpu:
+            lr_tensor = torch.tensor([lr])
+            self.hvd.broadcast_value(lr_tensor, 'learning_rate')
+            lr = lr_tensor.item()
+
+        for param_group in self.optimizer_left.param_groups:
+            param_group['lr'] = lr
+
+    def update_lr_right(self, lr):
+        if self.multi_gpu:
+            lr_tensor = torch.tensor([lr])
+            self.hvd.broadcast_value(lr_tensor, 'learning_rate')
+            lr = lr_tensor.item()
+        for param_group in self.optimizer_right.param_groups:
+            param_group['lr'] = lr
+
         # if self.has_central_value:
         #    self.central_value_net.update_lr(lr)
 
@@ -1458,8 +1475,7 @@ class ContinuousA2CBase(A2CBase):
         dataset_dict['sigma'] = sigmas
 
         self.dataset.update_values_dict(dataset_dict)
-        self.dataset_left.update_values_dict(dataset_dict)
-        self.dataset_right.update_values_dict(dataset_dict)
+
 
         if self.has_central_value:
             dataset_dict = {}
@@ -1519,9 +1535,10 @@ class ContinuousA2CBase(A2CBase):
                     print(
                         f'fps step: {fps_step:.1f} fps step and policy inference: {fps_step_inference:.1f} fps total: {fps_total:.1f} epoch: {epoch_num}/{self.max_epochs}')
 
-                self.write_stats(total_time, epoch_num, step_time, play_time, update_time, a_losses_left, c_losses_left,
-                                 entropies_left, kls_left, last_lr_left, lr_mul_left, a_losses_right, c_losses_right,
-                                 entropies_right, kls_right, last_lr_right, lr_mul_right, frame, scaled_time, scaled_play_time, curr_frames)
+                self.write_stats(total_time, epoch_num, step_time, play_time, update_time,
+                                 a_losses_left, c_losses_left,entropies_left, kls_left, last_lr_left, lr_mul_left,
+                                 a_losses_right, c_losses_right,entropies_right, kls_right, last_lr_right, lr_mul_right,
+                                 frame, scaled_time, scaled_play_time, curr_frames)
                 if len(b_losses_left) > 0:
                     self.writer.add_scalar('losses/bounds_loss_left', torch_ext.mean_list(b_losses).item(), frame)
                 if len(b_losses_right) > 0:
@@ -1828,8 +1845,8 @@ class ContinuousMultiA2CBase(A2CBase):
                                                                               av_kls_left.item())
             self.last_lr_right, self.entropy_coef_right = self.scheduler.update(self.last_lr_right, self.entropy_coef_right, self.epoch_num, 0,
                                                                                 av_kls_right.item())
-            self.update_lr(self.last_lr_left)
-            self.update_lr(self.last_lr_right)
+            self.update_lr_left(self.last_lr_left)
+            self.update_lr_right(self.last_lr_right)
 
             kls_left.append(av_kls_left)
             kls_right.append(av_kls_right)
