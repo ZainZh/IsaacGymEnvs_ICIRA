@@ -2110,7 +2110,7 @@ class ContinuousMultiA2CBase(A2CBase):
         return batch_dict_left, batch_dict_right
 
     def train(self):
-        global mean_reward_left, mean_length_left, mean_reward_right, mean_length_right
+        # global mean_reward_left, mean_length_left, mean_reward_right, mean_length_right
         self.init_tensors()
         self.last_mean_rewards = -100500
         start_time = time.time()
@@ -2170,8 +2170,8 @@ class ContinuousMultiA2CBase(A2CBase):
                     mean_reward_left = self.game_rewards_left.get_mean_left()
                     mean_length_left = self.game_lengths_left.get_mean_left()
                     self.mean_rewards_left = mean_reward_left[0]
-                    if self.mean_rewards_left > 13000:
-                        print("self.mean_rewards_left>13000")
+                    # if self.mean_rewards_left > 13000:
+                    #     print("self.mean_rewards_left>13000")
                     print('mean_rewards_left: {}, mean_length_left: {}'.format(self.mean_rewards_left, mean_length_left))
                 if self.game_rewards_right.current_size > 0:
                     mean_reward_right = self.game_rewards_right.get_mean_right()

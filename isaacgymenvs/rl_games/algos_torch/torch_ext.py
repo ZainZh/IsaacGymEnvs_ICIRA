@@ -360,7 +360,7 @@ class AverageMeter(nn.Module):
         size = np.clip(size, 0, self.max_size)
         old_size = min(self.max_size - size, self.current_size_right)
         size_sum = old_size + size
-        self.current_size = size_sum
+        self.current_size_right = size_sum
         self.mean_right = (self.mean_right * old_size + new_mean * size) / size_sum
 
 
