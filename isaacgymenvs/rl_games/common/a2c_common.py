@@ -1530,12 +1530,12 @@ class ContinuousA2CBase(A2CBase):
                 if self.has_soft_aug:
                     self.writer.add_scalar('losses/aug_loss', np.mean(aug_losses), frame)
 
-                if self.game_rewards_left.current_size > 0:
+                if self.game_rewards_left.current_size_left > 0:
                     mean_rewards_left = self.game_rewards_left.get_mean_left()
                     mean_lengths_left = self.game_lengths_left.get_mean_left()
                     self.mean_rewards_left = mean_rewards_left[0]
                     print('mean_rewards_left: {}, mean_length_left: {}'.format(self.mean_rewards_left, mean_lengths_left))
-                if self.game_rewards_right.current_size > 0:
+                if self.game_rewards_right.current_size_right > 0:
                     mean_rewards_right = self.game_rewards_right.get_mean_right()
                     mean_lengths_right = self.game_lengths_right.get_mean_right()
                     self.mean_rewards_right = mean_rewards_right[0]
@@ -2166,14 +2166,14 @@ class ContinuousMultiA2CBase(A2CBase):
                 if self.has_soft_aug:
                     self.writer.add_scalar('losses/aug_loss', np.mean(aug_losses), frame)
 
-                if self.game_rewards_left.current_size > 0:
+                if self.game_rewards_left.current_size_left > 0:
                     mean_reward_left = self.game_rewards_left.get_mean_left()
                     mean_length_left = self.game_lengths_left.get_mean_left()
                     self.mean_rewards_left = mean_reward_left[0]
                     # if self.mean_rewards_left > 13000:
                     #     print("self.mean_rewards_left>13000")
                     print('mean_rewards_left: {}, mean_length_left: {}'.format(self.mean_rewards_left, mean_length_left))
-                if self.game_rewards_right.current_size > 0:
+                if self.game_rewards_right.current_size_right > 0:
                     mean_reward_right = self.game_rewards_right.get_mean_right()
                     mean_length_right = self.game_lengths_right.get_mean_right()
                     self.mean_rewards_right = mean_reward_right[0]
