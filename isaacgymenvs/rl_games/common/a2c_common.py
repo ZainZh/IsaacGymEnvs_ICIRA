@@ -1695,8 +1695,8 @@ class ContinuousMultiA2CBase(A2CBase):
 
             # split actions from two dics and combine actions_left in dic1 with actions_right in dic2
 
-            actions_new = self.obs['obs'][:,-18:]
-
+            # actions_new = self.obs['obs'][:,-18:]
+            actions_new=self.action_combine(res_dict_left['actions'],res_dict_right['actions'])
             # Todo: add another franka arm actions
             self.obs, rewards, self.dones, infos, rewards_left, rewards_right = self.env_step(actions_new)
 
@@ -2036,8 +2036,9 @@ class ContinuousMultiA2CBase(A2CBase):
                 self.experience_buffer.update_data('states', n, self.obs['states'])
 
             step_time_start = time.time()
-            actions_new = self.obs['obs'][:,-18:]
+            # actions_new = self.obs['obs'][:,-18:]
             # Todo: add another franka arm actions
+            actions_new = self.action_combine(res_dict_left['actions'], res_dict_right['actions'])
             self.obs, rewards, self.dones, infos, rewards_left, rewards_right = self.env_step(actions_new)
             step_time_end = time.time()
 
@@ -2193,10 +2194,11 @@ class ContinuousMultiA2CBase(A2CBase):
                     print('mean_rewards_right: {}, mean_length_right: {}'.format(self.mean_rewards_right, mean_length_right))
 
                     for i in range(self.value_size):
-                        rewards_name = 'rewards' if i == 0 else 'rewards{0}'.format(i)
+                        rewards_name = 'left_rewards' if i == 0 else 'rewards{0}'.format(i)
                         self.writer.add_scalar(rewards_name + '/step'.format(i), mean_reward_left[i], frame)
                         self.writer.add_scalar(rewards_name + '/iter'.format(i), mean_reward_left[i], epoch_num)
                         self.writer.add_scalar(rewards_name + '/time'.format(i), mean_reward_left[i], total_time)
+                        rewards_name = 'right_rewards' if i == 0 else 'rewards{0}'.format(i)
                         self.writer.add_scalar(rewards_name + '/step'.format(i), mean_reward_right[i], frame)
                         self.writer.add_scalar(rewards_name + '/iter'.format(i), mean_reward_right[i], epoch_num)
                         self.writer.add_scalar(rewards_name + '/time'.format(i), mean_reward_right[i], total_time)
