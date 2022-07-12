@@ -136,15 +136,6 @@ class A2CAgent(a2c_common.ContinuousA2CBase):
             else:
                 b_loss = torch.zeros(1, device=self.ppo_device)
 
-            if self.add_cql:
-                if self.cql_version == 0:
-                    # CQL-H
-                    cql_loss = torch.logsumexp(values, dim=1).mean() - values.mean()
-                    c_loss = c_loss + cql_loss
-                elif self.cql_version == 1:
-                    # CQL-rho
-                    cql_loss = F.normalize(torch.exp(values)) * values - values
-                    c_loss = c_loss + cql_loss
 
             losses, sum_mask = torch_ext.apply_masks([a_loss.unsqueeze(1), c_loss, entropy.unsqueeze(1), b_loss.unsqueeze(1)], rnn_masks)
             a_loss, c_loss, entropy, b_loss = losses[0], losses[1], losses[2], losses[3]
@@ -340,15 +331,6 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             else:
                 b_loss = torch.zeros(1, device=self.ppo_device)
 
-            if self.add_cql:
-                if self.cql_version == 0:
-                    # CQL-H
-                    cql_loss = torch.logsumexp(values, dim=1).mean() - values.mean()
-                    c_loss = c_loss + cql_loss
-                elif self.cql_version == 1:
-                    # CQL-rho
-                    cql_loss = F.normalize(torch.exp(values)) * values - values
-                    c_loss = c_loss + cql_loss
 
             losses, sum_mask = torch_ext.apply_masks([a_loss.unsqueeze(1), c_loss, entropy.unsqueeze(1), b_loss.unsqueeze(1)], rnn_masks)
             a_loss, c_loss, entropy, b_loss = losses[0], losses[1], losses[2], losses[3]
@@ -361,7 +343,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 for param in self.model_left.parameters():
                     param.grad = None
 
-        self.scaler.scale(loss).backward()
+        self.scaler_left.scale(loss).backward()
         # TODO: Refactor this ugliest code of they year
         self.trancate_gradients_and_step()
 
@@ -452,7 +434,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 for param in self.model_right.parameters():
                     param.grad = None
 
-        self.scaler.scale(loss).backward()
+        self.scaler_right.scale(loss).backward()
         # TODO: Refactor this ugliest code of they year
         self.trancate_gradients_and_step()
 
