@@ -1704,8 +1704,8 @@ class ContinuousMultiA2CBase(A2CBase):
             step_time_end = time.time()
 
             step_time += (step_time_end - step_time_start)
-
-            # shaped_rewards = self.rewards_shaper(rewards)
+            # two rewards
+            '''
             shaped_rewards_left = self.rewards_shaper(rewards_left)
             shaped_rewards_right = self.rewards_shaper(rewards_right)
 
@@ -1728,6 +1728,31 @@ class ContinuousMultiA2CBase(A2CBase):
             self.current_rewards_left += rewards_left
             self.current_lengths_left += 1
             self.current_rewards_right += rewards_right
+            self.current_lengths_right += 1
+            '''
+            # shaped_rewards = self.rewards_shaper(rewards)
+            shaped_rewards_left = self.rewards_shaper(rewards)
+            shaped_rewards_right = self.rewards_shaper(rewards)
+
+            # if self.value_bootstrap and 'time_outs' in infos:
+            #     shaped_rewards += self.gamma * res_dict['values'] * self.cast_obs(infos['time_outs']).unsqueeze(
+            #         1).float()
+            if self.value_bootstrap and 'time_outs' in infos:
+                shaped_rewards_left += self.gamma * res_dict_left['values'] * self.cast_obs(infos['time_outs']).unsqueeze(
+                    1).float()
+            if self.value_bootstrap and 'time_outs' in infos:
+                shaped_rewards_right += self.gamma * res_dict_right['values'] * self.cast_obs(infos['time_outs']).unsqueeze(
+                    1).float()
+
+            # self.experience_buffer.update_data('rewards', n, shaped_rewards)
+            self.experience_buffer_left.update_data_left('rewards', n, shaped_rewards_left)
+            self.experience_buffer_right.update_data_right('rewards', n, shaped_rewards_right)
+
+            # self.current_rewards += rewards
+            # self.current_lengths += 1
+            self.current_rewards_left += rewards
+            self.current_lengths_left += 1
+            self.current_rewards_right += rewards
             self.current_lengths_right += 1
             all_done_indices = self.dones.nonzero(as_tuple=False)
             env_done_indices = self.dones.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
@@ -2044,6 +2069,8 @@ class ContinuousMultiA2CBase(A2CBase):
 
             step_time += (step_time_end - step_time_start)
 
+            # two reward
+            '''
             shaped_rewards_left = self.rewards_shaper(rewards_left)
             shaped_rewards_right = self.rewards_shaper(rewards_right)
 
@@ -2058,6 +2085,19 @@ class ContinuousMultiA2CBase(A2CBase):
 
             self.current_rewards_left += rewards_left
             self.current_rewards_right += rewards_right
+            
+            '''
+            shaped_rewards = self.rewards_shaper(rewards)
+
+            if self.value_bootstrap and 'time_outs' in infos:
+                shaped_rewards += self.gamma * res_dict_left['values'] * self.cast_obs(infos['time_outs']).unsqueeze(
+                    1).float()
+
+            self.experience_buffer_left.update_data_left('rewards', n, shaped_rewards)
+            self.experience_buffer_right.update_data_right('rewards', n, shaped_rewards)
+
+            self.current_rewards_left += rewards
+            self.current_rewards_right += rewards
             self.current_lengths_left += 1
             self.current_lengths_right += 1
             all_done_indices = self.dones.nonzero(as_tuple=False)
