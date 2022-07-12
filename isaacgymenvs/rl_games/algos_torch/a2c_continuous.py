@@ -345,7 +345,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
         self.scaler_left.scale(loss).backward()
         # TODO: Refactor this ugliest code of they year
-        self.trancate_gradients_and_step()
+        self.trancate_gradients_and_step_left()
 
         with torch.no_grad():
             reduce_kl = rnn_masks is None
@@ -426,7 +426,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
         self.scaler_right.scale(loss).backward()
         # TODO: Refactor this ugliest code of they year
-        self.trancate_gradients_and_step()
+        self.trancate_gradients_and_step_right()
 
         with torch.no_grad():
             reduce_kl = rnn_masks is None

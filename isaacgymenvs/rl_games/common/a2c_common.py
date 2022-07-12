@@ -155,13 +155,26 @@ class A2CBase(BaseAlgorithm):
         if self.is_adaptive_lr:
             self.kl_threshold = config['kl_threshold']
             self.scheduler = schedulers.AdaptiveScheduler(self.kl_threshold)
+            self.scheduler_left = schedulers.AdaptiveScheduler(self.kl_threshold)
+            self.scheduler_right = schedulers.AdaptiveScheduler(self.kl_threshold)
+
         elif self.linear_lr:
             self.scheduler = schedulers.LinearScheduler(float(config['learning_rate']),
                                                         max_steps=self.max_epochs,
                                                         apply_to_entropy=config.get('schedule_entropy', False),
                                                         start_entropy_coef=config.get('entropy_coef'))
+            self.scheduler_left = schedulers.LinearScheduler(float(config['learning_rate']),
+                                                        max_steps=self.max_epochs,
+                                                        apply_to_entropy=config.get('schedule_entropy', False),
+                                                        start_entropy_coef=config.get('entropy_coef'))
+            self.scheduler_right = schedulers.LinearScheduler(float(config['learning_rate']),
+                                                        max_steps=self.max_epochs,
+                                                        apply_to_entropy=config.get('schedule_entropy', False),
+                                                        start_entropy_coef=config.get('entropy_coef'))
         else:
             self.scheduler = schedulers.IdentityScheduler()
+            self.scheduler_left = schedulers.IdentityScheduler()
+            self.scheduler_right = schedulers.IdentityScheduler()
 
         self.e_clip = config['e_clip']
         self.clip_value = config['clip_value']
@@ -299,6 +312,41 @@ class A2CBase(BaseAlgorithm):
         actions = torch.cat((actions_left, actions_right), 1)
         return actions
 
+    def trancate_gradients_and_step_left(self):
+
+        if self.multi_gpu:
+            self.optimizer.synchronize()
+
+        # self.truncate_grads is True
+        if self.truncate_grads:
+            self.scaler_left.unscale_(self.optimizer_left)
+            nn.utils.clip_grad_norm_(self.model_left.parameters(), self.grad_norm)
+
+        if self.multi_gpu:
+            with self.optimizer.skip_synchronize():
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+        else:
+            self.scaler_left.step(self.optimizer_left)
+            self.scaler_left.update()
+
+    def trancate_gradients_and_step_right(self):
+        if self.multi_gpu:
+            self.optimizer.synchronize()
+
+        # self.truncate_grads is True
+        if self.truncate_grads:
+            self.scaler_right.unscale_(self.optimizer_right)
+            nn.utils.clip_grad_norm_(self.model_right.parameters(), self.grad_norm)
+
+        if self.multi_gpu:
+            with self.optimizer.skip_synchronize():
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+        else:
+            self.scaler_right.step(self.optimizer_right)
+            self.scaler_right.update()
+
     def trancate_gradients_and_step(self):
         if self.multi_franka:
             if self.multi_gpu:
@@ -336,6 +384,7 @@ class A2CBase(BaseAlgorithm):
             else:
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
+
 
     def load_networks(self, params):
         builder = model_builder.ModelBuilder()
@@ -1785,7 +1834,7 @@ class ContinuousMultiA2CBase(A2CBase):
         with torch.no_grad():
             # self.is_rnn is False
             if self.is_rnn_left and self.is_rnn_right:  # Todo rewrite play_steps_rnn_multi
-                batch_dict_left, batch_dict_right = self.play_steps_rnn_multi()
+                batch_dict_left, batch_dict_right = self.play_steps_rnn_multi()  # evaluion: the interaction
             else:
                 batch_dict_left, batch_dict_right = self.play_steps_multi()
 
@@ -1842,9 +1891,9 @@ class ContinuousMultiA2CBase(A2CBase):
             if self.multi_gpu:
                 av_kls_left = self.hvd.average_value(av_kls_left, 'ep_kls')
                 av_kls_right = self.hvd.average_value(av_kls_right, 'ep_kls')
-            self.last_lr_left, self.entropy_coef_left = self.scheduler.update(self.last_lr_left, self.entropy_coef_left, self.epoch_num, 0,
+            self.last_lr_left, self.entropy_coef_left = self.scheduler_left.update(self.last_lr_left, self.entropy_coef_left, self.epoch_num, 0,
                                                                               av_kls_left.item())
-            self.last_lr_right, self.entropy_coef_right = self.scheduler.update(self.last_lr_right, self.entropy_coef_right, self.epoch_num, 0,
+            self.last_lr_right, self.entropy_coef_right = self.scheduler_right.update(self.last_lr_right, self.entropy_coef_right, self.epoch_num, 0,
                                                                                 av_kls_right.item())
             self.update_lr_left(self.last_lr_left)
             self.update_lr_right(self.last_lr_right)
