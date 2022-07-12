@@ -1705,7 +1705,7 @@ class ContinuousMultiA2CBase(A2CBase):
 
             step_time += (step_time_end - step_time_start)
             # two rewards
-            
+
             shaped_rewards_left = self.rewards_shaper(rewards_left)
             shaped_rewards_right = self.rewards_shaper(rewards_right)
 

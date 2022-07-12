@@ -141,7 +141,7 @@ class PpoMultiPlayerContinuous(BasePlayer):
             current_action = self.action_combine(mu_left,mu_right)
         else:
             current_action = self.action_combine(action_left,action_right)
-        if self.has_batch_dimension == False:d
+        if self.has_batch_dimension == False:
             current_action = torch.squeeze(current_action.detach())
 
         if self.clip_actions:
