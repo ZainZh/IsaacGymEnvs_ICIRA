@@ -132,8 +132,8 @@ class DualFranka(VecTask):
 
         self.num_dofs = self.gym.get_sim_dof_count(self.sim) // self.num_envs
         self.franka_dof_targets = torch.zeros((self.num_envs, self.num_dofs), dtype=torch.float, device=self.device)
-        self.franka_dof_targets_spoon = torch.zeros((self.num_envs, int(self.num_dofs/2)), dtype=torch.float, device=self.device)
-        self.franka_dof_targets_cup = torch.zeros((self.num_envs, int(self.num_dofs/2)), dtype=torch.float, device=self.device)
+        self.franka_dof_targets_spoon = torch.zeros((self.num_envs, self.num_dofs), dtype=torch.float, device=self.device)
+        self.franka_dof_targets_cup = torch.zeros((self.num_envs, self.num_dofs), dtype=torch.float, device=self.device)
         self.global_indices = torch.arange(self.num_envs * 7, dtype=torch.int32, device=self.device).view(self.num_envs,
                                                                                                           -1)
         if self.ResetFromReplay:
@@ -711,7 +711,7 @@ class DualFranka(VecTask):
     def compute_reward(self):
         self.rew_buf[:], self.reset_buf[:], self.reset_buf_spoon[:],self.reset_buf_cup[:],\
         self.reward_dict, self.gripped, self.gripped_1, self.left_reward_stage1[:], self.right_reward_stage1[:] = compute_franka_reward(
-            self.reset_buf, self.reset_buf_spoon, self.reset_buf_cup, self.progress_buf, self.actions,
+            self.reset_buf, self.reset_buf_spoon, self.reset_buf_cup, self.progress_buf,self.progress_buf_spoon,self.progress_buf_cup, self.actions,
             self.franka_grasp_pos, self.cup_grasp_pos, self.franka_grasp_rot,
             self.franka_grasp_pos_1, self.spoon_grasp_pos, self.franka_grasp_rot_1,
             self.cup_grasp_rot, self.spoon_grasp_rot, self.table_rot, self.cup_positions, self.spoon_positions,
@@ -898,9 +898,9 @@ class DualFranka(VecTask):
         # reset franka with "pos"
         self.franka_dof_pos[env_ids, :] = pos
         self.franka_dof_vel[env_ids, :] = torch.zeros_like(self.franka_dof_vel[env_ids])
-        self.franka_dof_targets_spoon[env_ids, :] = pos
+        self.franka_dof_targets_spoon[env_ids, :self.num_franka_dofs] = pos
         self.franka_dof_targets[env_ids, :self.num_franka_dofs] = pos
-        self.franka_dof_targets[env_ids, self.num_franka_dofs: 2 * self.num_franka_dofs]=self.franka_dof_pos_1[env_ids, :]
+        self.franka_dof_targets_spoon[env_ids, self.num_franka_dofs: 2 * self.num_franka_dofs]=self.franka_dof_pos_1[env_ids, :]
         # reset spoon
         self.spoon_positions[env_ids, 0] = -0.29
         self.spoon_positions[env_ids, 1] = 0.5
@@ -933,7 +933,7 @@ class DualFranka(VecTask):
         multi_env_ids = self.global_indices[env_ids, :2].flatten()
         multi_env_ids_int32 = multi_env_ids.to(torch.int32)
         self.gym.set_dof_position_target_tensor_indexed(self.sim,
-                                                        gymtorch.unwrap_tensor(self.franka_dof_targets),
+                                                        gymtorch.unwrap_tensor(self.franka_dof_targets_spoon),
                                                         gymtorch.unwrap_tensor(multi_env_ids_int32),
                                                         len(multi_env_ids_int32))
 
@@ -941,7 +941,7 @@ class DualFranka(VecTask):
                                               gymtorch.unwrap_tensor(self.dof_state),
                                               gymtorch.unwrap_tensor(multi_env_ids_int32), len(multi_env_ids_int32))
 
-        self.progress_buf[env_ids] = 0
+        self.progress_buf_spoon[env_ids] = 0
 
         self.reset_buf_spoon[env_ids] = 0
 
@@ -958,7 +958,8 @@ class DualFranka(VecTask):
         self.franka_dof_pos_1[env_ids, :] = pos_1
         self.franka_dof_vel_1[env_ids, :] = torch.zeros_like(self.franka_dof_vel_1[env_ids])
 
-        self.franka_dof_targets[env_ids, :self.num_franka_dofs] = self.franka_dof_pos[env_ids, :]
+        self.franka_dof_targets_cup[env_ids, :self.num_franka_dofs] = self.franka_dof_pos[env_ids, :]
+        self.franka_dof_targets_cup[env_ids, self.num_franka_dofs: 2 * self.num_franka_dofs] = pos_1
         self.franka_dof_targets[env_ids, self.num_franka_dofs: 2 * self.num_franka_dofs] = pos_1
         # reset cup
         self.cup_positions[env_ids, 0] = -0.3
@@ -982,7 +983,7 @@ class DualFranka(VecTask):
         multi_env_ids = self.global_indices[env_ids, :2].flatten()
         multi_env_ids_int32 = multi_env_ids.to(torch.int32)
         self.gym.set_dof_position_target_tensor_indexed(self.sim,
-                                                        gymtorch.unwrap_tensor(self.franka_dof_targets),
+                                                        gymtorch.unwrap_tensor(self.franka_dof_targets_cup),
                                                         gymtorch.unwrap_tensor(multi_env_ids_int32),
                                                         len(multi_env_ids_int32))
 
@@ -990,7 +991,7 @@ class DualFranka(VecTask):
                                               gymtorch.unwrap_tensor(self.dof_state),
                                               gymtorch.unwrap_tensor(multi_env_ids_int32), len(multi_env_ids_int32))
 
-        self.progress_buf[env_ids] = 0
+        self.progress_buf_cup[env_ids] = 0
 
         self.reset_buf_cup[env_ids] = 0
 
@@ -1026,6 +1027,8 @@ class DualFranka(VecTask):
 
     def post_physics_step(self):  # what do frankas do after interacting with the envs
         self.progress_buf += 1
+        self.progress_buf_cup += 1
+        self.progress_buf_spoon += 1
         # print("progress buffer is ",self.progress_buf)
 
         env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
@@ -1225,7 +1228,7 @@ class DualFranka(VecTask):
 
 @torch.jit.script
 def compute_franka_reward(
-        reset_buf, reset_buf_spoon, reset_buf_cup, progress_buf, actions, franka_grasp_pos, cup_grasp_pos, franka_grasp_rot, franka_grasp_pos_1,
+        reset_buf, reset_buf_spoon, reset_buf_cup, progress_buf,progress_buf_spoon,progress_buf_cup, actions, franka_grasp_pos, cup_grasp_pos, franka_grasp_rot, franka_grasp_pos_1,
         spoon_grasp_pos, franka_grasp_rot_1, cup_grasp_rot, spoon_grasp_rot, table_rot,
         cup_positions, spoon_positions, cup_orientations, spoon_orientations,
         spoon_linvels, cup_linvels,
@@ -1721,7 +1724,7 @@ def compute_franka_reward(
     reset_buf_spoon = torch.where(spoon_positions[:, 1] > 1.1, torch.ones_like(reset_buf_spoon), reset_buf_spoon)
     reset_buf_spoon = torch.where(spoon_positions[:, 1] < 0.418, torch.ones_like(reset_buf_spoon),
                                   reset_buf_spoon)
-    reset_buf_spoon = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf_spoon), reset_buf_spoon)
+    reset_buf_spoon = torch.where(progress_buf_spoon >= max_episode_length - 1, torch.ones_like(reset_buf_spoon), reset_buf_spoon)
 
     # reset_buf_cup
     reset_buf_cup = torch.where(cup_positions[:, 1] > 0.78, torch.ones_like(reset_buf_cup), reset_buf_cup)  #
@@ -1730,7 +1733,7 @@ def compute_franka_reward(
                                 reset_buf_cup)  # cup fall to table or ground
     reset_buf_cup = torch.where(torch.acos(dot_cup_reverse) * 180 / torch.pi > 90, torch.ones_like(reset_buf_cup),
                                 reset_buf_cup)  # cup fall direction
-    reset_buf_cup = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf_cup), reset_buf_cup)
+    reset_buf_cup = torch.where(progress_buf_cup >= max_episode_length - 1, torch.ones_like(reset_buf_cup), reset_buf_cup)
     # </editor-fold>
 
     # list rewards details for test

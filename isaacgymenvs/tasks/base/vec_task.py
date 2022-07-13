@@ -278,6 +278,10 @@ class VecTask(Env):
              self.num_envs, device=self.device, dtype=torch.long)
         self.progress_buf = torch.zeros(
             self.num_envs, device=self.device, dtype=torch.long)
+        self.progress_buf_spoon = torch.zeros(
+            self.num_envs, device=self.device, dtype=torch.long)
+        self.progress_buf_cup = torch.zeros(
+            self.num_envs, device=self.device, dtype=torch.long)
         self.randomize_buf = torch.zeros(
             self.num_envs, device=self.device, dtype=torch.long)
         self.extras = {}
