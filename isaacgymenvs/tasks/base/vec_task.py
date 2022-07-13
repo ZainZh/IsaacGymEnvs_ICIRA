@@ -408,7 +408,8 @@ class VecTask(Env):
         if self.num_states > 0:
             self.obs_dict["states"] = self.get_state()
 
-        return self.obs_dict, self.rew_buf.to(self.rl_device), self.reset_buf.to(self.rl_device), self.extras,\
+        return self.obs_dict, self.rew_buf.to(self.rl_device), \
+               self.reset_buf.to(self.rl_device),self.reset_buf_spoon.to(self.rl_device),self.reset_buf_cup.to(self.rl_device), self.extras,\
                self.left_reward_stage1.to(self.rl_device), self.right_reward_stage1.to(self.rl_device)
 
     def zero_actions(self) -> torch.Tensor:

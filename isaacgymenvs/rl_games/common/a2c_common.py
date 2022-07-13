@@ -1355,6 +1355,8 @@ class ContinuousMultiA2CBase(A2CBase):
         self.current_lengths_right = torch.zeros(batch_size, dtype=torch.float32, device=self.ppo_device)
 
         self.dones = torch.ones((batch_size,), dtype=torch.uint8, device=self.ppo_device)
+        self.dones_spoon = torch.ones((batch_size,), dtype=torch.uint8, device=self.ppo_device)
+        self.dones_cup = torch.ones((batch_size,), dtype=torch.uint8, device=self.ppo_device)
 
         if self.is_rnn_left:
             self.rnn_states_left = self.model_left.get_default_rnn_state()
@@ -1523,7 +1525,7 @@ class ContinuousMultiA2CBase(A2CBase):
 
     def env_step(self, actions):
         actions = self.preprocess_actions(actions)
-        obs, rewards, dones, infos, left_reward, right_reward = self.vec_env.step_multi(actions)
+        obs, rewards, dones, dones_spoon, dones_cup, infos, left_reward, right_reward = self.vec_env.step_multi(actions)
 
         if self.is_tensor_obses:
             if self.value_size == 1:
@@ -1531,7 +1533,8 @@ class ContinuousMultiA2CBase(A2CBase):
                 left_reward = left_reward.unsqueeze(1)
                 right_reward = right_reward.unsqueeze(1)
             if self.multi_franka:
-                return self.obs_to_tensors(obs), rewards.to(self.ppo_device), dones.to(self.ppo_device), infos, \
+                return self.obs_to_tensors(obs), rewards.to(self.ppo_device), \
+                       dones.to(self.ppo_device),dones_spoon.to(self.ppo_device),dones_cup.to(self.ppo_device),infos, \
                        left_reward.to(self.ppo_device), right_reward.to(self.ppo_device)
             else:
                 return self.obs_to_tensors(obs), rewards.to(self.ppo_device), dones.to(self.ppo_device), infos
@@ -1639,7 +1642,6 @@ class ContinuousMultiA2CBase(A2CBase):
         self.model_right.load_state_dict(weights['model'])
         self.set_stats_weights(weights)
 
-
     def play_steps_multi(self):
         # Todo: add lists
         update_list_left = self.update_list_left
@@ -1686,7 +1688,7 @@ class ContinuousMultiA2CBase(A2CBase):
             # actions_new = self.obs['obs'][:,-18:]
             actions_new = self.action_combine(res_dict_left['actions'], res_dict_right['actions'])
             # Todo: add another franka arm actions
-            self.obs, rewards, self.dones, infos, rewards_left, rewards_right = self.env_step(actions_new)
+            self.obs, rewards, self.dones,self.dones_spoon,self.dones_cup,infos, rewards_left, rewards_right = self.env_step(actions_new)
 
             #  self.obs, rewards, self.dones, infos = self.env_step(res_dict['actions'])
             step_time_end = time.time()
@@ -1724,35 +1726,41 @@ class ContinuousMultiA2CBase(A2CBase):
 
             all_done_indices = self.dones.nonzero(as_tuple=False)
             env_done_indices = self.dones.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
+            env_done_indices_left = self.dones_spoon.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
+            env_done_indices_right = self.dones_cup.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
 
             # self.game_rewards.update(self.current_rewards[env_done_indices])
             # self.game_lengths.update(self.current_lengths[env_done_indices])
             # self.algo_observer.process_infos(infos, env_done_indices)
 
-            self.game_rewards_left.update_left(self.current_rewards_left[env_done_indices])
-            self.game_lengths_left.update_left(self.current_lengths_left[env_done_indices])
-            self.game_rewards_right.update_right(self.current_rewards_right[env_done_indices])
-            self.game_lengths_right.update_right(self.current_lengths_right[env_done_indices])
-            self.algo_observer_left.process_infos(infos, env_done_indices)
-            self.algo_observer_right.process_infos(infos, env_done_indices)
+            self.game_rewards_left.update_left(self.current_rewards_left[env_done_indices_left])
+            self.game_lengths_left.update_left(self.current_lengths_left[env_done_indices_left])
+            self.game_rewards_right.update_right(self.current_rewards_right[env_done_indices_right])
+            self.game_lengths_right.update_right(self.current_lengths_right[env_done_indices_right])
+            self.algo_observer_left.process_infos(infos, env_done_indices_left)
+            self.algo_observer_right.process_infos(infos, env_done_indices_right)
             not_dones = 1.0 - self.dones.float()
-            self.current_rewards_left = self.current_rewards_left * not_dones.unsqueeze(1)
-            self.current_lengths_left = self.current_lengths_left * not_dones
-            self.current_rewards_right = self.current_rewards_right * not_dones.unsqueeze(1)
-            self.current_lengths_right = self.current_lengths_right * not_dones
+            not_dones_left = 1.0 - self.dones_spoon.float()
+            not_dones_right = 1.0 - self.dones_cup.float()
+            self.current_rewards_left = self.current_rewards_left * not_dones_left.unsqueeze(1)
+            self.current_lengths_left = self.current_lengths_left * not_dones_left
+            self.current_rewards_right = self.current_rewards_right * not_dones_right.unsqueeze(1)
+            self.current_lengths_right = self.current_lengths_right * not_dones_right
 
         last_values_left = self.get_values_left(self.obs)
         last_values_right = self.get_values_right(self.obs)
         fdones = self.dones.float()
+        fdones_left = self.dones_spoon.float()
+        fdones_right = self.dones_cup.float()
         mb_fdones_left = self.experience_buffer_left.tensor_dict_left['dones'].float()
         mb_values_left = self.experience_buffer_left.tensor_dict_left['values']
         mb_rewards_left = self.experience_buffer_left.tensor_dict_left['rewards']
         mb_fdones_right = self.experience_buffer_right.tensor_dict_right['dones'].float()
         mb_values_right = self.experience_buffer_right.tensor_dict_right['values']
         mb_rewards_right = self.experience_buffer_right.tensor_dict_right['rewards']
-        mb_advs_left = self.discount_values(fdones, last_values_left, mb_fdones_left, mb_values_left, mb_rewards_left)
+        mb_advs_left = self.discount_values(fdones_left, last_values_left, mb_fdones_left, mb_values_left, mb_rewards_left)
         mb_returns_left = mb_advs_left + mb_values_left
-        mb_advs_right = self.discount_values(fdones, last_values_right, mb_fdones_right, mb_values_right,
+        mb_advs_right = self.discount_values(fdones_right, last_values_right, mb_fdones_right, mb_values_right,
                                              mb_rewards_right)
         mb_returns_right = mb_advs_right + mb_values_right
 
@@ -2031,7 +2039,7 @@ class ContinuousMultiA2CBase(A2CBase):
             # actions_new = self.obs['obs'][:,-18:]
             # Todo: add another franka arm actions
             actions_new = self.action_combine(res_dict_left['actions'], res_dict_right['actions'])
-            self.obs, rewards, self.dones, infos, rewards_left, rewards_right = self.env_step(actions_new)
+            self.obs, rewards, self.dones, self.dones_spoon, self.dones_cup, infos, rewards_left, rewards_right = self.env_step(actions_new)
             step_time_end = time.time()
 
             step_time += (step_time_end - step_time_start)
@@ -2057,33 +2065,38 @@ class ContinuousMultiA2CBase(A2CBase):
             self.current_lengths_left += 1
             self.current_lengths_right += 1
             all_done_indices = self.dones.nonzero(as_tuple=False)
+            all_done_indices_left = self.dones_spoon.nonzero(as_tuple=False)
+            all_done_indices_right = self.dones_cup.nonzero(as_tuple=False)
             env_done_indices = self.dones.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
-            if len(all_done_indices) > 0:
+            env_done_indices_left = self.dones_spoon.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
+            env_done_indices_right = self.dones_cup.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
+            if len(all_done_indices_left) > 0:
                 for s in self.rnn_states_left:
-                    s[:, all_done_indices, :] = s[:, all_done_indices, :] * 0.0
+                    s[:, all_done_indices_left, :] = s[:, all_done_indices_left, :] * 0.0
+            if len(all_done_indices_right) > 0:
                 for s in self.rnn_states_right:
-                    s[:, all_done_indices, :] = s[:, all_done_indices, :] * 0.0
-                if self.has_central_value:
-                    self.central_value_net.post_step_rnn(all_done_indices)
+                    s[:, all_done_indices_right, :] = s[:, all_done_indices_right, :] * 0.0
 
-            self.game_rewards_left.update_left(self.current_rewards_left[env_done_indices])
-            self.game_rewards_right.update_right(self.current_rewards_right[env_done_indices])
-            self.game_lengths_left.update_left(self.current_lengths_left[env_done_indices])
-            self.game_lengths_right.update_right(self.current_lengths_right[env_done_indices])
-            self.algo_observer_left.process_infos(infos, env_done_indices)
-            self.algo_observer_right.process_infos(infos, env_done_indices)
+            self.game_rewards_left.update_left(self.current_rewards_left[env_done_indices_left])
+            self.game_rewards_right.update_right(self.current_rewards_right[env_done_indices_right])
+            self.game_lengths_left.update_left(self.current_lengths_left[env_done_indices_left])
+            self.game_lengths_right.update_right(self.current_lengths_right[env_done_indices_right])
+            self.algo_observer_left.process_infos(infos, env_done_indices_left)
+            self.algo_observer_right.process_infos(infos, env_done_indices_right)
 
-            not_dones = 1.0 - self.dones.float()
+            not_dones_left = 1.0 - self.dones_spoon.float()
+            not_dones_right = 1.0 - self.dones_cup.float()
 
-            self.current_rewards_left = self.current_rewards_left * not_dones.unsqueeze(1)
-            self.current_rewards_right = self.current_rewards_right * not_dones.unsqueeze(1)
-            self.current_lengths_left = self.current_lengths_left * not_dones
-            self.current_lengths_right = self.current_lengths_right * not_dones
+            self.current_rewards_left = self.current_rewards_left * not_dones_left.unsqueeze(1)
+            self.current_rewards_right = self.current_rewards_right * not_dones_right.unsqueeze(1)
+            self.current_lengths_left = self.current_lengths_left * not_dones_left
+            self.current_lengths_right = self.current_lengths_right * not_dones_right
 
         last_values_left = self.get_values_left(self.obs)
         last_values_right = self.get_values_right(self.obs)
 
-        fdones = self.dones.float()
+        fdones_left = self.dones_spoon.float()
+        fdones_right = self.dones_cup.float()
         mb_fdones_left = self.experience_buffer_left.tensor_dict_left['dones'].float()
         mb_fdones_right = self.experience_buffer_right.tensor_dict_right['dones'].float()
 
@@ -2091,8 +2104,8 @@ class ContinuousMultiA2CBase(A2CBase):
         mb_values_right = self.experience_buffer_right.tensor_dict_right['values']
         mb_rewards_left = self.experience_buffer_left.tensor_dict_left['rewards']
         mb_rewards_right = self.experience_buffer_right.tensor_dict_right['rewards']
-        mb_advs_left = self.discount_values(fdones, last_values_left, mb_fdones_left, mb_values_left, mb_rewards_left)
-        mb_advs_right = self.discount_values(fdones, last_values_right, mb_fdones_right, mb_values_right,
+        mb_advs_left = self.discount_values(fdones_left, last_values_left, mb_fdones_left, mb_values_left, mb_rewards_left)
+        mb_advs_right = self.discount_values(fdones_right, last_values_right, mb_fdones_right, mb_values_right,
                                              mb_rewards_right)
         mb_returns_left = mb_advs_left + mb_values_left
         mb_returns_right = mb_advs_right + mb_values_right
