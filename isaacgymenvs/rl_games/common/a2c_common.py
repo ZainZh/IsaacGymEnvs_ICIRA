@@ -1447,7 +1447,7 @@ class ContinuousMultiA2CBase(A2CBase):
                     'is_train': False,
                     'states': states,
                     'actions': None,
-                    'is_done': self.dones,
+                    'is_done': self.dones_spoon,
                 }
                 value = self.get_central_value(input_dict)
             else:
@@ -1472,7 +1472,7 @@ class ContinuousMultiA2CBase(A2CBase):
                     'is_train': False,
                     'states': states,
                     'actions': None,
-                    'is_done': self.dones,
+                    'is_done': self.dones_cup,
                 }
                 value = self.get_central_value(input_dict)
             else:
@@ -1657,9 +1657,9 @@ class ContinuousMultiA2CBase(A2CBase):
 
             # Todo: add informations
             self.experience_buffer_left.update_data_left('obses', n, self.obs['obs'])
-            self.experience_buffer_left.update_data_left('dones', n, self.dones)
+            self.experience_buffer_left.update_data_left('dones', n, self.dones_spoon)
             self.experience_buffer_right.update_data_right('obses', n, self.obs['obs'])
-            self.experience_buffer_right.update_data_right('dones', n, self.dones)
+            self.experience_buffer_right.update_data_right('dones', n, self.dones_cup)
 
             # for k in update_list:
             #     self.experience_buffer.update_data(k, n, res_dict[k])
@@ -2009,9 +2009,9 @@ class ContinuousMultiA2CBase(A2CBase):
             self.rnn_states_left = res_dict_left['rnn_states']
             self.rnn_states_right = res_dict_right['rnn_states']
             self.experience_buffer_left.update_data_left('obses', n, self.obs['obs'])
-            self.experience_buffer_left.update_data_left('dones', n, self.dones.byte())
+            self.experience_buffer_left.update_data_left('dones', n, self.dones_spoon.byte())
             self.experience_buffer_right.update_data_right('obses', n, self.obs['obs'])
-            self.experience_buffer_right.update_data_right('dones', n, self.dones.byte())
+            self.experience_buffer_right.update_data_right('dones', n, self.dones_cup.byte())
 
             for k in update_list_left:
                 self.experience_buffer_left.update_data_left(k, n, res_dict_left[k])
