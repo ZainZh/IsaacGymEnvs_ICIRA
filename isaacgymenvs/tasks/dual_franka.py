@@ -1606,7 +1606,7 @@ def compute_franka_reward(
                         + rot_reward_scale * (rot_reward * sf + rot_reward_1 * cf) \
                         + around_handle_reward_scale * (around_handle_reward * sf + around_handle_reward_1 * cf) \
                         + finger_dist_reward_scale * (finger_dist_reward * sf + finger_dist_reward_1 * cf) \
-                        + lift_reward_scale * (lift_reward * sf ) + 4*lift_reward_1 * cf\
+                        + lift_reward_scale * (lift_reward * sf ) + 20*lift_reward_1 * cf\
                         - action_penalty_scale * action_penalty \
                         - spoon_fall_penalty)
     left_reward_stage1 = stage1 * (dist_reward_scale * (dist_reward * sf) \
@@ -1620,7 +1620,7 @@ def compute_franka_reward(
                                     + rot_reward_scale * (rot_reward_1 * cf) \
                                     + around_handle_reward_scale * (around_handle_reward_1 * cf) \
                                     + finger_dist_reward_scale * (finger_dist_reward_1 * cf) \
-                                    + 4* (lift_reward_1 * cf) \
+                                    + 20* (lift_reward_1 * cf) \
                                     - action_penalty_scale * action_penalty
                                     - cup_fall_penalty)
     rewards = rewards + stage2 * (dist_reward_stage2 * dist_reward_scale * 20 \

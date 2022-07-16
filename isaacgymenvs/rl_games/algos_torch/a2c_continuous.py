@@ -5,6 +5,7 @@ from rl_games.algos_torch import central_value
 from rl_games.common import common_losses
 from rl_games.common import datasets
 
+from itertools import chain
 from torch import optim
 import torch
 from torch import nn
@@ -228,8 +229,11 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         self.last_lr_left = float(self.last_lr_left)
         self.last_lr_right = float(self.last_lr_right)
         self.bound_loss_type = self.config.get('bound_loss_type', 'bound')  # 'regularisation' or 'bound'
-        self.optimizer_left = optim.Adam(self.model_left.parameters(), float(self.last_lr_left), eps=1e-08, weight_decay=self.weight_decay)
-        self.optimizer_right = optim.Adam(self.model_right.parameters(), float(self.last_lr_right), eps=1e-08, weight_decay=self.weight_decay)
+        self.optimizer = optim.Adam([
+            {'params':self.model_left.parameters(),'lr':float(self.last_lr_left),'eps':1e-08,'weight_decay':self.weight_decay},
+            {'params':self.model_right.parameters(),'lr':float(self.last_lr_right),'eps':1e-08,'weight_decay':self.weight_decay}
+             ])
+        # self.optimizer_right = optim.Adam(self.model_right.parameters(), float(self.last_lr_right), eps=1e-08, weight_decay=self.weight_decay)
 
         if self.has_central_value:
             cv_config = {
@@ -274,8 +278,11 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
     def save_multi(self, fn):
         state_left, state_right = self.get_full_state_weights()
-        torch_ext.save_checkpoint(fn, state_left)
-        torch_ext.save_checkpoint(fn, state_right)
+        save_model={
+            'model_left':state_left,
+            'model_right':state_right
+        }
+        torch_ext.save_checkpoint(fn, save_model)
 
     def restore(self, fn):
         checkpoint = torch_ext.load_checkpoint(fn)

@@ -1396,18 +1396,18 @@ class ContinuousMultiA2CBase(A2CBase):
 
     def trancate_gradients_and_step_left(self):
         if self.truncate_grads:
-            self.scaler_left.unscale_(self.optimizer_left)
+            self.scaler_left.unscale_(self.optimizer)
             nn.utils.clip_grad_norm_(self.model_left.parameters(), self.grad_norm)
 
-        self.scaler_left.step(self.optimizer_left)
+        self.scaler_left.step(self.optimizer)
         self.scaler_left.update()
 
     def trancate_gradients_and_step_right(self):
         if self.truncate_grads:
-            self.scaler_right.unscale_(self.optimizer_right)
+            self.scaler_right.unscale_(self.optimizer)
             nn.utils.clip_grad_norm_(self.model_right.parameters(), self.grad_norm)
 
-        self.scaler_right.step(self.optimizer_right)
+        self.scaler_right.step(self.optimizer)
         self.scaler_right.update()
 
     def get_action_values_left(self, obs):
@@ -1494,7 +1494,7 @@ class ContinuousMultiA2CBase(A2CBase):
             self.hvd.broadcast_value(lr_tensor, 'learning_rate')
             lr = lr_tensor.item()
 
-        for param_group in self.optimizer_left.param_groups:
+        for param_group in self.optimizer.param_groups:
             param_group['lr'] = lr
 
     def update_lr_right(self, lr):
@@ -1502,7 +1502,7 @@ class ContinuousMultiA2CBase(A2CBase):
             lr_tensor = torch.tensor([lr])
             self.hvd.broadcast_value(lr_tensor, 'learning_rate')
             lr = lr_tensor.item()
-        for param_group in self.optimizer_right.param_groups:
+        for param_group in self.optimizer.param_groups:
             param_group['lr'] = lr
 
     def init_rnn_from_model_left(self, model):
@@ -1563,8 +1563,8 @@ class ContinuousMultiA2CBase(A2CBase):
         state_left, state_right = self.get_weights()
         state_left['epoch'] = self.epoch_num
         state_right['epoch'] = self.epoch_num
-        state_left['optimizer'] = self.optimizer_left.state_dict()
-        state_right['optimizer'] = self.optimizer_right.state_dict()
+        state_left['optimizer'] = self.optimizer.state_dict()
+        state_right['optimizer'] = self.optimizer.state_dict()
         if self.has_central_value:
             state_left['assymetric_vf_nets'] = self.central_value_net.state_dict()
             state_right['assymetric_vf_nets'] = self.central_value_net.state_dict()
@@ -1586,8 +1586,8 @@ class ContinuousMultiA2CBase(A2CBase):
     def set_full_state_weights(self, weights):
         self.set_weights(weights)
         self.epoch_num = weights['epoch']
-        self.optimizer_left.load_state_dict(weights['optimizer'])
-        self.optimizer_right.load_state_dict(weights['optimizer'])
+        self.optimizer.load_state_dict(weights['optimizer'])
+
 
         self.frame = weights.get('frame', 0)
         self.last_mean_rewards = weights.get('last_mean_rewards', -100500)
@@ -2221,21 +2221,21 @@ class ContinuousMultiA2CBase(A2CBase):
                     if self.save_freq > 0:
                         if (epoch_num % self.save_freq == 0) and (
                                 mean_reward_left[0] + mean_reward_right[0] <= self.last_mean_rewards):
-                            self.save(os.path.join(self.nn_dir, 'last_' + checkpoint_name))
+                            self.save_multi(os.path.join(self.nn_dir, 'last_' + checkpoint_name))
 
                     if mean_reward_left[0] + mean_reward_right[
                         0] > self.last_mean_rewards and epoch_num >= self.save_best_after:
                         print('saving next best left rewards: ', mean_reward_left[0])
                         print('saving next best right rewards: ', mean_reward_right[0])
                         self.last_mean_rewards = mean_reward_left[0] + mean_reward_right[0]
-                        self.save(os.path.join(self.nn_dir, self.config['name']))
+                        self.save_multi(os.path.join(self.nn_dir, self.config['name']))
                         if self.last_mean_rewards > self.config['score_to_win']:
                             print('Network won!')
-                            self.save(os.path.join(self.nn_dir, checkpoint_name))
+                            self.save_multi(os.path.join(self.nn_dir, checkpoint_name))
                             should_exit = True
 
                 if epoch_num > self.max_epochs:
-                    self.save(os.path.join(self.nn_dir,
+                    self.save_multi(os.path.join(self.nn_dir,
                                            'last_' + self.config['name'] + 'ep' + str(epoch_num) + 'rew' + str(
                                                mean_reward_left + mean_reward_right)))
                     print('MAX EPOCHS NUM!')
