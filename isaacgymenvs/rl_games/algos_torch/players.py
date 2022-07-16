@@ -1,4 +1,5 @@
 from rl_games.common.player import BasePlayer
+from rl_games.common.player import BaseMultiPlayer
 from rl_games.algos_torch import torch_ext
 from rl_games.algos_torch.running_mean_std import RunningMeanStd
 from rl_games.common.tr_helpers import unsqueeze_obs
@@ -77,7 +78,7 @@ class PpoPlayerContinuous(BasePlayer):
     def reset(self):
         self.init_rnn()
 
-class PpoMultiPlayerContinuous(BasePlayer):
+class PpoMultiPlayerContinuous(BaseMultiPlayer):
     def __init__(self, params):
         BasePlayer.__init__(self, params)
         self.network = self.config['network']
