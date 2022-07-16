@@ -343,7 +343,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 for param in self.model_left.parameters():
                     param.grad = None
 
-        self.scaler.scale(loss).backward()
+        self.scaler_left.scale(loss).backward()
         # TODO: Refactor this ugliest code of they year
         self.trancate_gradients_and_step_left()
 
@@ -424,7 +424,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 for param in self.model_right.parameters():
                     param.grad = None
 
-        self.scaler.scale(loss).backward()
+        self.scaler_right.scale(loss).backward()
         # TODO: Refactor this ugliest code of they year
         self.trancate_gradients_and_step_right()
 

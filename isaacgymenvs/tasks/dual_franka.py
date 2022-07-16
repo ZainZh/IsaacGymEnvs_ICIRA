@@ -1507,7 +1507,7 @@ def compute_franka_reward(
 
     # <editor-fold desc="5. fall penalty(table or ground)">
     # # cup(fall and reverse)
-    # cup_fall_penalty = torch.where(cup_positions[:, 1] < 0.439, 1.0, 0.0)
+    cup_fall_penalty = torch.where(cup_positions[:, 1] < 0.439, 1.0, 0.0)
     dot_cup_reverse = torch.bmm(axis4_1.view(num_envs, 1, 3), cup_up_axis.view(num_envs, 3, 1)).squeeze(-1).squeeze(
         -1)  # cup rotation y align with ground y(=cup up axis)
     # cup_reverse_penalty = torch.where(torch.acos(dot_cup_reverse) * 180 / torch.pi > 45 , 1.0, 0.0)    
@@ -1606,7 +1606,7 @@ def compute_franka_reward(
                         + rot_reward_scale * (rot_reward * sf + rot_reward_1 * cf) \
                         + around_handle_reward_scale * (around_handle_reward * sf + around_handle_reward_1 * cf) \
                         + finger_dist_reward_scale * (finger_dist_reward * sf + finger_dist_reward_1 * cf) \
-                        + lift_reward_scale * (lift_reward * sf + lift_reward_1 * cf) \
+                        + lift_reward_scale * (lift_reward * sf ) + 4*lift_reward_1 * cf\
                         - action_penalty_scale * action_penalty \
                         - spoon_fall_penalty)
     left_reward_stage1 = stage1 * (dist_reward_scale * (dist_reward * sf) \
@@ -1620,9 +1620,9 @@ def compute_franka_reward(
                                     + rot_reward_scale * (rot_reward_1 * cf) \
                                     + around_handle_reward_scale * (around_handle_reward_1 * cf) \
                                     + finger_dist_reward_scale * (finger_dist_reward_1 * cf) \
-                                    + lift_reward_scale * (lift_reward_1 * cf) \
-                                    - action_penalty_scale * action_penalty \
-                                    - spoon_fall_penalty)
+                                    + 4* (lift_reward_1 * cf) \
+                                    - action_penalty_scale * action_penalty
+                                    - cup_fall_penalty)
     rewards = rewards + stage2 * (dist_reward_stage2 * dist_reward_scale * 20 \
                                   + rot_reward_stage2 * rot_reward_scale * 20 \
                                   + dist_reward_stage2_y * dist_reward_scale * 20)

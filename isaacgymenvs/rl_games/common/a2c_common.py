@@ -163,7 +163,7 @@ class A2CBase(BaseAlgorithm):
         self.seq_len = self.config.get('seq_length', 4)
         self.bptt_len = self.config.get('bptt_length', self.seq_len)
         self.normalize_advantage = config['normalize_advantage']
-        self.normalize_rms_advantage = config.get('normalize_rms_advantage', False)
+        self.normalize_rms_advantage = config.get('normalize_rms_advantage', False) #False
         self.normalize_input = self.config['normalize_input']
         self.normalize_value = self.config.get('normalize_value', False)  # True
         self.truncate_grads = self.config.get('truncate_grads', False)
@@ -1307,8 +1307,8 @@ class ContinuousMultiA2CBase(A2CBase):
         self.game_rewards_right = torch_ext.AverageMeter(self.value_size, self.games_to_track).to(self.ppo_device)
         self.game_lengths_right = torch_ext.AverageMeter(1, self.games_to_track).to(self.ppo_device)
 
-        self.scaler = torch.cuda.amp.GradScaler(enabled=self.mixed_precision)
-        self.scaler = torch.cuda.amp.GradScaler(enabled=self.mixed_precision)
+        self.scaler_left = torch.cuda.amp.GradScaler(enabled=self.mixed_precision)
+        self.scaler_right = torch.cuda.amp.GradScaler(enabled=self.mixed_precision)
 
         self.last_lr_left = self.config['learning_rate']
         self.last_lr_right = self.config['learning_rate']
@@ -1396,19 +1396,19 @@ class ContinuousMultiA2CBase(A2CBase):
 
     def trancate_gradients_and_step_left(self):
         if self.truncate_grads:
-            self.scaler.unscale_(self.optimizer_left)
+            self.scaler_left.unscale_(self.optimizer_left)
             nn.utils.clip_grad_norm_(self.model_left.parameters(), self.grad_norm)
 
-        self.scaler.step(self.optimizer_left)
-        self.scaler.update()
+        self.scaler_left.step(self.optimizer_left)
+        self.scaler_left.update()
 
     def trancate_gradients_and_step_right(self):
         if self.truncate_grads:
-            self.scaler.unscale_(self.optimizer_right)
+            self.scaler_right.unscale_(self.optimizer_right)
             nn.utils.clip_grad_norm_(self.model_right.parameters(), self.grad_norm)
 
-        self.scaler.step(self.optimizer_right)
-        self.scaler.update()
+        self.scaler_right.step(self.optimizer_right)
+        self.scaler_right.update()
 
     def get_action_values_left(self, obs):
         processed_obs = self._preproc_obs(obs['obs'])
@@ -1514,14 +1514,12 @@ class ContinuousMultiA2CBase(A2CBase):
     def set_train_multi(self):
         self.model_left.train()
         self.model_right.train()
-        if self.normalize_rms_advantage:
-            self.advantage_mean_std.train()
+
 
     def set_eval_multi(self):
         self.model_left.eval()
         self.model_right.eval()
-        if self.normalize_rms_advantage:
-            self.advantage_mean_std.eval()
+
 
     def env_step(self, actions):
         actions = self.preprocess_actions(actions)
@@ -1609,8 +1607,8 @@ class ContinuousMultiA2CBase(A2CBase):
         state_left = {}
         state_right = {}
         if self.mixed_precision:
-            state_left['scaler'] = self.scaler.state_dict()
-            state_right['scaler'] = self.scaler.state_dict()
+            state_left['scaler'] = self.scaler_left.state_dict()
+            state_right['scaler'] = self.scaler_right.state_dict()
         if self.has_central_value:
             state_left['central_val_stats'] = self.central_value_net.get_stats_weights(model_stats)
             state_right['central_val_stats'] = self.central_value_net.get_stats_weights(model_stats)
@@ -1625,8 +1623,6 @@ class ContinuousMultiA2CBase(A2CBase):
         return state_left, state_right
 
     def set_stats_weights(self, weights):
-        if self.normalize_rms_advantage:
-            self.advantage_mean_std.load_state_dic(weights['advantage_mean_std'])
         if self.normalize_input and 'running_mean_std' in weights:
             self.model_left.running_mean_std.load_state_dict(weights['running_mean_std'])
             self.model_right.running_mean_std.load_state_dict(weights['running_mean_std'])
@@ -1634,8 +1630,8 @@ class ContinuousMultiA2CBase(A2CBase):
             self.model_left.value_mean_std.load_state_dict(weights['reward_mean_std'])
             self.model_right.value_mean_std.load_state_dict(weights['reward_mean_std'])
         if self.mixed_precision and 'scaler' in weights:
-            self.scaler.load_state_dict(weights['scaler'])
-            self.scaler.load_state_dict(weights['scaler'])
+            self.scaler_left.load_state_dict(weights['scaler'])
+            self.scaler_right.load_state_dict(weights['scaler'])
 
     def set_weights(self, weights):
         self.model_left.load_state_dict(weights['model'])
@@ -1899,15 +1895,10 @@ class ContinuousMultiA2CBase(A2CBase):
 
         if self.normalize_advantage:
             if self.is_rnn_left:
-                if self.normalize_rms_advantage:
-                    advantages = self.advantage_mean_std(advantages, mask=rnn_masks)
-                else:
-                    advantages = torch_ext.normalization_with_masks(advantages, rnn_masks)
+
+                advantages = torch_ext.normalization_with_masks(advantages, rnn_masks)
             else:
-                if self.normalize_rms_advantage:
-                    advantages = self.advantage_mean_std(advantages)
-                else:
-                    advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+                advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         dataset_dict = {}
         dataset_dict['old_values'] = values
@@ -1961,15 +1952,9 @@ class ContinuousMultiA2CBase(A2CBase):
 
         if self.normalize_advantage:
             if self.is_rnn_right:
-                if self.normalize_rms_advantage:
-                    advantages = self.advantage_mean_std(advantages, mask=rnn_masks)
-                else:
-                    advantages = torch_ext.normalization_with_masks(advantages, rnn_masks)
+                advantages = torch_ext.normalization_with_masks(advantages, rnn_masks)
             else:
-                if self.normalize_rms_advantage:
-                    advantages = self.advantage_mean_std(advantages)
-                else:
-                    advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+                advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         dataset_dict = {}
         dataset_dict['old_values'] = values
