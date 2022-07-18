@@ -187,8 +187,6 @@ class A2CBase(BaseAlgorithm):
         self.game_lengths = torch_ext.AverageMeter(1, self.games_to_track).to(self.ppo_device)
 
         self.obs = None
-        self.obs_left=None
-        self.obs_right=None
         # Todo: add two new obs
         self.games_num = self.config['minibatch_size'] // self.seq_len  # it is used only for current rnn implementation
         self.batch_size = self.horizon_length * self.num_actors * self.num_agents
@@ -1651,16 +1649,16 @@ class ContinuousMultiA2CBase(A2CBase):
                 masks = self.vec_env.get_action_masks()
                 res_dict = self.get_masked_action_values(self.obs, masks)
             else:
-                res_dict_left = self.get_action_values_left(self.obs_left)
-                res_dict_right = self.get_action_values_right(self.obs_right)
+                res_dict_left = self.get_action_values_left(self.obs)
+                res_dict_right = self.get_action_values_right(self.obs)
 
             # self.experience_buffer.update_data('obses', n, self.obs['obs'])
             # self.experience_buffer.update_data('dones', n, self.dones)
 
             # Todo: add informations
-            self.experience_buffer_left.update_data_left('obses', n, self.obs_left['obs'])
+            self.experience_buffer_left.update_data_left('obses', n, self.obs['obs'])
             self.experience_buffer_left.update_data_left('dones', n, self.dones_spoon)
-            self.experience_buffer_right.update_data_right('obses', n, self.obs_right['obs'])
+            self.experience_buffer_right.update_data_right('obses', n, self.obs['obs'])
             self.experience_buffer_right.update_data_right('dones', n, self.dones_cup)
 
             # for k in update_list:
@@ -1672,12 +1670,12 @@ class ContinuousMultiA2CBase(A2CBase):
             for k in update_list_left:
                 self.experience_buffer_left.update_data_left(k, n, res_dict_left[k])
             if self.has_central_value:
-                self.experience_buffer_left.update_data_left('states', n, self.obs_left['states'])
+                self.experience_buffer_left.update_data_left('states', n, self.obs['states'])
 
             for k in update_list_right:
                 self.experience_buffer_right.update_data_right(k, n, res_dict_right[k])
             if self.has_central_value:
-                self.experience_buffer_right.update_data_right('states', n, self.obs_right['states'])
+                self.experience_buffer_right.update_data_right('states', n, self.obs['states'])
 
             step_time_start = time.time()
 
@@ -1687,10 +1685,7 @@ class ContinuousMultiA2CBase(A2CBase):
             actions_new = self.action_combine(res_dict_left['actions'], res_dict_right['actions'])
             # Todo: add another franka arm actions
             self.obs, rewards, self.dones,self.dones_spoon,self.dones_cup,infos, rewards_left, rewards_right = self.env_step(actions_new)
-            self.obs_left=self.obs
-            self.obs_right=self.obs
-            self.obs_left['obs'][:, -9:] = self.obs_left['obs'][:, -18:-9]
-            self.obs_right["obs"][:, -18:-9] = self.obs_right["obs"][:, -9:]
+
             #  self.obs, rewards, self.dones, infos = self.env_step(res_dict['actions'])
             step_time_end = time.time()
 
@@ -1748,8 +1743,8 @@ class ContinuousMultiA2CBase(A2CBase):
             self.current_rewards_right = self.current_rewards_right * not_dones_right.unsqueeze(1)
             self.current_lengths_right = self.current_lengths_right * not_dones_right
 
-        last_values_left = self.get_values_left(self.obs_left)
-        last_values_right = self.get_values_right(self.obs_right)
+        last_values_left = self.get_values_left(self.obs)
+        last_values_right = self.get_values_right(self.obs)
         fdones = self.dones.float()
         fdones_left = self.dones_spoon.float()
         fdones_right = self.dones_cup.float()
@@ -2009,13 +2004,13 @@ class ContinuousMultiA2CBase(A2CBase):
                 masks = self.vec_env.get_action_masks()
                 res_dict = self.get_masked_action_values(self.obs, masks)
             else:
-                res_dict_left = self.get_action_values_left(self.obs_left)
-                res_dict_right = self.get_action_values_right(self.obs_right)
+                res_dict_left = self.get_action_values_left(self.obs)
+                res_dict_right = self.get_action_values_right(self.obs)
             self.rnn_states_left = res_dict_left['rnn_states']
             self.rnn_states_right = res_dict_right['rnn_states']
-            self.experience_buffer_left.update_data_left('obses', n, self.obs_left['obs'])
+            self.experience_buffer_left.update_data_left('obses', n, self.obs['obs'])
             self.experience_buffer_left.update_data_left('dones', n, self.dones_spoon.byte())
-            self.experience_buffer_right.update_data_right('obses', n, self.obs_right['obs'])
+            self.experience_buffer_right.update_data_right('obses', n, self.obs['obs'])
             self.experience_buffer_right.update_data_right('dones', n, self.dones_cup.byte())
 
             for k in update_list_left:
@@ -2031,10 +2026,7 @@ class ContinuousMultiA2CBase(A2CBase):
             actions_new = self.action_combine(res_dict_left['actions'], res_dict_right['actions'])
             self.obs, rewards, self.dones, self.dones_spoon, self.dones_cup, infos, rewards_left, rewards_right = self.env_step(actions_new)
             step_time_end = time.time()
-            self.obs_left=self.obs
-            self.obs_right=self.obs
-            self.obs_left['obs'][:, -9:] = self.obs_left['obs'][:, -18:-9]
-            self.obs_right["obs"][:, -18:-9] = self.obs_right["obs"][:, -9:]
+
             step_time += (step_time_end - step_time_start)
 
             # two reward
@@ -2085,8 +2077,8 @@ class ContinuousMultiA2CBase(A2CBase):
             self.current_lengths_left = self.current_lengths_left * not_dones_left
             self.current_lengths_right = self.current_lengths_right * not_dones_right
 
-        last_values_left = self.get_values_left(self.obs_left)
-        last_values_right = self.get_values_right(self.obs_right)
+        last_values_left = self.get_values_left(self.obs)
+        last_values_right = self.get_values_right(self.obs)
 
         fdones_left = self.dones_spoon.float()
         fdones_right = self.dones_cup.float()
@@ -2134,11 +2126,6 @@ class ContinuousMultiA2CBase(A2CBase):
         total_time = 0
         rep_count = 0
         self.obs = self.env_reset()
-        self.obs_left = self.obs
-        self.obs_right = self.obs
-        self.obs_left['obs'][:,-9:]=self.obs_left['obs'][:,-18:-9]
-        self.obs_right["obs"][:,-18:-9]=self.obs_right["obs"][:,-9:]
-
         self.curr_frames = self.batch_size_envs
 
         if self.multi_gpu:
