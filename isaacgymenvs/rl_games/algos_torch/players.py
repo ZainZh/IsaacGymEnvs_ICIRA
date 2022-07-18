@@ -152,10 +152,11 @@ class PpoMultiPlayerContinuous(BaseMultiPlayer):
 
     def restore(self, fn):
         checkpoint = torch_ext.load_checkpoint(fn)
-        self.model_left.load_state_dict(checkpoint[0]['model'])
-        self.model_right.load_state_dict(checkpoint[1]['model'])
-        if self.normalize_input and 'running_mean_std' in checkpoint:
+        self.model_left.load_state_dict(checkpoint['model_left']['model'])
+        self.model_right.load_state_dict(checkpoint['model_right']['model'])
+        if self.normalize_input and 'running_mean_std' in checkpoint['model_left']:
             self.model_left.running_mean_std.load_state_dict(checkpoint['running_mean_std'])
+        if self.normalize_input and 'running_mean_std' in checkpoint['model_right']:
             self.model_right.running_mean_std.load_state_dict(checkpoint['running_mean_std'])
 
     def reset(self):

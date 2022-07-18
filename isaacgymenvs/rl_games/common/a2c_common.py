@@ -1634,8 +1634,8 @@ class ContinuousMultiA2CBase(A2CBase):
             self.scaler_right.load_state_dict(weights['scaler'])
 
     def set_weights(self, weights):
-        self.model_left.load_state_dict(weights['model'])
-        self.model_right.load_state_dict(weights['model'])
+        self.model_left.load_state_dict(weights['model_left'])
+        self.model_right.load_state_dict(weights['model_right'])
         self.set_stats_weights(weights)
 
     def play_steps_multi(self):

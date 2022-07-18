@@ -1598,23 +1598,23 @@ def compute_franka_reward(
     # ................................................................................................................
     ## sum of rewards
     sf = 1  # spoon flag
-    cf = 1  # cup flag
+    cf = 0  # cup flag
     stage1 = 1  # stage1 flag
-    stage2 = 1  # stage2 flag
-    stage3 = 1  # stage3 flag
+    stage2 = 0  # stage2 flag
+    stage3 = 0  # stage3 flag
     rewards = stage1 * (dist_reward_scale * (dist_reward * sf + dist_reward_1 * cf) \
                         + rot_reward_scale * (rot_reward * sf + rot_reward_1 * cf) \
                         + around_handle_reward_scale * (around_handle_reward * sf + around_handle_reward_1 * cf) \
                         + finger_dist_reward_scale * (finger_dist_reward * sf + finger_dist_reward_1 * cf) \
-                        + lift_reward_scale * (lift_reward * sf ) + 20*lift_reward_1 * cf\
+                        + 20 * (lift_reward * sf ) + 20*lift_reward_1 * cf\
                         - action_penalty_scale * action_penalty \
                         - spoon_fall_penalty)
     left_reward_stage1 = stage1 * (dist_reward_scale * (dist_reward * sf) \
                                    + rot_reward_scale * (rot_reward * sf) \
                                    + around_handle_reward_scale * (around_handle_reward * sf) \
                                    + finger_dist_reward_scale * (finger_dist_reward * sf) \
-                                   + lift_reward_scale * (lift_reward * sf) \
-                                   - action_penalty_scale * action_penalty \
+                                   + 20 * (lift_reward * sf) \
+                                   - action_penalty_scale * action_penalty
                                    - spoon_fall_penalty)
     right_reward_stage1 = stage1 * (dist_reward_scale * (dist_reward_1 * cf) \
                                     + rot_reward_scale * (rot_reward_1 * cf) \
@@ -1722,14 +1722,14 @@ def compute_franka_reward(
 
     # reset_buf_spoon
     reset_buf_spoon = torch.where(spoon_positions[:, 1] > 1.1, torch.ones_like(reset_buf_spoon), reset_buf_spoon)
-    reset_buf_spoon = torch.where(spoon_positions[:, 1] < 0.418, torch.ones_like(reset_buf_spoon),
+    reset_buf_spoon = torch.where(spoon_positions[:, 1] < 0.43, torch.ones_like(reset_buf_spoon),
                                   reset_buf_spoon)
     reset_buf_spoon = torch.where(progress_buf_spoon >= max_episode_length - 1, torch.ones_like(reset_buf_spoon), reset_buf_spoon)
 
     # reset_buf_cup
     reset_buf_cup = torch.where(cup_positions[:, 1] > 0.78, torch.ones_like(reset_buf_cup), reset_buf_cup)  #
     '''fall'''
-    reset_buf_cup = torch.where(cup_positions[:, 1] < 0.3, torch.ones_like(reset_buf_cup),
+    reset_buf_cup = torch.where(cup_positions[:, 1] < 0.43, torch.ones_like(reset_buf_cup),
                                 reset_buf_cup)  # cup fall to table or ground
     reset_buf_cup = torch.where(torch.acos(dot_cup_reverse) * 180 / torch.pi > 90, torch.ones_like(reset_buf_cup),
                                 reset_buf_cup)  # cup fall direction
