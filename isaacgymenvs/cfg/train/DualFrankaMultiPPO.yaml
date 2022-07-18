@@ -34,7 +34,7 @@ params:
   load_path: ${...checkpoint} # path to the checkpoint to load
 
   config:
-    name: ${resolve_default:DualFrankaMultiPPO_0718,${....experiment}}
+    name: ${resolve_default:DualFrankaMultiPPO_0718_twoobs,${....experiment}}
     full_experiment_name: ${.name}
     env_name: rlgpu
     ppo: True
