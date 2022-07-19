@@ -89,14 +89,15 @@ class Env(ABC):
         self.multifranka=config["env"]["multifranka"]
 
         self.control_freq_inv = config["env"].get("controlFrequencyInv", 1)
-        self.obs_space = spaces.Box(np.ones(self.num_obs) * -np.Inf, np.ones(self.num_obs) * np.Inf)
+
         self.state_space = spaces.Box(np.ones(self.num_states) * -np.Inf, np.ones(self.num_states) * np.Inf)
 
         if self.multifranka:
             self.act_space = spaces.Box(np.ones(int(self.num_actions/2)) * -1., np.ones(int(self.num_actions/2)) * 1.)
+            self.obs_space = spaces.Box(np.ones(int(self.num_obs/2)) * -np.Inf, np.ones(int(self.num_obs/2)) * np.Inf)
         else:
             self.act_space = spaces.Box(np.ones(self.num_actions) * -1., np.ones(self.num_actions) * 1.)
-
+            self.obs_space = spaces.Box(np.ones(self.num_obs) * -np.Inf, np.ones(self.num_obs) * np.Inf)
 
 
         self.clip_obs = config["env"].get("clipObservations", np.Inf)
@@ -260,6 +261,10 @@ class VecTask(Env):
         # allocate buffers
         self.obs_buf = torch.zeros(
             (self.num_envs, self.num_obs), device=self.device, dtype=torch.float)
+        self.obs_buf_left = torch.zeros(
+            (self.num_envs, int(self.num_obs/2)), device=self.device, dtype=torch.float)
+        self.obs_buf_right = torch.zeros(
+            (self.num_envs, int(self.num_obs/2)), device=self.device, dtype=torch.float)
         self.states_buf = torch.zeros(
             (self.num_envs, self.num_states), device=self.device, dtype=torch.float)
         self.rew_buf = torch.zeros(
@@ -404,15 +409,20 @@ class VecTask(Env):
         if self.dr_randomizations.get('observations', None):
             self.obs_buf = self.dr_randomizations['observations']['noise_lambda'](self.obs_buf)
 
+
+
         self.extras["time_outs"] = self.timeout_buf.to(self.rl_device)
 
         self.obs_dict["obs"] = torch.clamp(self.obs_buf, -self.clip_obs, self.clip_obs).to(self.rl_device)
 
+
         # asymmetric actor-critic
         if self.num_states > 0:
             self.obs_dict["states"] = self.get_state()
+        self.obs_dict_left['obs']=self.obs_dict['obs'][:,:37]
+        self.obs_dict_right['obs']=self.obs_dict['obs'][:,37:]
 
-        return self.obs_dict, self.rew_buf.to(self.rl_device), \
+        return self.obs_dict_left, self.obs_dict_right,self.rew_buf.to(self.rl_device), \
                self.reset_buf.to(self.rl_device),self.reset_buf_spoon.to(self.rl_device),self.reset_buf_cup.to(self.rl_device), self.extras,\
                self.left_reward_stage1.to(self.rl_device), self.right_reward_stage1.to(self.rl_device)
 
@@ -456,15 +466,17 @@ class VecTask(Env):
             Observation dictionary
         """
         zero_actions = self.zero_actions()
-        self.obs_dict["obs"] = torch.clamp(self.obs_buf, -self.clip_obs, self.clip_obs).to(self.rl_device)
+        self.obs_dict_left["obs"] = torch.clamp(self.obs_buf_left, -self.clip_obs, self.clip_obs).to(self.rl_device)
+        self.obs_dict_right["obs"] = torch.clamp(self.obs_buf_right, -self.clip_obs, self.clip_obs).to(self.rl_device)
 
         # asymmetric actor-critic
         if self.num_states > 0:
-            self.obs_dict["states"] = self.get_state()
+            self.obs_dict_left["states"] = self.get_state()
+            self.obs_dict_right["states"] = self.get_state()
 
         self.step_multi(zero_actions)
 
-        return self.obs_dict
+        return self.obs_dict_left,self.obs_dict_right
 
     def reset_done(self):
         """Reset the environment.

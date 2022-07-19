@@ -163,7 +163,7 @@ class A2CBase(BaseAlgorithm):
         self.seq_len = self.config.get('seq_length', 4)
         self.bptt_len = self.config.get('bptt_length', self.seq_len)
         self.normalize_advantage = config['normalize_advantage']
-        self.normalize_rms_advantage = config.get('normalize_rms_advantage', False) #False
+        self.normalize_rms_advantage = config.get('normalize_rms_advantage', False)  # False
         self.normalize_input = self.config['normalize_input']
         self.normalize_value = self.config.get('normalize_value', False)  # True
         self.truncate_grads = self.config.get('truncate_grads', False)
@@ -187,6 +187,8 @@ class A2CBase(BaseAlgorithm):
         self.game_lengths = torch_ext.AverageMeter(1, self.games_to_track).to(self.ppo_device)
 
         self.obs = None
+        self.obs_left = None
+        self.obs_right = None
         # Todo: add two new obs
         self.games_num = self.config['minibatch_size'] // self.seq_len  # it is used only for current rnn implementation
         self.batch_size = self.horizon_length * self.num_actors * self.num_agents
@@ -1323,6 +1325,12 @@ class ContinuousMultiA2CBase(A2CBase):
         self.actions_low = torch.cat((self.actions_low, self.actions_low), 0)
         self.actions_high = torch.cat((self.actions_high, self.actions_high), 0)
 
+    def env_reset_multi(self):
+        obs_left, obs_right = self.vec_env.reset_multi()
+        obs_left = self.obs_to_tensors(obs_left)
+        obs_right = self.obs_to_tensors(obs_right)
+        return obs_left, obs_right
+
     def preprocess_actions(self, actions):
 
         if self.clip_actions:
@@ -1515,39 +1523,34 @@ class ContinuousMultiA2CBase(A2CBase):
         self.model_left.train()
         self.model_right.train()
 
-
     def set_eval_multi(self):
         self.model_left.eval()
         self.model_right.eval()
 
-
     def env_step(self, actions):
         actions = self.preprocess_actions(actions)
-        obs, rewards, dones, dones_spoon, dones_cup, infos, left_reward, right_reward = self.vec_env.step_multi(actions)
+        obs_left, obs_right, rewards, dones, dones_spoon, dones_cup, infos, left_reward, right_reward = self.vec_env.step_multi(
+            actions)
 
         if self.is_tensor_obses:
             if self.value_size == 1:
                 rewards = rewards.unsqueeze(1)
                 left_reward = left_reward.unsqueeze(1)
                 right_reward = right_reward.unsqueeze(1)
-            if self.multi_franka:
-                return self.obs_to_tensors(obs), rewards.to(self.ppo_device), \
-                       dones.to(self.ppo_device),dones_spoon.to(self.ppo_device),dones_cup.to(self.ppo_device),infos, \
-                       left_reward.to(self.ppo_device), right_reward.to(self.ppo_device)
-            else:
-                return self.obs_to_tensors(obs), rewards.to(self.ppo_device), dones.to(self.ppo_device), infos
+
+            return self.obs_to_tensors(obs_left), self.obs_to_tensors(obs_right), rewards.to(self.ppo_device), \
+                   dones.to(self.ppo_device), dones_spoon.to(self.ppo_device), dones_cup.to(self.ppo_device), infos, \
+                   left_reward.to(self.ppo_device), right_reward.to(self.ppo_device)
+
         else:
             if self.value_size == 1:
                 rewards = np.expand_dims(rewards, axis=1)
                 left_reward = np.expand_dims(left_reward, axis=1)
                 right_reward = np.expand_dims(right_reward, axis=1)
-            if self.multi_franka:
-                return self.obs_to_tensors(obs), rewards.to(self.ppo_device), dones.to(self.ppo_device), infos, \
-                       left_reward.to(self.ppo_device), right_reward.to(self.ppo_device)
-            else:
-                return self.obs_to_tensors(obs), torch.from_numpy(rewards).to(
-                    self.ppo_device).float(), torch.from_numpy(
-                    dones).to(self.ppo_device), infos
+
+            return self.obs_to_tensors(obs_left), self.obs_to_tensors(obs_right), rewards.to(self.ppo_device), dones.to(
+                self.ppo_device), infos, \
+                   left_reward.to(self.ppo_device), right_reward.to(self.ppo_device)
 
     def clear_stats(self):
         self.game_rewards_left.clear_left()
@@ -1587,7 +1590,6 @@ class ContinuousMultiA2CBase(A2CBase):
         self.set_weights(weights)
         self.epoch_num = weights['epoch']
         self.optimizer.load_state_dict(weights['optimizer'])
-
 
         self.frame = weights.get('frame', 0)
         self.last_mean_rewards = weights.get('last_mean_rewards', -100500)
@@ -1645,37 +1647,31 @@ class ContinuousMultiA2CBase(A2CBase):
         step_time = 0.0
 
         for n in range(self.horizon_length):
-            if self.use_action_masks:
-                masks = self.vec_env.get_action_masks()
-                res_dict = self.get_masked_action_values(self.obs, masks)
-            else:
-                res_dict_left = self.get_action_values_left(self.obs)
-                res_dict_right = self.get_action_values_right(self.obs)
+
+            res_dict_left = self.get_action_values_left(self.obs_left)
+            res_dict_right = self.get_action_values_right(self.obs_right)
 
             # self.experience_buffer.update_data('obses', n, self.obs['obs'])
             # self.experience_buffer.update_data('dones', n, self.dones)
 
             # Todo: add informations
-            self.experience_buffer_left.update_data_left('obses', n, self.obs['obs'])
+            self.experience_buffer_left.update_data_left('obses', n, self.obs_left['obs'])
             self.experience_buffer_left.update_data_left('dones', n, self.dones_spoon)
-            self.experience_buffer_right.update_data_right('obses', n, self.obs['obs'])
+            self.experience_buffer_right.update_data_right('obses', n, self.obs_right['obs'])
             self.experience_buffer_right.update_data_right('dones', n, self.dones_cup)
 
-            # for k in update_list:
-            #     self.experience_buffer.update_data(k, n, res_dict[k])
-            # if self.has_central_value:
-            #     self.experience_buffer.update_data('states', n, self.obs['states'])
+
 
             # Todo: add informations
             for k in update_list_left:
                 self.experience_buffer_left.update_data_left(k, n, res_dict_left[k])
             if self.has_central_value:
-                self.experience_buffer_left.update_data_left('states', n, self.obs['states'])
+                self.experience_buffer_left.update_data_left('states', n, self.obs_left['states'])
 
             for k in update_list_right:
                 self.experience_buffer_right.update_data_right(k, n, res_dict_right[k])
             if self.has_central_value:
-                self.experience_buffer_right.update_data_right('states', n, self.obs['states'])
+                self.experience_buffer_right.update_data_right('states', n, self.obs_right['states'])
 
             step_time_start = time.time()
 
@@ -1684,9 +1680,9 @@ class ContinuousMultiA2CBase(A2CBase):
             # actions_new = self.obs['obs'][:,-18:]
             actions_new = self.action_combine(res_dict_left['actions'], res_dict_right['actions'])
             # Todo: add another franka arm actions
-            self.obs, rewards, self.dones,self.dones_spoon,self.dones_cup,infos, rewards_left, rewards_right = self.env_step(actions_new)
+            self.obs_left, self.obs_right, rewards, self.dones, self.dones_spoon, self.dones_cup, infos, rewards_left, rewards_right = self.env_step(
+                actions_new)
 
-            #  self.obs, rewards, self.dones, infos = self.env_step(res_dict['actions'])
             step_time_end = time.time()
 
             step_time += (step_time_end - step_time_start)
@@ -1722,8 +1718,10 @@ class ContinuousMultiA2CBase(A2CBase):
 
             all_done_indices = self.dones.nonzero(as_tuple=False)
             env_done_indices = self.dones.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
-            env_done_indices_left = self.dones_spoon.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
-            env_done_indices_right = self.dones_cup.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
+            env_done_indices_left = self.dones_spoon.view(self.num_actors, self.num_agents).all(dim=1).nonzero(
+                as_tuple=False)
+            env_done_indices_right = self.dones_cup.view(self.num_actors, self.num_agents).all(dim=1).nonzero(
+                as_tuple=False)
 
             # self.game_rewards.update(self.current_rewards[env_done_indices])
             # self.game_lengths.update(self.current_lengths[env_done_indices])
@@ -1743,8 +1741,8 @@ class ContinuousMultiA2CBase(A2CBase):
             self.current_rewards_right = self.current_rewards_right * not_dones_right.unsqueeze(1)
             self.current_lengths_right = self.current_lengths_right * not_dones_right
 
-        last_values_left = self.get_values_left(self.obs)
-        last_values_right = self.get_values_right(self.obs)
+        last_values_left = self.get_values_left(self.obs_left)
+        last_values_right = self.get_values_right(self.obs_right)
         fdones = self.dones.float()
         fdones_left = self.dones_spoon.float()
         fdones_right = self.dones_cup.float()
@@ -1754,7 +1752,8 @@ class ContinuousMultiA2CBase(A2CBase):
         mb_fdones_right = self.experience_buffer_right.tensor_dict_right['dones'].float()
         mb_values_right = self.experience_buffer_right.tensor_dict_right['values']
         mb_rewards_right = self.experience_buffer_right.tensor_dict_right['rewards']
-        mb_advs_left = self.discount_values(fdones_left, last_values_left, mb_fdones_left, mb_values_left, mb_rewards_left)
+        mb_advs_left = self.discount_values(fdones_left, last_values_left, mb_fdones_left, mb_values_left,
+                                            mb_rewards_left)
         mb_returns_left = mb_advs_left + mb_values_left
         mb_advs_right = self.discount_values(fdones_right, last_values_right, mb_fdones_right, mb_values_right,
                                              mb_rewards_right)
@@ -2000,31 +1999,28 @@ class ContinuousMultiA2CBase(A2CBase):
             if self.has_central_value:
                 self.central_value_net.pre_step_rnn(n)
 
-            if self.use_action_masks:
-                masks = self.vec_env.get_action_masks()
-                res_dict = self.get_masked_action_values(self.obs, masks)
-            else:
-                res_dict_left = self.get_action_values_left(self.obs)
-                res_dict_right = self.get_action_values_right(self.obs)
+
+            res_dict_left = self.get_action_values_left(self.obs_left)
+            res_dict_right = self.get_action_values_right(self.obs_right)
+
             self.rnn_states_left = res_dict_left['rnn_states']
             self.rnn_states_right = res_dict_right['rnn_states']
-            self.experience_buffer_left.update_data_left('obses', n, self.obs['obs'])
+            self.experience_buffer_left.update_data_left('obses', n, self.obs_left['obs'])
             self.experience_buffer_left.update_data_left('dones', n, self.dones_spoon.byte())
-            self.experience_buffer_right.update_data_right('obses', n, self.obs['obs'])
+            self.experience_buffer_right.update_data_right('obses', n, self.obs_right['obs'])
             self.experience_buffer_right.update_data_right('dones', n, self.dones_cup.byte())
 
             for k in update_list_left:
                 self.experience_buffer_left.update_data_left(k, n, res_dict_left[k])
             for k in update_list_right:
                 self.experience_buffer_right.update_data_right(k, n, res_dict_right[k])
-            if self.has_central_value:
-                self.experience_buffer.update_data('states', n, self.obs['states'])
 
             step_time_start = time.time()
             # actions_new = self.obs['obs'][:,-18:]
             # Todo: add another franka arm actions
             actions_new = self.action_combine(res_dict_left['actions'], res_dict_right['actions'])
-            self.obs, rewards, self.dones, self.dones_spoon, self.dones_cup, infos, rewards_left, rewards_right = self.env_step(actions_new)
+            self.obs_left, self.obs_right, rewards, self.dones, self.dones_spoon, self.dones_cup, infos, rewards_left, rewards_right = self.env_step(
+                actions_new)
             step_time_end = time.time()
 
             step_time += (step_time_end - step_time_start)
@@ -2053,8 +2049,10 @@ class ContinuousMultiA2CBase(A2CBase):
             all_done_indices_left = self.dones_spoon.nonzero(as_tuple=False)
             all_done_indices_right = self.dones_cup.nonzero(as_tuple=False)
             env_done_indices = self.dones.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
-            env_done_indices_left = self.dones_spoon.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
-            env_done_indices_right = self.dones_cup.view(self.num_actors, self.num_agents).all(dim=1).nonzero(as_tuple=False)
+            env_done_indices_left = self.dones_spoon.view(self.num_actors, self.num_agents).all(dim=1).nonzero(
+                as_tuple=False)
+            env_done_indices_right = self.dones_cup.view(self.num_actors, self.num_agents).all(dim=1).nonzero(
+                as_tuple=False)
             if len(all_done_indices_left) > 0:
                 for s in self.rnn_states_left:
                     s[:, all_done_indices_left, :] = s[:, all_done_indices_left, :] * 0.0
@@ -2077,8 +2075,8 @@ class ContinuousMultiA2CBase(A2CBase):
             self.current_lengths_left = self.current_lengths_left * not_dones_left
             self.current_lengths_right = self.current_lengths_right * not_dones_right
 
-        last_values_left = self.get_values_left(self.obs)
-        last_values_right = self.get_values_right(self.obs)
+        last_values_left = self.get_values_left(self.obs_left)
+        last_values_right = self.get_values_right(self.obs_right)
 
         fdones_left = self.dones_spoon.float()
         fdones_right = self.dones_cup.float()
@@ -2089,7 +2087,8 @@ class ContinuousMultiA2CBase(A2CBase):
         mb_values_right = self.experience_buffer_right.tensor_dict_right['values']
         mb_rewards_left = self.experience_buffer_left.tensor_dict_left['rewards']
         mb_rewards_right = self.experience_buffer_right.tensor_dict_right['rewards']
-        mb_advs_left = self.discount_values(fdones_left, last_values_left, mb_fdones_left, mb_values_left, mb_rewards_left)
+        mb_advs_left = self.discount_values(fdones_left, last_values_left, mb_fdones_left, mb_values_left,
+                                            mb_rewards_left)
         mb_advs_right = self.discount_values(fdones_right, last_values_right, mb_fdones_right, mb_values_right,
                                              mb_rewards_right)
         mb_returns_left = mb_advs_left + mb_values_left
@@ -2125,7 +2124,7 @@ class ContinuousMultiA2CBase(A2CBase):
         start_time = time.time()
         total_time = 0
         rep_count = 0
-        self.obs = self.env_reset()
+        self.obs_left, self.obs_right = self.env_reset_multi()
         self.curr_frames = self.batch_size_envs
 
         if self.multi_gpu:
@@ -2171,7 +2170,8 @@ class ContinuousMultiA2CBase(A2CBase):
                 if len(b_losses_left) > 0:
                     self.writer.add_scalar('losses/bounds_loss_left', torch_ext.mean_list(b_losses_left).item(), frame)
                 if len(b_losses_right) > 0:
-                    self.writer.add_scalar('losses/bounds_loss_right', torch_ext.mean_list(b_losses_right).item(), frame)
+                    self.writer.add_scalar('losses/bounds_loss_right', torch_ext.mean_list(b_losses_right).item(),
+                                           frame)
 
                 if self.has_soft_aug:
                     self.writer.add_scalar('losses/aug_loss', np.mean(aug_losses), frame)
@@ -2236,8 +2236,8 @@ class ContinuousMultiA2CBase(A2CBase):
 
                 if epoch_num > self.max_epochs:
                     self.save_multi(os.path.join(self.nn_dir,
-                                           'last_' + self.config['name'] + 'ep' + str(epoch_num) + 'rew' + str(
-                                               mean_reward_left + mean_reward_right)))
+                                                 'last_' + self.config['name'] + 'ep' + str(epoch_num) + 'rew' + str(
+                                                     mean_reward_left + mean_reward_right)))
                     print('MAX EPOCHS NUM!')
                     should_exit = True
 

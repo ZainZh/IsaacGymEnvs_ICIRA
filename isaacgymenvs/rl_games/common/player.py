@@ -384,16 +384,18 @@ class BaseMultiPlayer(object):
     def env_step(self, env, actions):
         if not self.is_tensor_obses:
             actions = actions.cpu().numpy()
-        obs, rewards, dones, dones_spoon, dones_cup, infos, left_rewards, right_rewards = env.step_multi(actions)
+        obs_left,obs_right,rewards, dones, dones_spoon, dones_cup, infos, left_rewards, right_rewards = env.step_multi(actions)
 
-        if hasattr(obs, 'dtype') and obs.dtype == np.float64:
-            obs = np.float32(obs)
+        if hasattr(obs_left, 'dtype') and obs_left.dtype == np.float64:
+            obs_left = np.float32(obs_left)
+        if hasattr(obs_right, 'dtype') and obs_right.dtype == np.float64:
+            obs_right = np.float32(obs_right)
         if self.value_size > 1:
             rewards = rewards[0]
             left_rewards = left_rewards[0]
             right_rewards = right_rewards[0]
         if self.is_tensor_obses:
-            return self.obs_to_torch(obs), rewards.cpu(), dones.cpu(), \
+            return self.obs_to_torch(obs_left),self.obs_to_torch(obs_right),rewards.cpu(), dones.cpu(), \
                    dones_spoon.cpu(), dones_cup.cpu(), \
                    infos, left_rewards.cpu(), right_rewards.cpu()
         else:
@@ -404,7 +406,7 @@ class BaseMultiPlayer(object):
                 dones = np.expand_dims(np.asarray(dones), 0)
                 dones_spoon = np.expand_dims(np.asarray(dones_spoon), 0)
                 dones_cup = np.expand_dims(np.asarray(dones_cup), 0)
-            return self.obs_to_torch(obs), torch.from_numpy(rewards), torch.from_numpy(dones), \
+            return self.obs_to_torch(obs_left),self.obs_to_torch(obs_right),torch.from_numpy(rewards), torch.from_numpy(dones), \
                    torch.from_numpy(dones_spoon), torch.from_numpy(dones_cup), infos, \
                    torch.from_numpy(left_rewards), torch.from_numpy(right_rewards)
 
@@ -448,8 +450,8 @@ class BaseMultiPlayer(object):
         return actions
 
     def env_reset(self, env):
-        obs = env.reset()
-        return self.obs_to_torch(obs)
+        obs_left,obs_right = env.reset_multi()
+        return self.obs_to_torch(obs_left),self.obs_to_torch(obs_right)
 
     def restore(self, fn):
         raise NotImplementedError('restore')
@@ -523,9 +525,9 @@ class BaseMultiPlayer(object):
             if games_played >= n_games:
                 break
 
-            obses = self.env_reset(self.env)
+            obses_left,obses_right = self.env_reset(self.env)
             batch_size = 1
-            batch_size = self.get_batch_size(obses, batch_size)
+            batch_size = self.get_batch_size(obses_left, batch_size)
 
             if need_init_rnn:
                 if self.multi_franka:
