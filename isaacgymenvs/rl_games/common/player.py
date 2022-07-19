@@ -342,6 +342,8 @@ class BaseMultiPlayer(object):
         self.is_tensor_obses = False
 
         self.states = None
+        self.states_left = None
+        self.states_right = None
         self.player_config = self.config.get('player', {})
         self.use_cuda = True
         self.batch_size = 1
@@ -491,9 +493,17 @@ class BaseMultiPlayer(object):
 
     def init_rnn_multi(self):
         if self.is_rnn_left:
-            rnn_states = self.model_left.get_default_rnn_state()
-            self.states = [torch.zeros((s.size()[0], self.batch_size, s.size(
-            )[2]), dtype=torch.float32).to(self.device) for s in rnn_states]
+            rnn_states_left = self.model_left.get_default_rnn_state()
+            self.states_left = [torch.zeros((s.size()[0], self.batch_size, s.size(
+            )[2]), dtype=torch.float32).to(self.device) for s in rnn_states_left]
+        if self.is_rnn_right:
+            rnn_states_right = self.model_right.get_default_rnn_state()
+            self.states_right = [torch.zeros((s.size()[0], self.batch_size, s.size(
+            )[2]), dtype=torch.float32).to(self.device) for s in rnn_states_right]
+
+    def action_combine(self, actions_left, actions_right):
+        actions = torch.cat((actions_left, actions_right), 1)
+        return actions
 
     def run(self):
         n_games = self.games_num
@@ -526,8 +536,10 @@ class BaseMultiPlayer(object):
                 break
 
             obses_left,obses_right = self.env_reset(self.env)
-            batch_size = 1
-            batch_size = self.get_batch_size(obses_left, batch_size)
+            batch_size_left = 1
+            batch_size_left = self.get_batch_size_left(obses_left,batch_size_left)
+            batch_size_right = 1
+            batch_size_right = self.get_batch_size_right(obses_right,batch_size_right)
 
             if need_init_rnn:
                 if self.multi_franka:
@@ -537,31 +549,34 @@ class BaseMultiPlayer(object):
                     self.init_rnn()
                     need_init_rnn = False
 
-            cr = torch.zeros(batch_size, dtype=torch.float32)
-            cr_left = torch.zeros(batch_size, dtype=torch.float32)
-            cr_right = torch.zeros(batch_size, dtype=torch.float32)
-            steps = torch.zeros(batch_size, dtype=torch.float32)
+
+            cr_left = torch.zeros(batch_size_left, dtype=torch.float32)
+            cr_right = torch.zeros(batch_size_right, dtype=torch.float32)
+            steps_left = torch.zeros(batch_size_left, dtype=torch.float32)
+            steps_right = torch.zeros(batch_size_right, dtype=torch.float32)
 
             print_game_res = False
 
             for n in range(self.max_steps):
                 if has_masks:
                     masks = self.env.get_action_mask()
-                    action = self.get_masked_action(
-                        obses, masks, is_determenistic)
+                    action_left = self.get_masked_action(
+                        obses_left, masks, is_determenistic)
+                    action_right = self.get_masked_action(
+                        obses_right, masks, is_determenistic)
+                    action= self.action_combine(action_left,action_right)
                 else:
-                    action = self.get_action(obses, is_determenistic)
-                obses, r, done, done_spoon, done_cup, info, left_r, right_r = self.env_step(self.env, action)
+                    action_left = self.get_action_left(obses_left, is_determenistic)
+                    action_right = self.get_action_right(obses_right, is_determenistic)
+                    action = self.action_combine(action_left, action_right)
+                obses_left,obses_right, r, done, done_spoon, done_cup, info, left_r, right_r = self.env_step(self.env, action)
 
                 cr_left+=left_r
                 cr_right+=right_r
                 cr =cr_left+cr_right
-                steps += 1
+                steps_left += 1
+                steps_right += 1
 
-                # save step to hdf5
-                if self.if_write_hdf5 and n >= 1:
-                    self.hdf5_writer.add(prev_obses, action, r, obses, done)
-                prev_obses = obses
 
                 if render:
                     self.env.render(mode='human')
@@ -573,24 +588,24 @@ class BaseMultiPlayer(object):
                 # done_indices = all_done_indices[::self.num_agents]
                 done_indices_spoon = all_done_indices_spoon[::self.num_agents]
                 done_indices_cup = all_done_indices_cup[::self.num_agents]
-                done_count = max(len(done_indices_cup),len(done_indices_spoon))
+                done_count = min(len(done_indices_cup),len(done_indices_spoon))
                 games_played += done_count
 
                 if done_count > 0:
-                    if self.multi_franka:
-                        if self.is_rnn_left:
-                            for s in self.states:
-                                s[:, all_done_indices_cup, :] = s[:, all_done_indices_cup, :] * 0.0
-                    else:
-                        if self.is_rnn:
-                            for s in self.states:
-                                s[:, all_done_indices, :] = s[:, all_done_indices, :] * 0.0
+
+                    if self.is_rnn_left:
+                        for s in self.states_left:
+                            s[:, all_done_indices_cup, :] = s[:, all_done_indices_cup, :] * 0.0
+                    if self.is_rnn_right:
+                        for s in self.states_right:
+                            s[:, all_done_indices_spoon, :] = s[:, all_done_indices_spoon, :] * 0.0
+
 
                     cur_rewards = cr[done_indices_cup].sum().item()
-                    cur_steps = steps[done_indices_cup].sum().item()
+                    cur_steps = steps_right[done_indices_cup].sum().item()
 
                     cr = cr * (1.0 - done_cup.float())
-                    steps = steps * (1.0 - done_cup.float())
+                    steps_right = steps_right * (1.0 - done_cup.float())
                     sum_rewards += cur_rewards
                     sum_steps += cur_steps
 
@@ -612,11 +627,10 @@ class BaseMultiPlayer(object):
                                   'steps:', cur_steps / done_count)
 
                     sum_game_res += game_res
-                    if batch_size // self.num_agents == 1 or games_played >= n_games:
+                    if batch_size_left // self.num_agents == 1 or games_played >= n_games:
                         break
 
-            if self.if_write_hdf5:
-                self.hdf5_writer.flush()
+
 
         print(sum_rewards)
         if print_game_res:
@@ -626,7 +640,7 @@ class BaseMultiPlayer(object):
             print('av reward:', sum_rewards / games_played * n_game_life,
                   'av steps:', sum_steps / games_played * n_game_life)
 
-    def get_batch_size(self, obses, batch_size):
+    def get_batch_size_left(self, obses, batch_size):
         obs_shape = self.obs_shape
         if type(self.obs_shape) is dict:
             if 'obs' in obses:
@@ -641,6 +655,27 @@ class BaseMultiPlayer(object):
             batch_size = obses.size()[0]
             self.has_batch_dimension = True
 
-        self.batch_size = batch_size
+        self.batch_size_left = batch_size
+
+
+        return batch_size
+
+    def get_batch_size_right(self, obses, batch_size):
+        obs_shape = self.obs_shape
+        if type(self.obs_shape) is dict:
+            if 'obs' in obses:
+                obses = obses['obs']
+            keys_view = self.obs_shape.keys()
+            keys_iterator = iter(keys_view)
+            first_key = next(keys_iterator)
+            obs_shape = self.obs_shape[first_key]
+            obses = obses[first_key]
+
+        if len(obses.size()) > len(obs_shape):
+            batch_size = obses.size()[0]
+            self.has_batch_dimension = True
+
+        self.batch_size_right = batch_size
+
 
         return batch_size

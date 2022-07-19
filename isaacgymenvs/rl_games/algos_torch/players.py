@@ -80,13 +80,13 @@ class PpoPlayerContinuous(BasePlayer):
 
 class PpoMultiPlayerContinuous(BaseMultiPlayer):
     def __init__(self, params):
-        BasePlayer.__init__(self, params)
+        BaseMultiPlayer.__init__(self, params)
         self.network = self.config['network']
         self.actions_num = self.action_space.shape[0]
         self.actions_low = torch.from_numpy(self.action_space.low.copy()).float().to(self.device)
         self.actions_high = torch.from_numpy(self.action_space.high.copy()).float().to(self.device)
-        self.actions_low = torch.cat((self.actions_low, self.actions_low), 0)
-        self.actions_high = torch.cat((self.actions_high, self.actions_high), 0)
+        # self.actions_low = torch.cat((self.actions_low, self.actions_low), 0)
+        # self.actions_high = torch.cat((self.actions_high, self.actions_high), 0)
         self.mask = [False]
 
         self.normalize_input = self.config['normalize_input']
@@ -119,7 +119,7 @@ class PpoMultiPlayerContinuous(BaseMultiPlayer):
         actions = torch.cat((actions_left, actions_right), 1)
         return actions
 
-    def get_action(self, obs, is_determenistic = False):
+    def get_action_left(self, obs, is_determenistic = False):
         if self.has_batch_dimension == False:
             obs = unsqueeze_obs(obs)
         obs = self._preproc_obs(obs)
@@ -127,21 +127,52 @@ class PpoMultiPlayerContinuous(BaseMultiPlayer):
             'is_train': False,
             'prev_actions': None,
             'obs' : obs,
-            'rnn_states' : self.states
+            'rnn_states' : self.states_left
         }
         with torch.no_grad():
             res_dict_left = self.model_left(input_dict)
-            res_dict_right = self.model_right(input_dict)
+
         mu_left = res_dict_left['mus']
-        mu_right = res_dict_right['mus']
+
         action_left = res_dict_left['actions']
-        action_right = res_dict_right['actions']
-        self.states = res_dict_right['rnn_states']
+
+        self.states_left = res_dict_left['rnn_states']
 
         if is_determenistic:
-            current_action = self.action_combine(mu_left,mu_right)
+            current_action = mu_left
         else:
-            current_action = self.action_combine(action_left,action_right)
+            current_action = action_left
+        if self.has_batch_dimension == False:
+            current_action = torch.squeeze(current_action.detach())
+
+        if self.clip_actions:
+            return rescale_actions(self.actions_low, self.actions_high, torch.clamp(current_action, -1.0, 1.0))
+        else:
+            return current_action
+
+    def get_action_right(self, obs, is_determenistic = False):
+        if self.has_batch_dimension == False:
+            obs = unsqueeze_obs(obs)
+        obs = self._preproc_obs(obs)
+        input_dict = {
+            'is_train': False,
+            'prev_actions': None,
+            'obs' : obs,
+            'rnn_states' : self.states_right
+        }
+        with torch.no_grad():
+
+            res_dict_right = self.model_right(input_dict)
+
+        mu_right = res_dict_right['mus']
+
+        action_right = res_dict_right['actions']
+        self.states_right = res_dict_right['rnn_states']
+
+        if is_determenistic:
+            current_action =mu_right
+        else:
+            current_action =action_right
         if self.has_batch_dimension == False:
             current_action = torch.squeeze(current_action.detach())
 
