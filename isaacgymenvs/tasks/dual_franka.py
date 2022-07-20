@@ -1598,7 +1598,7 @@ def compute_franka_reward(
     # ................................................................................................................
     ## sum of rewards
     sf = 1  # spoon flag
-    cf = 1  # cup flag
+    cf = 0  # cup flag
     stage1 = 1 # stage1 flag
     stage2 = 0  # stage2 flag
     stage3 = 0  # stage3 flag
