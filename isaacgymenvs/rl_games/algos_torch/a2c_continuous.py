@@ -44,7 +44,8 @@ class A2CAgent(a2c_common.ContinuousA2CBase):
         self.init_rnn_from_model(self.model)
         self.last_lr = float(self.last_lr)
         self.bound_loss_type = self.config.get('bound_loss_type', 'bound')  # 'regularisation' or 'bound'
-        self.optimizer = optim.Adam(self.model.parameters(), float(self.last_lr), eps=1e-08, weight_decay=self.weight_decay)
+        self.optimizer = optim.Adam(self.model.parameters(), float(self.last_lr), eps=1e-08,
+                                    weight_decay=self.weight_decay)
 
         if self.has_central_value:
             cv_config = {
@@ -67,7 +68,8 @@ class A2CAgent(a2c_common.ContinuousA2CBase):
             self.central_value_net = central_value.CentralValueTrain(**cv_config).to(self.ppo_device)
 
         self.use_experimental_cv = self.config.get('use_experimental_cv', True)
-        self.dataset = datasets.PPODataset(self.batch_size, self.minibatch_size, self.is_discrete, self.is_rnn, self.ppo_device, self.seq_len)
+        self.dataset = datasets.PPODataset(self.batch_size, self.minibatch_size, self.is_discrete, self.is_rnn,
+                                           self.ppo_device, self.seq_len)
         if self.normalize_value:
             self.value_mean_std = self.central_value_net.model.value_mean_std if self.has_central_value else self.model.value_mean_std
 
@@ -124,10 +126,12 @@ class A2CAgent(a2c_common.ContinuousA2CBase):
             mu = res_dict['mus']
             sigma = res_dict['sigmas']
 
-            a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo, curr_e_clip)
+            a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo,
+                                          curr_e_clip)
 
             if self.has_value_loss:
-                c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch, self.clip_value)
+                c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch,
+                                                   self.clip_value)
             else:
                 c_loss = torch.zeros(1, device=self.ppo_device)
             if self.bound_loss_type == 'regularisation':
@@ -137,8 +141,8 @@ class A2CAgent(a2c_common.ContinuousA2CBase):
             else:
                 b_loss = torch.zeros(1, device=self.ppo_device)
 
-
-            losses, sum_mask = torch_ext.apply_masks([a_loss.unsqueeze(1), c_loss, entropy.unsqueeze(1), b_loss.unsqueeze(1)], rnn_masks)
+            losses, sum_mask = torch_ext.apply_masks(
+                [a_loss.unsqueeze(1), c_loss, entropy.unsqueeze(1), b_loss.unsqueeze(1)], rnn_masks)
             a_loss, c_loss, entropy, b_loss = losses[0], losses[1], losses[2], losses[3]
 
             loss = a_loss + 0.5 * c_loss * self.critic_coef - entropy * self.entropy_coef + b_loss * self.bounds_loss_coef
@@ -212,14 +216,15 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         obs_shape = self.obs_shape
 
         build_config = {
-            'actions_num': int(self.actions_num/2),
+            'actions_num': int(self.actions_num / 2),
             'input_shape': obs_shape,
             'num_seqs': self.num_actors * self.num_agents,
             'value_size': self.env_info.get('value_size', 1),
             'normalize_value': self.normalize_value,
             'normalize_input': self.normalize_input,
         }
-
+        self.num_random = 10
+        self.min_q_weight = 1.0
         self.model_left = self.network.build(build_config)
         self.model_right = self.network.build(build_config)
         self.model_left.to(self.ppo_device)
@@ -231,9 +236,11 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         self.last_lr_right = float(self.last_lr_right)
         self.bound_loss_type = self.config.get('bound_loss_type', 'bound')  # 'regularisation' or 'bound'
         self.optimizer = optim.Adam([
-            {'params':self.model_left.parameters(),'lr':float(self.last_lr_left),'eps':1e-08,'weight_decay':self.weight_decay},
-            {'params':self.model_right.parameters(),'lr':float(self.last_lr_right),'eps':1e-08,'weight_decay':self.weight_decay}
-             ])
+            {'params': self.model_left.parameters(), 'lr': float(self.last_lr_left), 'eps': 1e-08,
+             'weight_decay': self.weight_decay},
+            {'params': self.model_right.parameters(), 'lr': float(self.last_lr_right), 'eps': 1e-08,
+             'weight_decay': self.weight_decay}
+        ])
         # self.optimizer_right = optim.Adam(self.model_right.parameters(), float(self.last_lr_right), eps=1e-08, weight_decay=self.weight_decay)
 
         if self.has_central_value:
@@ -258,8 +265,14 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
         self.use_experimental_cv = self.config.get('use_experimental_cv', True)
         # self.dataset = datasets.PPODataset(self.batch_size, self.minibatch_size, self.is_discrete, self.is_rnn, self.ppo_device, self.seq_len)
-        self.dataset_left = datasets.PPODataset_left(self.batch_size, self.minibatch_size, self.is_discrete, self.is_rnn_left, self.ppo_device, self.seq_len)
-        self.dataset_right = datasets.PPODataset_right(self.batch_size, self.minibatch_size, self.is_discrete, self.is_rnn_right, self.ppo_device, self.seq_len)
+        self.dataset_left = datasets.PPODataset_left(self.batch_size, self.minibatch_size, self.is_discrete,
+                                                     self.is_rnn_left, self.ppo_device, self.seq_len)
+        self.dataset_offline_left = datasets.PPODataset_left(self.batch_size, self.minibatch_size, self.is_discrete,
+                                                     self.is_rnn_left, self.ppo_device, self.seq_len)
+        self.dataset_right = datasets.PPODataset_right(self.batch_size, self.minibatch_size, self.is_discrete,
+                                                       self.is_rnn_right, self.ppo_device, self.seq_len)
+        self.dataset_offline_right = datasets.PPODataset_right(self.batch_size, self.minibatch_size, self.is_discrete,
+                                                       self.is_rnn_right, self.ppo_device, self.seq_len)
         if self.normalize_value:
             self.value_mean_std_left = self.central_value_net.model.value_mean_std if self.has_central_value else self.model_left.value_mean_std
             self.value_mean_std_right = self.central_value_net.model.value_mean_std if self.has_central_value else self.model_right.value_mean_std
@@ -279,9 +292,9 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
     def save_multi(self, fn):
         state_left, state_right = self.get_full_state_weights()
-        save_model={
-            'model_left':state_left,
-            'model_right':state_right
+        save_model = {
+            'model_left': state_left,
+            'model_right': state_right
         }
         torch_ext.save_checkpoint(fn, save_model)
 
@@ -292,7 +305,17 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
     def get_masked_action_values(self, obs, action_masks):
         assert False
 
-    def calc_gradients_left(self, input_dict):
+    def _get_tensor_values(self, obs, actions, network=None):
+        action_shape = actions.shape[0]
+        obs_shape = obs.shape[0]
+        num_repeat = int(action_shape / obs_shape)
+        obs_temp = obs.unsqueeze(1).repeat(1, num_repeat, 1).view(obs.shape[0] * num_repeat, obs.shape[1])
+        # change, q1,q2=self.model.critic(obs,action)
+        preds_q1, preds_q2 = network(obs_temp, actions)
+        preds_q1 = preds_q1.view(obs.shape[0], num_repeat, 1)
+        return preds_q1, preds_q2
+
+    def calc_gradients_left(self, input_dict, input_dict_offline):
         value_preds_batch = input_dict['old_values']
         old_action_log_probs_batch = input_dict['old_logp_actions']
         advantage = input_dict['advantages']
@@ -300,9 +323,14 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         old_sigma_batch = input_dict['sigma']
         return_batch = input_dict['returns']
         actions_batch = input_dict['actions']
+        actions_batch_offline = input_dict_offline['actions']
         obs_batch = input_dict['obs']
+        obs_batch_offline = input_dict_offline['obs']
         obs_batch = self._preproc_obs(obs_batch)
+        obs_batch_offline = self._preproc_obs(obs_batch_offline)
 
+        # value_preds_batch_offline = input_dict_offline['old_values']
+        # return_batch_offline = input_dict_offline['returns']
         lr_mul = 1.0
         curr_e_clip = self.e_clip
 
@@ -310,6 +338,11 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             'is_train': True,
             'prev_actions': actions_batch,
             'obs': obs_batch,
+        }
+        batch_dict_offline = {
+            'is_train': True,
+            'prev_actions': actions_batch_offline,
+            'obs': obs_batch_offline,
         }
 
         rnn_masks = None
@@ -320,16 +353,41 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
         with torch.cuda.amp.autocast(enabled=self.mixed_precision):
             res_dict = self.model_left(batch_dict)
+            res_dict_offline = self.model_left(batch_dict_offline)
             action_log_probs = res_dict['prev_neglogp']
             values = res_dict['values']
+            values_offline = res_dict_offline['values']
             entropy = res_dict['entropy']
             mu = res_dict['mus']
             sigma = res_dict['sigmas']
 
-            a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo, curr_e_clip)
+            ## add CQL
+            # add CQL here
+            random_actions_tensor = torch.FloatTensor(res_dict.shape[0] *
+                                                      self.num_random, actions_batch.shape[-1]).uniform_(-1, 1).to(
+                self.ppo_device)
 
+            batch_dict_random = {
+                'is_train': True,
+                'prev_actions': random_actions_tensor,
+                'obs': obs_batch,
+            }
+
+            res_dict_random = self.model_left(batch_dict_random)
+            values_random = res_dict_random['values']
+            cat_q1 = torch.cat([values_random, values], 1)
+            ## logsumexp= Log(Sum(Exp()))
+            min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight * 1.0
+            """Subtract the log likelihood of data"""
+            min_qf1_loss = min_qf1_loss - values.mean() * self.min_q_weight
+            a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo,
+                                          curr_e_clip)
             if self.has_value_loss:
-                c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch, self.clip_value)
+                # c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch,
+                #                                    self.clip_value)
+                c_loss_offline = common_losses.critic_loss_offline(value_preds_batch, values, curr_e_clip, return_batch,
+                                                                   self.clip_value, values_offline, values_random)
+                c_loss = c_loss_offline + min_qf1_loss
             else:
                 c_loss = torch.zeros(1, device=self.ppo_device)
             if self.bound_loss_type == 'regularisation':
@@ -339,8 +397,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             else:
                 b_loss = torch.zeros(1, device=self.ppo_device)
 
-
-            losses, sum_mask = torch_ext.apply_masks([a_loss.unsqueeze(1), c_loss, entropy.unsqueeze(1), b_loss.unsqueeze(1)], rnn_masks)
+            losses, sum_mask = torch_ext.apply_masks(
+                [a_loss.unsqueeze(1), c_loss, entropy.unsqueeze(1), b_loss.unsqueeze(1)], rnn_masks)
             a_loss, c_loss, entropy, b_loss = losses[0], losses[1], losses[2], losses[3]
 
             loss = a_loss + 0.5 * c_loss * self.critic_coef - entropy * self.entropy_coef + b_loss * self.bounds_loss_coef
@@ -374,7 +432,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                                   kl_dist, self.last_lr_left, lr_mul, \
                                   mu.detach(), sigma.detach(), b_loss)
 
-    def calc_gradients_right(self, input_dict):
+    def calc_gradients_right(self, input_dict, input_dict_offline):
         value_preds_batch = input_dict['old_values']
         old_action_log_probs_batch = input_dict['old_logp_actions']
         advantage = input_dict['advantages']
@@ -382,9 +440,14 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         old_sigma_batch = input_dict['sigma']
         return_batch = input_dict['returns']
         actions_batch = input_dict['actions']
+        actions_batch_offline = input_dict_offline['actions']
         obs_batch = input_dict['obs']
+        obs_batch_offline = input_dict_offline['obs']
         obs_batch = self._preproc_obs(obs_batch)
+        obs_batch_offline = self._preproc_obs(obs_batch_offline)
 
+        # value_preds_batch_offline = input_dict_offline['old_values']
+        # return_batch_offline = input_dict_offline['returns']
         lr_mul = 1.0
         curr_e_clip = self.e_clip
 
@@ -392,6 +455,11 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             'is_train': True,
             'prev_actions': actions_batch,
             'obs': obs_batch,
+        }
+        batch_dict_offline = {
+            'is_train': True,
+            'prev_actions': actions_batch_offline,
+            'obs': obs_batch_offline,
         }
 
         rnn_masks = None
@@ -402,16 +470,41 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
         with torch.cuda.amp.autocast(enabled=self.mixed_precision):
             res_dict = self.model_right(batch_dict)
+            res_dict_offline = self.model_right(batch_dict_offline)
             action_log_probs = res_dict['prev_neglogp']
             values = res_dict['values']
+            values_offline = res_dict_offline['values']
             entropy = res_dict['entropy']
             mu = res_dict['mus']
             sigma = res_dict['sigmas']
 
-            a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo, curr_e_clip)
+            ## add CQL
+            # add CQL here
+            random_actions_tensor = torch.FloatTensor(res_dict.shape[0] *
+                                                      self.num_random, actions_batch.shape[-1]).uniform_(-1, 1).to(
+                self.ppo_device)
 
+            batch_dict_random = {
+                'is_train': True,
+                'prev_actions': random_actions_tensor,
+                'obs': obs_batch,
+            }
+
+            res_dict_random = self.model_right(batch_dict_random)
+            values_random = res_dict_random['values']
+            cat_q1 = torch.cat([values_random, values], 1)
+            ## logsumexp= Log(Sum(Exp()))
+            min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight * 1.0
+            """Subtract the log likelihood of data"""
+            min_qf1_loss = min_qf1_loss - values.mean() * self.min_q_weight
+            a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo,
+                                          curr_e_clip)
             if self.has_value_loss:
-                c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch, self.clip_value)
+                # c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch,
+                #                                    self.clip_value)
+                c_loss_offline = common_losses.critic_loss_offline(value_preds_batch, values, curr_e_clip, return_batch,
+                                                                   self.clip_value, values_offline, values_random)
+                c_loss = c_loss_offline + min_qf1_loss
             else:
                 c_loss = torch.zeros(1, device=self.ppo_device)
             if self.bound_loss_type == 'regularisation':
@@ -421,7 +514,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             else:
                 b_loss = torch.zeros(1, device=self.ppo_device)
 
-            losses, sum_mask = torch_ext.apply_masks([a_loss.unsqueeze(1), c_loss, entropy.unsqueeze(1), b_loss.unsqueeze(1)], rnn_masks)
+            losses, sum_mask = torch_ext.apply_masks(
+                [a_loss.unsqueeze(1), c_loss, entropy.unsqueeze(1), b_loss.unsqueeze(1)], rnn_masks)
             a_loss, c_loss, entropy, b_loss = losses[0], losses[1], losses[2], losses[3]
 
             loss = a_loss + 0.5 * c_loss * self.critic_coef - entropy * self.entropy_coef + b_loss * self.bounds_loss_coef
@@ -452,12 +546,13 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                                     }, curr_e_clip, 0)
 
         self.train_result_right = (a_loss, c_loss, entropy, \
-                                   kl_dist, self.last_lr_right, lr_mul, \
-                                   mu.detach(), sigma.detach(), b_loss)
+                                  kl_dist, self.last_lr_right, lr_mul, \
+                                  mu.detach(), sigma.detach(), b_loss)
 
-    def train_actor_critic_multi(self, input_dict_left, input_dict_right):
-        self.calc_gradients_left(input_dict_left)
-        self.calc_gradients_right(input_dict_right)
+    def train_actor_critic_multi(self, input_dict_left, input_dict_right, input_dict_left_offline,
+                                 input_dict_right_offline):
+        self.calc_gradients_left(input_dict_left, input_dict_left_offline)
+        self.calc_gradients_right(input_dict_right, input_dict_right_offline)
         self.train_result = self.train_result_left + self.train_result_right
         return self.train_result
 

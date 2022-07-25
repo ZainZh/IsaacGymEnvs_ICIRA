@@ -5,6 +5,7 @@ import torch
 from rl_games.common import env_configurations
 from rl_games.algos_torch import model_builder
 from utils.utils import HDF5DatasetWriter
+from utils.utils import HDF5DatasetWriter_multi
 import os
 from datetime import datetime
 
@@ -366,7 +367,7 @@ class BaseMultiPlayer(object):
         if self.if_write_hdf5:
             file_time = datetime.now().strftime("%m%d-%H-%M-%S")
             output_path = os.path.join(self.config['save_hdf5_folder'], file_time + '.hdf5')
-            self.hdf5_writer = HDF5DatasetWriter(output_path, action_size=self.action_space.shape[0], obs_size=self.observation_space.shape[0], bufSize=1000,
+            self.hdf5_writer = HDF5DatasetWriter_multi(output_path, action_size=self.action_space.shape[0], obs_size=self.observation_space.shape[0], bufSize=1000,
                                                  maxSize=None)
             print('\033[1;33mWrite HDF5 offline dataset, path=>{}\033[0m'.format(output_path))
 
@@ -577,6 +578,12 @@ class BaseMultiPlayer(object):
                 steps_left += 1
                 steps_right += 1
 
+                # save step to hdf5
+                if self.if_write_hdf5 and n >= 1:
+                    self.hdf5_writer.add(prev_obses_left, action_left, left_r, obses_left, done_spoon,
+                                         prev_obses_right, action_right, right_r, obses_right, done_cup)
+                prev_obses_left = obses_left
+                prev_obses_right = obses_right
 
                 if render:
                     self.env.render(mode='human')
@@ -630,7 +637,8 @@ class BaseMultiPlayer(object):
                     if batch_size_left // self.num_agents == 1 or games_played >= n_games:
                         break
 
-
+            if self.if_write_hdf5:
+                self.hdf5_writer.flush()
 
         print(sum_rewards)
         if print_game_res:

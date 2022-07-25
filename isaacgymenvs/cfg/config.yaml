@@ -46,8 +46,8 @@ headless: True
 #dataset: 'test_save/hdf5/0616-06-45-14.hdf5'
 dataset: ''
 # collect trajectory when play test
-save_hdf5_when_play: False
-save_hdf5_folder: 'test_save/hdf5'
+save_hdf5_when_play: True
+save_hdf5_folder: './test_save/hdf5'
 
 # set default task and default training config based on task
 defaults:
