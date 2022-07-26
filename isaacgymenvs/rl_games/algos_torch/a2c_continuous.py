@@ -223,7 +223,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             'normalize_value': self.normalize_value,
             'normalize_input': self.normalize_input,
         }
-        self.num_random = 10
+        self.num_random = 1
         self.min_q_weight = 1.0
         self.model_left = self.network.build(build_config)
         self.model_right = self.network.build(build_config)
@@ -268,11 +268,11 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         self.dataset_left = datasets.PPODataset_left(self.batch_size, self.minibatch_size, self.is_discrete,
                                                      self.is_rnn_left, self.ppo_device, self.seq_len)
         self.dataset_offline_left = datasets.PPODataset_left(self.batch_size, self.minibatch_size, self.is_discrete,
-                                                     self.is_rnn_left, self.ppo_device, self.seq_len)
+                                                             self.is_rnn_left, self.ppo_device, self.seq_len)
         self.dataset_right = datasets.PPODataset_right(self.batch_size, self.minibatch_size, self.is_discrete,
                                                        self.is_rnn_right, self.ppo_device, self.seq_len)
         self.dataset_offline_right = datasets.PPODataset_right(self.batch_size, self.minibatch_size, self.is_discrete,
-                                                       self.is_rnn_right, self.ppo_device, self.seq_len)
+                                                               self.is_rnn_right, self.ppo_device, self.seq_len)
         if self.normalize_value:
             self.value_mean_std_left = self.central_value_net.model.value_mean_std if self.has_central_value else self.model_left.value_mean_std
             self.value_mean_std_right = self.central_value_net.model.value_mean_std if self.has_central_value else self.model_right.value_mean_std
@@ -315,7 +315,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         preds_q1 = preds_q1.view(obs.shape[0], num_repeat, 1)
         return preds_q1, preds_q2
 
-    def calc_gradients_left(self, input_dict, input_dict_offline):
+    def calc_gradients_left(self, input_dict, data_actions_left, data_next_obs_left):
         value_preds_batch = input_dict['old_values']
         old_action_log_probs_batch = input_dict['old_logp_actions']
         advantage = input_dict['advantages']
@@ -323,11 +323,9 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         old_sigma_batch = input_dict['sigma']
         return_batch = input_dict['returns']
         actions_batch = input_dict['actions']
-        actions_batch_offline = input_dict_offline['actions']
         obs_batch = input_dict['obs']
-        obs_batch_offline = input_dict_offline['obs']
         obs_batch = self._preproc_obs(obs_batch)
-        obs_batch_offline = self._preproc_obs(obs_batch_offline)
+        obs_batch_offline = self._preproc_obs(data_next_obs_left)
 
         # value_preds_batch_offline = input_dict_offline['old_values']
         # return_batch_offline = input_dict_offline['returns']
@@ -341,7 +339,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         }
         batch_dict_offline = {
             'is_train': True,
-            'prev_actions': actions_batch_offline,
+            'prev_actions': data_actions_left,
             'obs': obs_batch_offline,
         }
 
@@ -363,31 +361,31 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
             ## add CQL
             # add CQL here
-            random_actions_tensor = torch.FloatTensor(res_dict.shape[0] *
+            random_actions_tensor = torch.FloatTensor(res_dict['values'].shape[0] *
                                                       self.num_random, actions_batch.shape[-1]).uniform_(-1, 1).to(
                 self.ppo_device)
 
             batch_dict_random = {
                 'is_train': True,
                 'prev_actions': random_actions_tensor,
-                'obs': obs_batch,
+                'obs': obs_batch_offline,
             }
 
             res_dict_random = self.model_left(batch_dict_random)
             values_random = res_dict_random['values']
-            cat_q1 = torch.cat([values_random, values], 1)
+            cat_q1 = torch.cat([values_random], 1)
             ## logsumexp= Log(Sum(Exp()))
-            min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight * 1.0
+            min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean()
+            min_qf1_loss = min_qf1_loss - values_offline.mean()
             """Subtract the log likelihood of data"""
-            min_qf1_loss = min_qf1_loss - values.mean() * self.min_q_weight
             a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo,
                                           curr_e_clip)
             if self.has_value_loss:
                 # c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch,
                 #                                    self.clip_value)
-                c_loss_offline = common_losses.critic_loss_offline(value_preds_batch, values, curr_e_clip, return_batch,
-                                                                   self.clip_value, values_offline, values_random)
-                c_loss = c_loss_offline + min_qf1_loss
+                c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch,
+                                                   self.clip_value)
+                c_loss = c_loss + min_qf1_loss
             else:
                 c_loss = torch.zeros(1, device=self.ppo_device)
             if self.bound_loss_type == 'regularisation':
@@ -432,7 +430,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                                   kl_dist, self.last_lr_left, lr_mul, \
                                   mu.detach(), sigma.detach(), b_loss)
 
-    def calc_gradients_right(self, input_dict, input_dict_offline):
+    def calc_gradients_right(self, input_dict, data_actions_right, data_next_obs_right):
         value_preds_batch = input_dict['old_values']
         old_action_log_probs_batch = input_dict['old_logp_actions']
         advantage = input_dict['advantages']
@@ -440,11 +438,9 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         old_sigma_batch = input_dict['sigma']
         return_batch = input_dict['returns']
         actions_batch = input_dict['actions']
-        actions_batch_offline = input_dict_offline['actions']
         obs_batch = input_dict['obs']
-        obs_batch_offline = input_dict_offline['obs']
         obs_batch = self._preproc_obs(obs_batch)
-        obs_batch_offline = self._preproc_obs(obs_batch_offline)
+        obs_batch_offline = self._preproc_obs(data_next_obs_right)
 
         # value_preds_batch_offline = input_dict_offline['old_values']
         # return_batch_offline = input_dict_offline['returns']
@@ -458,7 +454,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         }
         batch_dict_offline = {
             'is_train': True,
-            'prev_actions': actions_batch_offline,
+            'prev_actions': data_actions_right,
             'obs': obs_batch_offline,
         }
 
@@ -480,31 +476,31 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
             ## add CQL
             # add CQL here
-            random_actions_tensor = torch.FloatTensor(res_dict.shape[0] *
+            random_actions_tensor = torch.FloatTensor(res_dict['values'].shape[0] *
                                                       self.num_random, actions_batch.shape[-1]).uniform_(-1, 1).to(
                 self.ppo_device)
 
             batch_dict_random = {
                 'is_train': True,
                 'prev_actions': random_actions_tensor,
-                'obs': obs_batch,
+                'obs': obs_batch_offline,
             }
 
             res_dict_random = self.model_right(batch_dict_random)
             values_random = res_dict_random['values']
-            cat_q1 = torch.cat([values_random, values], 1)
+            cat_q1 = torch.cat([values_random], 1)
             ## logsumexp= Log(Sum(Exp()))
-            min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight * 1.0
+            min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean()
+            min_qf1_loss = min_qf1_loss - values_offline.mean()
             """Subtract the log likelihood of data"""
-            min_qf1_loss = min_qf1_loss - values.mean() * self.min_q_weight
             a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo,
                                           curr_e_clip)
             if self.has_value_loss:
                 # c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch,
                 #                                    self.clip_value)
-                c_loss_offline = common_losses.critic_loss_offline(value_preds_batch, values, curr_e_clip, return_batch,
-                                                                   self.clip_value, values_offline, values_random)
-                c_loss = c_loss_offline + min_qf1_loss
+                c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch,
+                                                   self.clip_value)
+                c_loss = c_loss + min_qf1_loss
             else:
                 c_loss = torch.zeros(1, device=self.ppo_device)
             if self.bound_loss_type == 'regularisation':
@@ -549,10 +545,10 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                                   kl_dist, self.last_lr_right, lr_mul, \
                                   mu.detach(), sigma.detach(), b_loss)
 
-    def train_actor_critic_multi(self, input_dict_left, input_dict_right, input_dict_left_offline,
-                                 input_dict_right_offline):
-        self.calc_gradients_left(input_dict_left, input_dict_left_offline)
-        self.calc_gradients_right(input_dict_right, input_dict_right_offline)
+    def train_actor_critic_multi(self, input_dict_left, input_dict_right, data_actions_left, data_next_obs_left,
+                                 data_actions_right, data_next_obs_right):
+        self.calc_gradients_left(input_dict_left, data_actions_left, data_next_obs_left)
+        self.calc_gradients_right(input_dict_right, data_actions_right, data_next_obs_right)
         self.train_result = self.train_result_left + self.train_result_right
         return self.train_result
 
