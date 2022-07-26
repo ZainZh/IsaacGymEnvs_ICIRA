@@ -72,3 +72,4 @@ params:
     seq_len: 4
     bounds_loss_coef: 0.0001
     multi_franka: True
+    offline_ppo: True

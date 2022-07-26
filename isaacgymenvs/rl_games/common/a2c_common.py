@@ -1315,6 +1315,7 @@ class ContinuousMultiA2CBase(A2CBase):
 
         self.last_lr_left = self.config['learning_rate']
         self.last_lr_right = self.config['learning_rate']
+        self.offlinePPO=self.config['offline_ppo']
         self.curr_frames_left = 0
         self.curr_frames_right = 0
         self.entropy_coef_left = self.config['entropy_coef']
@@ -1326,37 +1327,38 @@ class ContinuousMultiA2CBase(A2CBase):
         self.actions_low = torch.cat((self.actions_low, self.actions_low), 0)
         self.actions_high = torch.cat((self.actions_high, self.actions_high), 0)
 
-        date_file = h5py.File('./replay_buffer/replay_buff512000.hdf5', 'r')
+        if self.offlinePPO:
+            date_file = h5py.File('./replay_buffer/replay_buff512000.hdf5', 'r')
 
-        # left action
-        self.data_actions_left = torch.tensor(np.array(date_file['actions_left']), dtype=torch.float,
-                                              device=self.device)
-        self.data_actions_left = self.data_actions_left[0:512000, :]
+            # left action
+            self.data_actions_left = torch.tensor(np.array(date_file['actions_left']), dtype=torch.float,
+                                                  device=self.device)
+            self.data_actions_left = self.data_actions_left[0:512000, :]
 
-        self.data_actions_left = torch.reshape(self.data_actions_left, (250, 2048, 9))
+            self.data_actions_left = torch.reshape(self.data_actions_left, (250, 2048, 9))
 
-        # left obs
-        self.data_next_obs_left = torch.tensor(np.array(date_file['next_observations_left']), dtype=torch.float,
-                                               device=self.device)
-        self.data_next_obs_left = self.data_next_obs_left[0:512000, :]
+            # left obs
+            self.data_next_obs_left = torch.tensor(np.array(date_file['next_observations_left']), dtype=torch.float,
+                                                   device=self.device)
+            self.data_next_obs_left = self.data_next_obs_left[0:512000, :]
 
-        self.data_next_obs_left = torch.reshape(self.data_next_obs_left, (250, 2048, 37))
+            self.data_next_obs_left = torch.reshape(self.data_next_obs_left, (250, 2048, 37))
 
-        # right action
-        self.data_actions_right = torch.tensor(np.array(date_file['actions_right']), dtype=torch.float,
-                                               device=self.device)
+            # right action
+            self.data_actions_right = torch.tensor(np.array(date_file['actions_right']), dtype=torch.float,
+                                                   device=self.device)
 
-        self.data_actions_right = self.data_actions_right[0:512000, :]
+            self.data_actions_right = self.data_actions_right[0:512000, :]
 
-        self.data_actions_right = torch.reshape(self.data_actions_right, (250, 2048, 9))
+            self.data_actions_right = torch.reshape(self.data_actions_right, (250, 2048, 9))
 
-        # right obs
-        self.data_next_obs_right = torch.tensor(np.array(date_file['next_observations_right']), dtype=torch.float,
-                                                device=self.device)
+            # right obs
+            self.data_next_obs_right = torch.tensor(np.array(date_file['next_observations_right']), dtype=torch.float,
+                                                    device=self.device)
 
-        self.data_next_obs_right = self.data_next_obs_right[0:512000, :]
+            self.data_next_obs_right = self.data_next_obs_right[0:512000, :]
 
-        self.data_next_obs_right = torch.reshape(self.data_next_obs_right, (250, 2048, 37))
+            self.data_next_obs_right = torch.reshape(self.data_next_obs_right, (250, 2048, 37))
 
     def env_reset_multi(self):
         obs_left, obs_right = self.vec_env.reset_multi()
@@ -1979,10 +1981,15 @@ class ContinuousMultiA2CBase(A2CBase):
             ep_kls_left = []
             ep_kls_right = []
             for i in range(len(self.dataset_left)):
-                a_loss_left, c_loss_left, entropy_left, kl_left, last_lr_left, lr_mul_left, cmu_left, csigma_left, b_loss_left, \
-                a_loss_right, c_loss_right, entropy_right, kl_right, last_lr_right, lr_mul_right, cmu_right, csigma_right, b_loss_right = self.train_actor_critic_multi(
-                    self.dataset_left[i], self.dataset_right[i], self.data_actions_left[i], self.data_next_obs_left[i],
-                    self.data_actions_right[i], self.data_next_obs_right[i])
+                if self.offlinePPO:
+                    a_loss_left, c_loss_left, entropy_left, kl_left, last_lr_left, lr_mul_left, cmu_left, csigma_left, b_loss_left, \
+                    a_loss_right, c_loss_right, entropy_right, kl_right, last_lr_right, lr_mul_right, cmu_right, csigma_right, b_loss_right = self.train_actor_critic_multi(
+                        self.dataset_left[i], self.dataset_right[i], self.data_actions_left[i], self.data_next_obs_left[i],
+                        self.data_actions_right[i], self.data_next_obs_right[i])
+                else:
+                    a_loss_left, c_loss_left, entropy_left, kl_left, last_lr_left, lr_mul_left, cmu_left, csigma_left, b_loss_left, \
+                    a_loss_right, c_loss_right, entropy_right, kl_right, last_lr_right, lr_mul_right, cmu_right, csigma_right, b_loss_right = self.train_actor_critic_multi(
+                        self.dataset_left[i], self.dataset_right[i])
                 a_losses_left.append(a_loss_left)
                 c_losses_left.append(c_loss_left)
                 ep_kls_left.append(kl_left)
