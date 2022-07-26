@@ -242,6 +242,9 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
              'weight_decay': self.weight_decay}
         ])
         # self.optimizer_right = optim.Adam(self.model_right.parameters(), float(self.last_lr_right), eps=1e-08, weight_decay=self.weight_decay)
+        self.offlinePPO = self.config.get('offline_ppo')
+        self.with_lagrange=self.config.get('with_lagrange')
+
 
         if self.has_central_value:
             cv_config = {
@@ -282,6 +285,11 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         self.algo_observer_left.after_init(self)
         self.algo_observer_right.after_init(self)
 
+        if self.with_lagrange:
+            self.target_action_gap = self.config.get('lagrange_thresh')
+            self.log_alpha_prime = torch.zeros(1, requires_grad=True, device=self.ppo_device)
+            self.alpha_prime_optimizer = torch.optim.Adam([self.log_alpha_prime],lr=self.config['learning_rate']
+            )
     def update_epoch(self):
         self.epoch_num += 1
         return self.epoch_num
@@ -359,25 +367,36 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             mu = res_dict['mus']
             sigma = res_dict['sigmas']
 
-            ## add CQL
-            # add CQL here
-            random_actions_tensor = torch.FloatTensor(res_dict['values'].shape[0] *
-                                                      self.num_random, actions_batch.shape[-1]).uniform_(-1, 1).to(
-                self.ppo_device)
+            if self.offlinePPO:
+                ## add CQL
+                # add CQL here
+                random_actions_tensor = torch.FloatTensor(res_dict['values'].shape[0] *
+                                                          self.num_random, actions_batch.shape[-1]).uniform_(-1, 1).to(
+                    self.ppo_device)
 
-            batch_dict_random = {
-                'is_train': True,
-                'prev_actions': random_actions_tensor,
-                'obs': obs_batch_offline,
-            }
+                batch_dict_random = {
+                    'is_train': True,
+                    'prev_actions': random_actions_tensor,
+                    'obs': obs_batch_offline,
+                }
 
-            res_dict_random = self.model_left(batch_dict_random)
-            values_random = res_dict_random['values']
-            cat_q1 = torch.cat([values_random], 1)
-            ## logsumexp= Log(Sum(Exp()))
-            min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean()
-            min_qf1_loss = min_qf1_loss - values_offline.mean()
-            """Subtract the log likelihood of data"""
+                res_dict_random = self.model_left(batch_dict_random)
+                values_random = res_dict_random['values']
+                cat_q1 = torch.cat([values_random], 1)
+                ## logsumexp= Log(Sum(Exp()))
+                min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean()
+                min_qf1_loss = min_qf1_loss - values_offline.mean()
+
+                if self.with_lagrange:
+                    alpha_prime = torch.clamp(self.log_alpha_prime.exp(), min=0.0, max=1000000.0)
+                    min_qf1_loss = alpha_prime * (min_qf1_loss - self.target_action_gap)
+
+                    self.alpha_prime_optimizer.zero_grad()
+                    alpha_prime_loss = -min_qf1_loss
+                    alpha_prime_loss.backward(retain_graph=True)
+                    self.alpha_prime_optimizer.step()
+
+                """Subtract the log likelihood of data"""
             a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo,
                                           curr_e_clip)
             if self.has_value_loss:
@@ -385,7 +404,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 #                                    self.clip_value)
                 c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch,
                                                    self.clip_value)
-                c_loss = c_loss + min_qf1_loss
+                if self.offlinePPO:
+                    c_loss = c_loss + min_qf1_loss
             else:
                 c_loss = torch.zeros(1, device=self.ppo_device)
             if self.bound_loss_type == 'regularisation':
@@ -474,24 +494,33 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             mu = res_dict['mus']
             sigma = res_dict['sigmas']
 
-            ## add CQL
-            # add CQL here
-            random_actions_tensor = torch.FloatTensor(res_dict['values'].shape[0] *
-                                                      self.num_random, actions_batch.shape[-1]).uniform_(-1, 1).to(
-                self.ppo_device)
+            if self.offlinePPO:
+                ## add CQL
+                # add CQL here
+                random_actions_tensor = torch.FloatTensor(res_dict['values'].shape[0] *
+                                                          self.num_random, actions_batch.shape[-1]).uniform_(-1, 1).to(
+                    self.ppo_device)
 
-            batch_dict_random = {
-                'is_train': True,
-                'prev_actions': random_actions_tensor,
-                'obs': obs_batch_offline,
-            }
+                batch_dict_random = {
+                    'is_train': True,
+                    'prev_actions': random_actions_tensor,
+                    'obs': obs_batch_offline,
+                }
 
-            res_dict_random = self.model_right(batch_dict_random)
-            values_random = res_dict_random['values']
-            cat_q1 = torch.cat([values_random], 1)
-            ## logsumexp= Log(Sum(Exp()))
-            min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean()
-            min_qf1_loss = min_qf1_loss - values_offline.mean()
+                res_dict_random = self.model_right(batch_dict_random)
+                values_random = res_dict_random['values']
+                cat_q1 = torch.cat([values_random], 1)
+                ## logsumexp= Log(Sum(Exp()))
+                min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean()
+                min_qf1_loss = min_qf1_loss - values_offline.mean()
+                if self.with_lagrange:
+                    alpha_prime = torch.clamp(self.log_alpha_prime.exp(), min=0.0, max=1000000.0)
+                    min_qf1_loss = alpha_prime * (min_qf1_loss - self.target_action_gap)
+
+                    self.alpha_prime_optimizer.zero_grad()
+                    alpha_prime_loss = -min_qf1_loss
+                    alpha_prime_loss.backward(retain_graph=True)
+                    self.alpha_prime_optimizer.step()
             """Subtract the log likelihood of data"""
             a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo,
                                           curr_e_clip)
@@ -500,7 +529,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 #                                    self.clip_value)
                 c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch,
                                                    self.clip_value)
-                c_loss = c_loss + min_qf1_loss
+                if self.offlinePPO:
+                    c_loss = c_loss + min_qf1_loss
             else:
                 c_loss = torch.zeros(1, device=self.ppo_device)
             if self.bound_loss_type == 'regularisation':
@@ -542,8 +572,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                                     }, curr_e_clip, 0)
 
         self.train_result_right = (a_loss, c_loss, entropy, \
-                                  kl_dist, self.last_lr_right, lr_mul, \
-                                  mu.detach(), sigma.detach(), b_loss)
+                                   kl_dist, self.last_lr_right, lr_mul, \
+                                   mu.detach(), sigma.detach(), b_loss)
 
     def train_actor_critic_multi(self, input_dict_left, input_dict_right, data_actions_left, data_next_obs_left,
                                  data_actions_right, data_next_obs_right):
