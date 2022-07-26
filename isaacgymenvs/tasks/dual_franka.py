@@ -744,7 +744,7 @@ class DualFranka(VecTask):
 
     def reset_idx_replay_buffer(self, env_ids):
         import h5py
-        with h5py.File('./reset_buffer/replay_buff.hdf5', 'r') as hdf:
+        with h5py.File('replay_buffer/replay_buff1.hdf5', 'r') as hdf:
             ls = list(hdf.keys())
             data = hdf.get('observations')
             dataset1 = np.array(data)  # get the obversation buffer from replay buffer
@@ -847,7 +847,7 @@ class DualFranka(VecTask):
         # reset cup
         self.cup_positions[env_ids, 0] = -0.3
         self.cup_positions[env_ids, 1] = 0.443
-        self.cup_positions[env_ids, 2] = -0.29
+        self.cup_positions[env_ids, 2] = -0.28
         self.cup_orientations[env_ids, 0:3] = 0.0
         self.cup_orientations[env_ids, 1] = -0.287
         self.cup_orientations[env_ids, 3] = 0.95793058

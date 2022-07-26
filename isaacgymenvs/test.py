@@ -17,6 +17,7 @@ import time
 import os
 from typing import Dict, Tuple, List
 from utils.utils import HDF5DatasetWriter
+from utils.utils import HDF5DatasetWriter_multi
 
 torch.set_printoptions(precision=4, sci_mode=False)
 file_time = time.strftime("%m-%d-%H_%M_%S", time.localtime())
@@ -36,6 +37,7 @@ gripper_err = test_config["SIM"].getfloat('gripper_err', 1e-2)
 output_path = test_config['SIM'].get('output_path', './test_save')
 output_name = file_time + '.txt'
 write_hdf5data = test_config["DEFAULT"].getboolean('write_hdf5data', False)
+MultiPPO = test_config["DEFAULT"].getboolean('MultiPPO', False)
 output_hdf5_path = os.path.join(output_path, 'hdf5')
 output_hdf5_name = file_time + '.hdf5'
 manual_drive_k = test_config["SIM"].getfloat('manual_drive_k', 0.1)
@@ -408,8 +410,8 @@ def get_franka():
 def reset_env():
     # need to disable pose override in viewer
     print('Reset env')
-    env.reset_idx_replay_buffer(torch.arange(env.num_envs, device=env.device))
-    # env.reset_idx(torch.arange(env.num_envs, device=env.device))
+    # env.reset_idx_replay_buffer(torch.arange(env.num_envs, device=env.device))
+    env.reset_idx(torch.arange(env.num_envs, device=env.device))
 
 
 def ready_to_track():
@@ -475,7 +477,7 @@ if __name__ == "__main__":
         # init writer once
         os.makedirs(output_hdf5_path, exist_ok=True)
         path = os.path.join(output_hdf5_path, output_hdf5_name)
-        writer = HDF5DatasetWriter(outputPath=path, bufSize=1000)
+        writer = HDF5DatasetWriter_multi(outputPath=path, bufSize=1000)
 
     while not env.gym.query_viewer_has_closed(env.viewer):
 
@@ -591,13 +593,31 @@ if __name__ == "__main__":
                 action = pos_action.clone().view(-1, 18).numpy()
                 # TODO: here calculate done
                 done = np.array([[0]], dtype='i8')
-                if step > 0:
-                    # append last stage to writer
-                    writer.add(obs, action, rew, next_obs, done)
-                # next round
-                obs = next_obs.copy()
-                rew = env.rew_buf.clone().view(-1, 1).numpy()
+                done_spoon = np.array([[0]], dtype='i8')
+                done_cup = np.array([[0]], dtype='i8')
 
+                if MultiPPO:
+                    next_obs_left = env.obs_buf_left.clone().view(-1, 37).numpy()
+                    action_left=env.franka_dof_pos.clone().view(-1,9).numpy()
+
+                    next_obs_right = env.obs_buf_right.clone().view(-1, 37).numpy()
+                    action_right = env.franka_dof_pos_1.clone().view(-1, 9).numpy()
+                    if step > 0:
+                        # append last stage to writer
+                        writer.add(obs_left, action_left, rew, next_obs_left, done_spoon,
+                                   obs_right, action_right, rew, next_obs_right, done_cup,)
+
+                    # next round
+                    obs_left = next_obs_left.copy()
+                    obs_right = next_obs_right.copy()
+                    rew = env.rew_buf.clone().view(-1, 1).numpy()
+                else:
+                    if step > 0:
+                        # append last stage to writer
+                        writer.add(obs, action, rew, next_obs, done)
+                    # next round
+                    obs = next_obs.copy()
+                    rew = env.rew_buf.clone().view(-1, 1).numpy()
             ## Calculation here
             # get jacobian tensor
             # for fixed-base franka, tensor has shape (num envs, 10, 6, 9)
