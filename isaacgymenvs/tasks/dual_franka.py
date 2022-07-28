@@ -1481,8 +1481,8 @@ def compute_franka_reward(
     sf = 1  # spoon flag
     cf = 1  # cup flag
     stage1 = 1  # stage1 flag
-    stage2 = 0  # stage2 flag
-    stage3 = 0  # stage3 flag
+    stage2 = 1  # stage2 flag
+    stage3 = 1  # stage3 flag
     rewards = stage1 * (dist_reward_scale * (dist_reward * sf + dist_reward_1 * cf) \
                         + rot_reward_scale * (rot_reward * sf + rot_reward_1 * cf) \
                         + around_handle_reward_scale * (around_handle_reward * sf + around_handle_reward_1 * cf) \

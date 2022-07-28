@@ -1277,7 +1277,7 @@ class ContinuousMultiA2CBase(A2CBase):
         self.bounds_loss_coef = self.config.get('bounds_loss_coef', None)
 
         self.clip_actions = self.config.get('clip_actions', True)
-
+        self.full_stage = self.config.get('full_stage', False)
         self.rnn_states_left = None
         self.rnn_states_right = None
 
@@ -1315,7 +1315,7 @@ class ContinuousMultiA2CBase(A2CBase):
 
         self.last_lr_left = self.config['learning_rate']
         self.last_lr_right = self.config['learning_rate']
-        self.offlinePPO=self.config['offline_ppo']
+        self.offlinePPO = self.config['offline_ppo']
         self.curr_frames_left = 0
         self.curr_frames_right = 0
         self.entropy_coef_left = self.config['entropy_coef']
@@ -1327,38 +1327,67 @@ class ContinuousMultiA2CBase(A2CBase):
         self.actions_low = torch.cat((self.actions_low, self.actions_low), 0)
         self.actions_high = torch.cat((self.actions_high, self.actions_high), 0)
 
+        if not self.full_stage:
+            date_file = h5py.File('replay_buffer/replay_buff512000.hdf5', 'r')
+            # left action
+            self.data_actions_left = torch.tensor(np.array(date_file['actions_left']), dtype=torch.float,
+                                                  device=self.device)
+            self.data_actions_left = self.data_actions_left[0:512000, :]
 
-        date_file = h5py.File('./replay_buffer/replay_buff512000.hdf5', 'r')
+            self.data_actions_left = torch.reshape(self.data_actions_left,
+                                                   (int(512000 / self.minibatch_size), self.minibatch_size, 9))
+            self.data_actions_left = self.data_actions_left[0]
+            # left obs
+            self.data_next_obs_left = torch.tensor(np.array(date_file['next_observations_left']), dtype=torch.float,
+                                                   device=self.device)
+            self.data_next_obs_left = self.data_next_obs_left[0:512000, :]
 
-        # left action
-        self.data_actions_left = torch.tensor(np.array(date_file['actions_left']), dtype=torch.float,
-                                              device=self.device)
-        self.data_actions_left = self.data_actions_left[0:512000, :]
+            self.data_next_obs_left = torch.reshape(self.data_next_obs_left,
+                                                    (int(512000 / self.minibatch_size), self.minibatch_size, 37))
+            self.data_next_obs_left = self.data_next_obs_left[0]
+            # right action
+            self.data_actions_right = torch.tensor(np.array(date_file['actions_right']), dtype=torch.float,
+                                                   device=self.device)
 
-        self.data_actions_left = torch.reshape(self.data_actions_left, (250, 2048, 9))
+            self.data_actions_right = self.data_actions_right[0:512000, :]
 
-        # left obs
-        self.data_next_obs_left = torch.tensor(np.array(date_file['next_observations_left']), dtype=torch.float,
-                                               device=self.device)
-        self.data_next_obs_left = self.data_next_obs_left[0:512000, :]
+            self.data_actions_right = torch.reshape(self.data_actions_right,
+                                                    (int(512000 / self.minibatch_size), self.minibatch_size, 9))
+            self.data_actions_right = self.data_actions_right[0]
+            # right obs
+            self.data_next_obs_right = torch.tensor(np.array(date_file['next_observations_right']), dtype=torch.float,
+                                                    device=self.device)
 
-        self.data_next_obs_left = torch.reshape(self.data_next_obs_left, (250, 2048, 37))
+            self.data_next_obs_right = self.data_next_obs_right[0:512000, :]
 
-        # right action
-        self.data_actions_right = torch.tensor(np.array(date_file['actions_right']), dtype=torch.float,
-                                               device=self.device)
+            self.data_next_obs_right = torch.reshape(self.data_next_obs_right,
+                                                     (int(512000 / self.minibatch_size), self.minibatch_size, 37))
 
-        self.data_actions_right = self.data_actions_right[0:512000, :]
+            self.data_next_obs_right = self.data_next_obs_right[0]
+        else:
+            date_file = h5py.File('replay_buffer/replaybuffer_fullstage.hdf5', 'r')
+            # left action
+            self.data_actions_left = torch.tensor(np.array(date_file['actions_left']), dtype=torch.float,
+                                                  device=self.device)
+            self.data_actions_left = torch.cat((self.data_actions_left, self.data_actions_left[930:977, :]))
 
-        self.data_actions_right = torch.reshape(self.data_actions_right, (250, 2048, 9))
+            # left obs
+            self.data_next_obs_left = torch.tensor(np.array(date_file['next_observations_left']), dtype=torch.float,
+                                                   device=self.device)
 
-        # right obs
-        self.data_next_obs_right = torch.tensor(np.array(date_file['next_observations_right']), dtype=torch.float,
-                                                device=self.device)
+            self.data_next_obs_left = torch.cat((self.data_next_obs_left, self.data_next_obs_left[930:977, :]))
 
-        self.data_next_obs_right = self.data_next_obs_right[0:512000, :]
+            # right action
+            self.data_actions_right = torch.tensor(np.array(date_file['actions_right']), dtype=torch.float,
+                                                   device=self.device)
 
-        self.data_next_obs_right = torch.reshape(self.data_next_obs_right, (250, 2048, 37))
+            self.data_actions_right = torch.cat((self.data_actions_right, self.data_actions_right[930:977, :]))
+
+            # right obs
+            self.data_next_obs_right = torch.tensor(np.array(date_file['next_observations_right']), dtype=torch.float,
+                                                    device=self.device)
+
+            self.data_next_obs_right = torch.cat((self.data_next_obs_right, self.data_next_obs_right[930:977, :]))
 
     def env_reset_multi(self):
         obs_left, obs_right = self.vec_env.reset_multi()
@@ -1984,8 +2013,8 @@ class ContinuousMultiA2CBase(A2CBase):
 
                 a_loss_left, c_loss_left, entropy_left, kl_left, last_lr_left, lr_mul_left, cmu_left, csigma_left, b_loss_left, \
                 a_loss_right, c_loss_right, entropy_right, kl_right, last_lr_right, lr_mul_right, cmu_right, csigma_right, b_loss_right = self.train_actor_critic_multi(
-                    self.dataset_left[i], self.dataset_right[i], self.data_actions_left[i], self.data_next_obs_left[i],
-                    self.data_actions_right[i], self.data_next_obs_right[i])
+                    self.dataset_left[i], self.dataset_right[i], self.data_actions_left, self.data_next_obs_left,
+                    self.data_actions_right, self.data_next_obs_right)
 
                 a_losses_left.append(a_loss_left)
                 c_losses_left.append(c_loss_left)

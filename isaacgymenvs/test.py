@@ -477,7 +477,7 @@ if __name__ == "__main__":
         # init writer once
         os.makedirs(output_hdf5_path, exist_ok=True)
         path = os.path.join(output_hdf5_path, output_hdf5_name)
-        writer = HDF5DatasetWriter_multi(outputPath=path, bufSize=1000)
+        writer = HDF5DatasetWriter_multi(outputPath=path, bufSize=1024)
 
     while not env.gym.query_viewer_has_closed(env.viewer):
 
@@ -675,7 +675,7 @@ if __name__ == "__main__":
                     print('Stop target tracking')
                     if write_hdf5data:
                         writer.flush()
-                        print('now total steps saved:', writer.idx)
+                        print('now total steps saved:', writer.idx_left)
                 else:
                     print_highlight('Stage', now_stage, 'Step', step, round(now_time - track_time, 4), 's')
 

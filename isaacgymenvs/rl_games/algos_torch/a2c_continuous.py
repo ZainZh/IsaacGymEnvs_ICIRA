@@ -286,7 +286,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         self.algo_observer_right.after_init(self)
 
         if self.with_lagrange:
-            self.target_action_gap = self.config.get('lagrange_thresh')
+            self.target_action_gap_left = self.config.get('lagrange_thresh_left')
+            self.target_action_gap_right = self.config.get('lagrange_thresh_right')
             self.log_alpha_prime = torch.zeros(1, requires_grad=True, device=self.ppo_device)
             self.alpha_prime_optimizer = torch.optim.Adam([self.log_alpha_prime],lr=self.config['learning_rate']
             )
@@ -389,7 +390,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
                 if self.with_lagrange:
                     alpha_prime = torch.clamp(self.log_alpha_prime.exp(), min=0.0, max=1000000.0)
-                    min_qf1_loss = alpha_prime * (min_qf1_loss - self.target_action_gap)
+                    min_qf1_loss = alpha_prime * (min_qf1_loss - self.target_action_gap_left)
 
                     self.alpha_prime_optimizer.zero_grad()
                     alpha_prime_loss = -min_qf1_loss
@@ -515,7 +516,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 min_qf1_loss = min_qf1_loss - values_offline.mean()
                 if self.with_lagrange:
                     alpha_prime = torch.clamp(self.log_alpha_prime.exp(), min=0.0, max=1000000.0)
-                    min_qf1_loss = alpha_prime * (min_qf1_loss - self.target_action_gap)
+                    min_qf1_loss = alpha_prime * (min_qf1_loss - self.target_action_gap_right)
 
                     self.alpha_prime_optimizer.zero_grad()
                     alpha_prime_loss = -min_qf1_loss

@@ -2,7 +2,7 @@ import h5py
 import torch
 import numpy as np
 
-date_file = h5py.File('./test_save/hdf5/0726-04-31-00.hdf5', 'r')
+date_file = h5py.File('./test_save/replaybuffer_fullstage.hdf5', 'r')
 
 print(list(date_file.keys()))
 

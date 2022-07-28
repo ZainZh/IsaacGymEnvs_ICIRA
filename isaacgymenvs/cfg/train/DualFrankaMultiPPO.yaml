@@ -34,7 +34,7 @@ params:
   load_path: ${...checkpoint} # path to the checkpoint to load
 
   config:
-    name: ${resolve_default:DualFrankaMultiPPO_0726_2,${....experiment}}
+    name: ${resolve_default:DualFrankaMultiPPO_0728_fullstage,${....experiment}}
     full_experiment_name: ${.name}
     env_name: rlgpu
     ppo: True
@@ -64,7 +64,7 @@ params:
     truncate_grads: True
     e_clip: 0.2
     horizon_length: 500
-    minibatch_size: 2048
+    minibatch_size: 1024
 #    minibatch_size: 10
     mini_epochs: 8
     critic_coef: 4
@@ -72,7 +72,9 @@ params:
     seq_len: 4
     bounds_loss_coef: 0.0001
     multi_franka: True
-    lagrange_thresh: 5.0
+    lagrange_thresh_left:  1.0
+    lagrange_thresh_right: 0.0
 
     with_lagrange: True
     offline_ppo: True
+    full_stage : True   # True is fullstage, False is stage1
