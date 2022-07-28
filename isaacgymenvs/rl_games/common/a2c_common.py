@@ -298,9 +298,8 @@ class A2CBase(BaseAlgorithm):
             self.config['central_value_config']['network'] = network
 
     def write_stats(self, total_time, epoch_num, step_time, play_time, update_time, a_losses_left, c_losses_left,
-                    entropies_left, kls_left,
-                    last_lr_left, lr_mul_left, a_losses_right, c_losses_right, entropies_right, kls_right,
-                    last_lr_right, lr_mul_right, frame, scaled_time, scaled_play_time, curr_frames):
+                    entropies_left, kls_left, last_lr_left, lr_mul_left, frame, scaled_time, scaled_play_time,
+                    curr_frames):
         # do we need scaled time?
         self.diagnostics.send_info(self.writer)
         self.writer.add_scalar('performance/step_inference_rl_update_fps', curr_frames / scaled_time, frame)
@@ -317,15 +316,6 @@ class A2CBase(BaseAlgorithm):
         self.writer.add_scalar('info/lr_mul_left', lr_mul_left, frame)
         self.writer.add_scalar('info/e_clip_left', self.e_clip * lr_mul_left, frame)
         self.writer.add_scalar('info/kl_left', torch_ext.mean_list(kls_left).item(), frame)
-
-        self.writer.add_scalar('losses/a_loss_right', torch_ext.mean_list(a_losses_right).item(), frame)
-        self.writer.add_scalar('losses/c_loss_right', torch_ext.mean_list(c_losses_right).item(), frame)
-        self.writer.add_scalar('losses/entropy_right', torch_ext.mean_list(entropies_right).item(), frame)
-        self.writer.add_scalar('info/last_lr_right', last_lr_right * lr_mul_right, frame)
-        self.writer.add_scalar('info/lr_mul_right', lr_mul_right, frame)
-        self.writer.add_scalar('info/e_clip_right', self.e_clip * lr_mul_right, frame)
-        self.writer.add_scalar('info/kl_right', torch_ext.mean_list(kls_right).item(), frame)
-        self.writer.add_scalar('info/epochs_right', epoch_num, frame)
         self.algo_observer.after_print_stats(frame, epoch_num, total_time)
 
     def set_eval(self):
@@ -1280,7 +1270,7 @@ class ContinuousMultiA2CBase(A2CBase):
         self.full_stage = self.config.get('full_stage', False)
         self.rnn_states_left = None
         self.rnn_states_right = None
-
+        self.offlinePPO = self.config.get('offline_ppo')
         # add new algo_observer
         self.algo_observer_left = self.config['features']['observer']
         self.algo_observer_left.before_init(base_name, self.config, self.experiment_name_left)
@@ -1315,7 +1305,6 @@ class ContinuousMultiA2CBase(A2CBase):
 
         self.last_lr_left = self.config['learning_rate']
         self.last_lr_right = self.config['learning_rate']
-        self.offlinePPO = self.config['offline_ppo']
         self.curr_frames_left = 0
         self.curr_frames_right = 0
         self.entropy_coef_left = self.config['entropy_coef']
@@ -1407,6 +1396,39 @@ class ContinuousMultiA2CBase(A2CBase):
             rescaled_actions = rescaled_actions.cpu().numpy()
 
         return rescaled_actions
+
+    def write_stats_multi(self, total_time, epoch_num, step_time, play_time, update_time,
+                          a_losses_left, c_losses_left,entropies_left, kls_left, last_lr_left, lr_mul_left,
+                          a_losses_right, c_losses_right, entropies_right, kls_right,
+                          last_lr_right, lr_mul_right, frame, scaled_time, scaled_play_time, curr_frames):
+        # do we need scaled time?
+        self.diagnostics.send_info(self.writer)
+        self.writer.add_scalar('performance/step_inference_rl_update_fps', curr_frames / scaled_time, frame)
+        self.writer.add_scalar('performance/step_inference_fps', curr_frames / scaled_play_time, frame)
+        self.writer.add_scalar('performance/step_fps', curr_frames / step_time, frame)
+        self.writer.add_scalar('performance/rl_update_time', update_time, frame)
+        self.writer.add_scalar('performance/step_inference_time', play_time, frame)
+        self.writer.add_scalar('performance/step_time', step_time, frame)
+
+        self.writer.add_scalar('losses/a_loss_left', torch_ext.mean_list(a_losses_left).item(), frame)
+        self.writer.add_scalar('losses/c_loss_left', torch_ext.mean_list(c_losses_left).item(), frame)
+
+        self.writer.add_scalar('losses/entropy_left', torch_ext.mean_list(entropies_left).item(), frame)
+        self.writer.add_scalar('info/last_lr_left', last_lr_left * lr_mul_left, frame)
+        self.writer.add_scalar('info/lr_mul_left', lr_mul_left, frame)
+        self.writer.add_scalar('info/e_clip_left', self.e_clip * lr_mul_left, frame)
+        self.writer.add_scalar('info/kl_left', torch_ext.mean_list(kls_left).item(), frame)
+
+        self.writer.add_scalar('losses/a_loss_right', torch_ext.mean_list(a_losses_right).item(), frame)
+        self.writer.add_scalar('losses/c_loss_right', torch_ext.mean_list(c_losses_right).item(), frame)
+
+        self.writer.add_scalar('losses/entropy_right', torch_ext.mean_list(entropies_right).item(), frame)
+        self.writer.add_scalar('info/last_lr_right', last_lr_right * lr_mul_right, frame)
+        self.writer.add_scalar('info/lr_mul_right', lr_mul_right, frame)
+        self.writer.add_scalar('info/e_clip_right', self.e_clip * lr_mul_right, frame)
+        self.writer.add_scalar('info/kl_right', torch_ext.mean_list(kls_right).item(), frame)
+        self.writer.add_scalar('info/epochs_right', epoch_num, frame)
+        self.algo_observer.after_print_stats(frame, epoch_num, total_time)
 
     def init_tensors(self):
         batch_size = self.num_agents * self.num_actors
@@ -1978,7 +2000,7 @@ class ContinuousMultiA2CBase(A2CBase):
         with torch.no_grad():
             # self.is_rnn is False
             if self.is_rnn_left and self.is_rnn_right:  # Todo rewrite play_steps_rnn_multi
-                batch_dict_left, batch_dict_right = self.play_steps_rnn_multi_offline()  # evaluion: the interaction
+                batch_dict_left, batch_dict_right = self.play_steps_rnn_multi()  # evaluion: the interaction
             else:
                 batch_dict_left, batch_dict_right = self.play_steps_multi()
 
@@ -1999,6 +2021,10 @@ class ContinuousMultiA2CBase(A2CBase):
         a_losses_left = []
         c_losses_left = []
         b_losses_left = []
+        offlosses_left = []
+        offvalues_left = []
+        offlosses_right = []
+        offvalues_right = []
         entropies_left = []
         kls_left = []
         a_losses_right = []
@@ -2010,14 +2036,26 @@ class ContinuousMultiA2CBase(A2CBase):
             ep_kls_left = []
             ep_kls_right = []
             for i in range(len(self.dataset_left)):
-
-                a_loss_left, c_loss_left, entropy_left, kl_left, last_lr_left, lr_mul_left, cmu_left, csigma_left, b_loss_left, \
-                a_loss_right, c_loss_right, entropy_right, kl_right, last_lr_right, lr_mul_right, cmu_right, csigma_right, b_loss_right = self.train_actor_critic_multi(
-                    self.dataset_left[i], self.dataset_right[i], self.data_actions_left, self.data_next_obs_left,
-                    self.data_actions_right, self.data_next_obs_right)
+                if self.offlinePPO:
+                    a_loss_left, c_loss_left, entropy_left, kl_left, last_lr_left, lr_mul_left, cmu_left, csigma_left, b_loss_left, offloss_left, offvalue_left, \
+                    a_loss_right, c_loss_right, entropy_right, kl_right, last_lr_right, lr_mul_right, cmu_right, csigma_right, b_loss_right, offloss_right, offvalue_right, = \
+                        self.train_actor_critic_multi(self.dataset_left[i], self.dataset_right[i],
+                                                              self.data_actions_left, self.data_next_obs_left,
+                                                              self.data_actions_right, self.data_next_obs_right)
+                else:
+                    a_loss_left, c_loss_left, entropy_left, kl_left, last_lr_left, lr_mul_left, cmu_left, csigma_left, b_loss_left, \
+                    a_loss_right, c_loss_right, entropy_right, kl_right, last_lr_right, lr_mul_right, cmu_right, csigma_right, b_loss_right = \
+                        self.train_actor_critic_multi(self.dataset_left[i], self.dataset_right[i],
+                                                              self.data_actions_left, self.data_next_obs_left,
+                                                              self.data_actions_right, self.data_next_obs_right)
 
                 a_losses_left.append(a_loss_left)
                 c_losses_left.append(c_loss_left)
+                if self.offlinePPO:
+                    offlosses_left.append(offloss_left)
+                    offlosses_right.append(offloss_right)
+                    offvalues_left.append(offvalue_left)
+                    offvalues_right.append(offvalue_right)
                 ep_kls_left.append(kl_left)
                 entropies_left.append(entropy_left)
                 if self.bounds_loss_coef is not None:
@@ -2063,11 +2101,16 @@ class ContinuousMultiA2CBase(A2CBase):
 
         # Todo: return two arm's loss and other params.
 
-        return batch_dict_left[
-                   'step_time'], play_time, update_time, total_time, \
-               a_losses_left, c_losses_left, b_losses_left, entropies_left, kls_left, last_lr_left, lr_mul_left, \
-               a_losses_right, c_losses_right, b_losses_right, entropies_right, kls_right, last_lr_right, lr_mul_right
-
+        if self.offlinePPO:
+            return batch_dict_left[
+                       'step_time'], play_time, update_time, total_time, \
+                   a_losses_left, c_losses_left, b_losses_left, entropies_left, kls_left, last_lr_left, lr_mul_left,offlosses_left,offvalues_left,\
+                   a_losses_right, c_losses_right, b_losses_right, entropies_right, kls_right, last_lr_right, lr_mul_right,offlosses_right,offvalues_right
+        else:
+            return batch_dict_left[
+                       'step_time'], play_time, update_time, total_time, \
+                   a_losses_left, c_losses_left, b_losses_left, entropies_left, kls_left, last_lr_left, lr_mul_left,\
+                   a_losses_right, c_losses_right, b_losses_right, entropies_right, kls_right, last_lr_right, lr_mul_right
     def prepare_dataset_left(self, batch_dict):
         obses = batch_dict['obses']
         returns = batch_dict['returns']
@@ -2198,9 +2241,14 @@ class ContinuousMultiA2CBase(A2CBase):
             epoch_num = self.update_epoch()
             print('\033[1;32m---------------- Epoch {} ----------------\033[0m'.format(epoch_num))
             # Todo: add other train epoch
-            step_time, play_time, update_time, sum_time, \
-            a_losses_left, c_losses_left, b_losses_left, entropies_left, kls_left, last_lr_left, lr_mul_left, \
-            a_losses_right, c_losses_right, b_losses_right, entropies_right, kls_right, last_lr_right, lr_mul_right = self.train_epoch_multi()
+            if self.offlinePPO:
+                step_time, play_time, update_time, sum_time, \
+                a_losses_left, c_losses_left, b_losses_left, entropies_left, kls_left, last_lr_left, lr_mul_left,offlosses_left,offvalues_left, \
+                a_losses_right, c_losses_right, b_losses_right, entropies_right, kls_right, last_lr_right, lr_mul_right,offlosses_right,offvalues_right = self.train_epoch_multi()
+            else:
+                step_time, play_time, update_time, sum_time, \
+                a_losses_left, c_losses_left, b_losses_left, entropies_left, kls_left, last_lr_left, lr_mul_left,  \
+                a_losses_right, c_losses_right, b_losses_right, entropies_right, kls_right, last_lr_right, lr_mul_right = self.train_epoch_multi()
 
             total_time += sum_time
             frame = self.frame // self.num_agents
@@ -2227,16 +2275,25 @@ class ContinuousMultiA2CBase(A2CBase):
                     print(
                         f'fps step: {fps_step:.1f} fps step and policy inference: {fps_step_inference:.1f} fps total: {fps_total:.1f} epoch: {epoch_num}/{self.max_epochs}')
 
-                self.write_stats(total_time, epoch_num, step_time, play_time, update_time, a_losses_left, c_losses_left,
-                                 entropies_left, kls_left, last_lr_left, lr_mul_left, a_losses_right, c_losses_right,
-                                 entropies_right, kls_right, last_lr_right, lr_mul_right, frame, scaled_time,
-                                 scaled_play_time, curr_frames)
+                self.write_stats_multi(total_time, epoch_num, step_time, play_time, update_time,
+                                       a_losses_left,c_losses_left, entropies_left, kls_left, last_lr_left, lr_mul_left,
+                                       a_losses_right,c_losses_right,entropies_right, kls_right, last_lr_right, lr_mul_right,
+                                       frame, scaled_time,scaled_play_time, curr_frames)
                 if len(b_losses_left) > 0:
                     self.writer.add_scalar('losses/bounds_loss_left', torch_ext.mean_list(b_losses_left).item(), frame)
                 if len(b_losses_right) > 0:
                     self.writer.add_scalar('losses/bounds_loss_right', torch_ext.mean_list(b_losses_right).item(),
                                            frame)
-
+                if self.offlinePPO:
+                    if len(offvalues_left)>0:
+                        self.writer.add_scalar('losses/offvalues_left',torch_ext.mean_list(offvalues_left).item(),frame)
+                    if len(offvalues_right) > 0:
+                        self.writer.add_scalar('losses/offvalues_right', torch_ext.mean_list(offvalues_right).item(), frame)
+                    if len(offlosses_left) > 0:
+                        self.writer.add_scalar('losses/offlosses_left', torch_ext.mean_list(offlosses_left).item(), frame)
+                    if len(offlosses_right) > 0:
+                        self.writer.add_scalar('losses/offlosses_right', torch_ext.mean_list(offlosses_right).item(),
+                                                   frame)
                 if self.has_soft_aug:
                     self.writer.add_scalar('losses/aug_loss', np.mean(aug_losses), frame)
 

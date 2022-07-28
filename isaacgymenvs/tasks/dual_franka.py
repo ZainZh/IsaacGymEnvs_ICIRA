@@ -33,6 +33,7 @@ class DualFranka(VecTask):
         self.lift_reward_scale = self.cfg["env"]["liftRewardScale"]
         self.finger_dist_reward_scale = self.cfg["env"]["fingerDistRewardScale"]
         self.action_penalty_scale = self.cfg["env"]["actionPenaltyScale"]
+        self.stage2_3_scale = self.cfg["env"]["stage2_3_scale"]
         self.num_agents = self.cfg["env"]["numAgents"]
         self.debug_viz = self.cfg["env"]["enableDebugVis"]
         self.ResetFromReplay = self.cfg["env"]["ResetFromReplay"]
@@ -735,7 +736,7 @@ class DualFranka(VecTask):
             self.gripper_forward_axis_1, self.gripper_up_axis_1, self.contact_forces,
             self.num_envs, self.dist_reward_scale, self.rot_reward_scale, self.around_handle_reward_scale,
             self.lift_reward_scale, self.finger_dist_reward_scale, self.action_penalty_scale, self.distX_offset,
-            self.max_episode_length)
+            self.max_episode_length, self.stage2_3_scale)
 
         # self.reset_num1 = torch.cat((self.contact_forces[:, 0:5, :], self.contact_forces[:, 6:7, :]), 1)
         # self.reset_num2 = torch.cat((self.contact_forces[:, 10:15, :], self.contact_forces[:, 16:17, :]), 1)
@@ -1247,7 +1248,7 @@ def compute_franka_reward(
         gripper_forward_axis_1, gripper_up_axis_1, contact_forces,
         num_envs: int, dist_reward_scale: float, rot_reward_scale: float, around_handle_reward_scale: float,
         lift_reward_scale: float, finger_dist_reward_scale: float, action_penalty_scale: float, distX_offset: float,
-        max_episode_length: float
+        max_episode_length: float, stage2_3_scale: float
 ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Dict[
     str, Union[Dict[str, Tuple[Tensor, Union[Tensor, float]]], Dict[str, Tuple[Tensor, float]], Dict[
         str, Tensor]]], Tensor, Tensor, Tensor, Tensor]:
@@ -1422,12 +1423,12 @@ def compute_franka_reward(
 
     # ....................stage 2 reward....................................................................
     # #delete the y column
-    franka_grasp_pos_trans = franka_grasp_pos.t()
-    franka_grasp_pos_1_trans = franka_grasp_pos_1.t()
+    spoon_positions_trans = spoon_positions.t()
+    cup_positions_trans = cup_positions.t()
     idx = 1
-    franka_grasp_pos_stage2 = franka_grasp_pos_trans[torch.arange(franka_grasp_pos_trans.size(0)) != idx]
-    franka_grasp_pos_1_stage2 = franka_grasp_pos_1_trans[torch.arange(franka_grasp_pos_1_trans.size(0)) != idx]
-    d_spoon_cup = torch.norm(franka_grasp_pos_stage2.t() - franka_grasp_pos_1_stage2.t(), p=2, dim=-1)
+    spoon_positions_without_y = spoon_positions_trans[torch.arange(spoon_positions_trans.size(0)) != idx]
+    cup_positions_without_y = cup_positions_trans[torch.arange(cup_positions_trans.size(0)) != idx]
+    d_spoon_cup = torch.norm(spoon_positions_without_y.t() - cup_positions_without_y.t(), p=2, dim=-1)
 
     # dist_reward = 2.0 / (1.0 + d ** 2)
     dist_reward_stage2 = 1.0 / (1.0 + d_spoon_cup ** 2)
@@ -1496,12 +1497,12 @@ def compute_franka_reward(
                                   + dist_reward_stage2_y * dist_reward_scale * 20)
 
     # TODO: add stage 3 reward
-    fulfill_s2 = torch.logical_and(spoon_positions[:, 1] - 0.4 > 0.15,
+    fulfill_s1 = torch.logical_and(spoon_positions[:, 1] - 0.4 > 0.15,
                                    # spoon_y - table_height > x  (shelf height ignored)
                                    cup_positions[:, 1] - 0.4 > 0.15,
                                    )
 
-    rewards = rewards + stage3 * fulfill_s2 * (h_reward_s3 * 20 \
+    rewards = rewards + stage3 * fulfill_s1 * (h_reward_s3 * 20 \
                                                + d_reward_s3 * 20 \
                                                + v_reward_s3 * 20)
 
@@ -1521,18 +1522,18 @@ def compute_franka_reward(
                                     - action_penalty_scale * action_penalty
                                     - cup_fall_penalty
                                     )
-    left_reward_stage2 = stage2 * (dist_reward_stage2 * dist_reward_scale * 20 \
-                                   + rot_reward_stage2 * rot_reward_scale * 20 \
-                                   + dist_reward_stage2_y * dist_reward_scale * 20)
-    right_reward_stage2 = stage2 * (dist_reward_stage2 * dist_reward_scale * 20 \
-                                    + rot_reward_stage2 * rot_reward_scale * 20 \
-                                    + dist_reward_stage2_y * dist_reward_scale * 20)
-    left_reward_stage3 = stage3 * fulfill_s2 * (h_reward_s3 * 20 \
-                                                + d_reward_s3 * 20 \
-                                                + v_reward_s3 * 20)
-    right_reward_stage3 = stage3 * fulfill_s2 * (h_reward_s3 * 20 \
-                                                 + d_reward_s3 * 20 \
-                                                 + v_reward_s3 * 20)
+    left_reward_stage2 = stage2 * fulfill_s1 * (dist_reward_stage2 * dist_reward_scale * stage2_3_scale \
+                                                + rot_reward_stage2 * rot_reward_scale * stage2_3_scale \
+                                                + dist_reward_stage2_y * dist_reward_scale * stage2_3_scale)
+    right_reward_stage2 = stage2 * fulfill_s1 * (dist_reward_stage2 * dist_reward_scale * stage2_3_scale \
+                                                 + rot_reward_stage2 * rot_reward_scale * stage2_3_scale \
+                                                 + dist_reward_stage2_y * dist_reward_scale * stage2_3_scale)
+    left_reward_stage3 = stage3 * fulfill_s1 * (h_reward_s3 * stage2_3_scale \
+                                                + d_reward_s3 * stage2_3_scale \
+                                                + v_reward_s3 * stage2_3_scale)
+    right_reward_stage3 = stage3 * fulfill_s1 * (h_reward_s3 * stage2_3_scale \
+                                                 + d_reward_s3 * stage2_3_scale \
+                                                 + v_reward_s3 * stage2_3_scale)
     left_reward = left_reward_stage1 + left_reward_stage2 + left_reward_stage3
     right_reward = right_reward_stage1 + right_reward_stage2 + right_reward_stage3
     # test args

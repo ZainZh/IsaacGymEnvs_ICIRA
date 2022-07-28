@@ -234,6 +234,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         self.init_rnn_from_model_right(self.model_right)
         self.last_lr_left = float(self.last_lr_left)
         self.last_lr_right = float(self.last_lr_right)
+        self.offlinePPO = self.config.get('offline_ppo')
         self.bound_loss_type = self.config.get('bound_loss_type', 'bound')  # 'regularisation' or 'bound'
         self.optimizer = optim.Adam([
             {'params': self.model_left.parameters(), 'lr': float(self.last_lr_left), 'eps': 1e-08,
@@ -242,9 +243,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
              'weight_decay': self.weight_decay}
         ])
         # self.optimizer_right = optim.Adam(self.model_right.parameters(), float(self.last_lr_right), eps=1e-08, weight_decay=self.weight_decay)
-        self.offlinePPO = self.config.get('offline_ppo')
-        self.with_lagrange=self.config.get('with_lagrange')
-
+        self.with_lagrange = self.config.get('with_lagrange')
 
         if self.has_central_value:
             cv_config = {
@@ -289,8 +288,9 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             self.target_action_gap_left = self.config.get('lagrange_thresh_left')
             self.target_action_gap_right = self.config.get('lagrange_thresh_right')
             self.log_alpha_prime = torch.zeros(1, requires_grad=True, device=self.ppo_device)
-            self.alpha_prime_optimizer = torch.optim.Adam([self.log_alpha_prime],lr=self.config['learning_rate']
-            )
+            self.alpha_prime_optimizer = torch.optim.Adam([self.log_alpha_prime], lr=self.config['learning_rate']
+                                                          )
+
     def update_epoch(self):
         self.epoch_num += 1
         return self.epoch_num
@@ -446,10 +446,14 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                                         'old_neglogp': old_action_log_probs_batch,
                                         'masks': rnn_masks
                                     }, curr_e_clip, 0)
-
-        self.train_result_left = (a_loss, c_loss, entropy, \
-                                  kl_dist, self.last_lr_left, lr_mul, \
-                                  mu.detach(), sigma.detach(), b_loss)
+        if self.offlinePPO:
+            self.train_result_left = (a_loss, c_loss, entropy, \
+                                      kl_dist, self.last_lr_left, lr_mul, \
+                                      mu.detach(), sigma.detach(), b_loss, min_qf1_loss,values_offline.mean())
+        else:
+            self.train_result_left = (a_loss, c_loss, entropy, \
+                                      kl_dist, self.last_lr_left, lr_mul, \
+                                      mu.detach(), sigma.detach(), b_loss)
 
     def calc_gradients_right(self, input_dict, data_actions_right, data_next_obs_right):
         value_preds_batch = input_dict['old_values']
@@ -571,10 +575,14 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                                         'old_neglogp': old_action_log_probs_batch,
                                         'masks': rnn_masks
                                     }, curr_e_clip, 0)
-
-        self.train_result_right = (a_loss, c_loss, entropy, \
-                                   kl_dist, self.last_lr_right, lr_mul, \
-                                   mu.detach(), sigma.detach(), b_loss)
+        if self.offlinePPO:
+            self.train_result_right = (a_loss, c_loss, entropy, \
+                                      kl_dist, self.last_lr_left, lr_mul, \
+                                      mu.detach(), sigma.detach(), b_loss, min_qf1_loss,values_offline.mean())
+        else:
+            self.train_result_right = (a_loss, c_loss, entropy, \
+                                       kl_dist, self.last_lr_right, lr_mul, \
+                                       mu.detach(), sigma.detach(), b_loss)
 
     def train_actor_critic_multi(self, input_dict_left, input_dict_right, data_actions_left, data_next_obs_left,
                                  data_actions_right, data_next_obs_right):
