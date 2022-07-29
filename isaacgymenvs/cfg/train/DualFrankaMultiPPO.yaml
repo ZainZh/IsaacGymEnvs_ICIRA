@@ -78,3 +78,4 @@ params:
     with_lagrange: True
     offline_ppo: True
     full_stage : True   # True is fullstage, False is stage1
+    with_Bimanual_regularization: False

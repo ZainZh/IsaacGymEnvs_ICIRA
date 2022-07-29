@@ -235,6 +235,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         self.last_lr_left = float(self.last_lr_left)
         self.last_lr_right = float(self.last_lr_right)
         self.offlinePPO = self.config.get('offline_ppo')
+        self.Bimanual_regularization = self.config.get('with_Bimanual_regularization')
         self.bound_loss_type = self.config.get('bound_loss_type', 'bound')  # 'regularisation' or 'bound'
         self.optimizer = optim.Adam([
             {'params': self.model_left.parameters(), 'lr': float(self.last_lr_left), 'eps': 1e-08,
@@ -291,6 +292,23 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             self.alpha_prime_optimizer = torch.optim.Adam([self.log_alpha_prime], lr=self.config['learning_rate']
                                                           )
 
+    def bimanual_regularization(self, current_actions, offline_actions, offline_obs, offline_rewards, offline_dones,
+                                offline_nextobs):
+        # update obs, action, reward, next_obs, done from replay_buffer(one step)
+        # data_tensor = offline_actions.expand(current_actions.size(0), 849, 18)
+        # current_actions = torch.unsqueeze(action_cql, 1)
+        dis = torch.norm((offline_actions - current_actions), dim=2)
+        min = torch.argmin(dis, axis=1)
+        min_numpy = np
+        # print(min.size())
+        # print(min, dis[min])
+        current_action = offline_actions[min]
+        current_obs = offline_obs[min]
+        current_rewards = offline_rewards[min]
+        current_dones = offline_dones[min]
+        current_nextobs = offline_nextobs[min]
+        return current_action, current_obs, current_rewards, current_dones, current_nextobs
+
     def update_epoch(self):
         self.epoch_num += 1
         return self.epoch_num
@@ -324,7 +342,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         preds_q1 = preds_q1.view(obs.shape[0], num_repeat, 1)
         return preds_q1, preds_q2
 
-    def calc_gradients_left(self, input_dict, data_actions_left, data_next_obs_left):
+    def calc_gradients_left(self, input_dict, data_actions_left, data_next_obs_left, data_obs_left):
         value_preds_batch = input_dict['old_values']
         old_action_log_probs_batch = input_dict['old_logp_actions']
         advantage = input_dict['advantages']
@@ -334,18 +352,27 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         actions_batch = input_dict['actions']
         obs_batch = input_dict['obs']
         obs_batch = self._preproc_obs(obs_batch)
-        obs_batch_offline = self._preproc_obs(data_next_obs_left)
+        obs_batch_offline = self._preproc_obs(data_obs_left)
+        obs_next_batch_offline = self._preproc_obs(data_next_obs_left)
 
         # value_preds_batch_offline = input_dict_offline['old_values']
         # return_batch_offline = input_dict_offline['returns']
         lr_mul = 1.0
         curr_e_clip = self.e_clip
-
-        batch_dict = {
-            'is_train': True,
-            'prev_actions': actions_batch,
-            'obs': obs_batch,
-        }
+        if self.Bimanual_regularization:
+            current_action, current_obs, current_rewards, current_dones, current_nextobs = self.bimanual_regularization(
+                actions_batch, data_actions_left, offline_obs, offline_rewards, offline_dones, offline_nextobs)
+            batch_dict = {
+                'is_train': True,
+                'prev_actions': actions_batch,
+                'obs': obs_batch,
+            }
+        else:
+            batch_dict = {
+                'is_train': True,
+                'prev_actions': actions_batch,
+                'obs': obs_batch,
+            }
         batch_dict_offline = {
             'is_train': True,
             'prev_actions': data_actions_left,
@@ -375,11 +402,18 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                                                           self.num_random, actions_batch.shape[-1]).uniform_(-1, 1).to(
                     self.ppo_device)
 
-                batch_dict_random = {
-                    'is_train': True,
-                    'prev_actions': random_actions_tensor,
-                    'obs': obs_batch_offline,
-                }
+                if self.Bimanual_regularization:
+                    batch_dict_random = {
+                        'is_train': True,
+                        'prev_actions': random_actions_tensor,
+                        'obs': obs_regularzation,
+                    }
+                else:
+                    batch_dict_random = {
+                        'is_train': True,
+                        'prev_actions': random_actions_tensor,
+                        'obs': obs_batch_offline,
+                    }
 
                 res_dict_random = self.model_left(batch_dict_random)
                 values_random = res_dict_random['values']
@@ -449,13 +483,13 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         if self.offlinePPO:
             self.train_result_left = (a_loss, c_loss, entropy, \
                                       kl_dist, self.last_lr_left, lr_mul, \
-                                      mu.detach(), sigma.detach(), b_loss, min_qf1_loss,values_offline.mean())
+                                      mu.detach(), sigma.detach(), b_loss, min_qf1_loss, values_offline.mean())
         else:
             self.train_result_left = (a_loss, c_loss, entropy, \
                                       kl_dist, self.last_lr_left, lr_mul, \
                                       mu.detach(), sigma.detach(), b_loss)
 
-    def calc_gradients_right(self, input_dict, data_actions_right, data_next_obs_right):
+    def calc_gradients_right(self, input_dict, data_actions_right, data_next_obs_right, data_obs_right):
         value_preds_batch = input_dict['old_values']
         old_action_log_probs_batch = input_dict['old_logp_actions']
         advantage = input_dict['advantages']
@@ -577,17 +611,18 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                                     }, curr_e_clip, 0)
         if self.offlinePPO:
             self.train_result_right = (a_loss, c_loss, entropy, \
-                                      kl_dist, self.last_lr_right, lr_mul, \
-                                      mu.detach(), sigma.detach(), b_loss, min_qf1_loss,values_offline.mean())
+                                       kl_dist, self.last_lr_right, lr_mul, \
+                                       mu.detach(), sigma.detach(), b_loss, min_qf1_loss, values_offline.mean())
         else:
             self.train_result_right = (a_loss, c_loss, entropy, \
                                        kl_dist, self.last_lr_right, lr_mul, \
                                        mu.detach(), sigma.detach(), b_loss)
 
-    def train_actor_critic_multi(self, input_dict_left, input_dict_right, data_actions_left, data_next_obs_left,
-                                 data_actions_right, data_next_obs_right):
-        self.calc_gradients_left(input_dict_left, data_actions_left, data_next_obs_left)
-        self.calc_gradients_right(input_dict_right, data_actions_right, data_next_obs_right)
+    def train_actor_critic_multi(self, input_dict_left, input_dict_right,
+                                 data_actions_left, data_next_obs_left, data_obs_left,
+                                 data_actions_right, data_next_obs_right, data_obs_right):
+        self.calc_gradients_left(input_dict_left, data_actions_left, data_next_obs_left, data_obs_left)
+        self.calc_gradients_right(input_dict_right, data_actions_right, data_next_obs_right, data_obs_right)
         self.train_result = self.train_result_left + self.train_result_right
         return self.train_result
 

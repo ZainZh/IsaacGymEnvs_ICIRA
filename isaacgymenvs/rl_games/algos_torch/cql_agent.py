@@ -116,12 +116,12 @@ class CQLAgent(BaseAlgorithm):
         self.min_q_weight = config['min_q_weight']
 
         # read one step replaybuffer
-        date_file = h5py.File('./reset_buffer/replay_buff1.hdf5', 'r')
-        self.data_obs = torch.tensor(np.array(date_file['observations']), dtype=torch.float, device=self.device)
-        self.data_actions = torch.tensor(np.array(date_file['actions']), dtype=torch.float, device=self.device)
-        self.data_rewards = torch.tensor(np.array(date_file['rewards']), dtype=torch.float, device=self.device)
-        self.data_next_obs = torch.tensor(np.array(date_file['next_observations']), dtype=torch.float, device=self.device)
-        self.data_dones = torch.tensor(np.array(date_file['dones']), dtype=torch.float, device=self.device)
+        date_file = h5py.File('replay_buffer/replaybuffer_fullstage.hdf5', 'r')
+        self.data_obs = torch.tensor(np.array(date_file['observations_left']), dtype=torch.float, device=self.device)
+        self.data_actions = torch.tensor(np.array(date_file['actions_left']), dtype=torch.float, device=self.device)
+        self.data_rewards = torch.tensor(np.array(date_file['rewards_left']), dtype=torch.float, device=self.device)
+        self.data_next_obs = torch.tensor(np.array(date_file['next_observations_left']), dtype=torch.float, device=self.device)
+        self.data_dones = torch.tensor(np.array(date_file['dones_left']), dtype=torch.float, device=self.device)
 
     def load_networks(self, params):
         builder = model_builder.ModelBuilder()

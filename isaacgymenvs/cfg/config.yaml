@@ -56,7 +56,7 @@ defaults:
   #- train: ${task}SAC
 #  - train: ${task}PPO
   - train: ${task}MultiPPO
- # - train: ${task}CQL   # if use CQL need to use this suffix
+#  - train: ${task}CQL   # if use CQL need to use this suffix
   - hydra/job_logging: disabled
 
 # set the directory where the output files get saved
