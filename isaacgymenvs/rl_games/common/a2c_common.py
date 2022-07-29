@@ -1358,25 +1358,25 @@ class ContinuousMultiA2CBase(A2CBase):
             # left action
             self.data_actions_left = torch.tensor(np.array(date_file['actions_left']), dtype=torch.float,
                                                   device=self.device)
-            self.data_actions_left = torch.cat((self.data_actions_left, self.data_actions_left[930:977, :]))
+            # self.data_actions_left = torch.cat((self.data_actions_left, self.data_actions_left[930:977, :]))
 
             # left obs
             self.data_next_obs_left = torch.tensor(np.array(date_file['next_observations_left']), dtype=torch.float,
                                                    device=self.device)
 
-            self.data_next_obs_left = torch.cat((self.data_next_obs_left, self.data_next_obs_left[930:977, :]))
+            # self.data_next_obs_left = torch.cat((self.data_next_obs_left, self.data_next_obs_left[930:977, :]))
 
             # right action
             self.data_actions_right = torch.tensor(np.array(date_file['actions_right']), dtype=torch.float,
                                                    device=self.device)
 
-            self.data_actions_right = torch.cat((self.data_actions_right, self.data_actions_right[930:977, :]))
+            # self.data_actions_right = torch.cat((self.data_actions_right, self.data_actions_right[930:977, :]))
 
             # right obs
             self.data_next_obs_right = torch.tensor(np.array(date_file['next_observations_right']), dtype=torch.float,
                                                     device=self.device)
 
-            self.data_next_obs_right = torch.cat((self.data_next_obs_right, self.data_next_obs_right[930:977, :]))
+            # self.data_next_obs_right = torch.cat((self.data_next_obs_right, self.data_next_obs_right[930:977, :]))
 
     def env_reset_multi(self):
         obs_left, obs_right = self.vec_env.reset_multi()

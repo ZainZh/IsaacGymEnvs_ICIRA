@@ -371,7 +371,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             if self.offlinePPO:
                 ## add CQL
                 # add CQL here
-                random_actions_tensor = torch.FloatTensor(res_dict['values'].shape[0] *
+                random_actions_tensor = torch.FloatTensor(values_offline.size(0) *
                                                           self.num_random, actions_batch.shape[-1]).uniform_(-1, 1).to(
                     self.ppo_device)
 
@@ -502,7 +502,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             if self.offlinePPO:
                 ## add CQL
                 # add CQL here
-                random_actions_tensor = torch.FloatTensor(res_dict['values'].shape[0] *
+                random_actions_tensor = torch.FloatTensor(values_offline.size(0) *
                                                           self.num_random, actions_batch.shape[-1]).uniform_(-1, 1).to(
                     self.ppo_device)
 
