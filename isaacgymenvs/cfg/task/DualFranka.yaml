@@ -31,7 +31,7 @@ env:
   liftRewardScale: 0.1
   fingerDistRewardScale: 5.0
   actionPenaltyScale: 0.01
-  stage2_3_scale: 20
+  stage2_3_scale: 200
   multifranka: True
 
 
