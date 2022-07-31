@@ -75,7 +75,7 @@ params:
     lagrange_thresh_left:  1.0
     lagrange_thresh_right: 0.0
 
-    with_lagrange: False
-    offline_ppo: False
+    with_lagrange: True
+    offline_ppo: True
     full_stage : True   # True is fullstage, False is stage1
-    with_Bimanual_regularization: False
+    with_Bimanual_regularization: True
