@@ -294,9 +294,10 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
     def bimanual_regularization(self, current_actions, offline_actions, offline_obs):
         # update obs, action, reward, next_obs, done from replay_buffer(one step)
-        offline_actions = torch.unsqueeze(offline_actions, 1)
-        data_tensor = self.data_actions.expand(action_cql.size(0), 849, 9)
-        dis = torch.norm((data_tensor - current_actions), dim=2)
+
+        offline_actions_data = offline_actions.expand(current_actions.size(0), offline_actions.size(0), 9)
+        current_actions = torch.unsqueeze(current_actions, 1)
+        dis = torch.norm((offline_actions_data - current_actions), dim=2)
         min = torch.argmin(dis, axis=1)
         min_numpy = np
         # print(min.size())
@@ -394,22 +395,16 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                                                           self.num_random, actions_batch.shape[-1]).uniform_(-1, 1).to(
                     self.ppo_device)
 
-                if self.Bimanual_regularization:
-                    batch_dict_random = {
-                        'is_train': True,
-                        'prev_actions': random_actions_tensor,
-                        'obs': obs_regularzation,
-                    }
-                else:
-                    batch_dict_random = {
-                        'is_train': True,
-                        'prev_actions': random_actions_tensor,
-                        'obs': obs_batch_offline,
-                    }
+
+                batch_dict_random = {
+                    'is_train': True,
+                    'prev_actions': random_actions_tensor,
+                    'obs': obs_batch_offline,
+                }
 
                 res_dict_random = self.model_left(batch_dict_random)
                 values_random = res_dict_random['values']
-                cat_q1 = torch.cat([values_random, values_offline.unsqueeze(1)], 1)
+                cat_q1 = torch.cat([values_random], 1)
                 ## logsumexp= Log(Sum(Exp()))
                 min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean()
                 min_qf1_loss = min_qf1_loss - values_offline.mean()
@@ -494,7 +489,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         obs_batch_offline = self._preproc_obs(data_obs_right)
         if self.Bimanual_regularization:
             actions_batch, obs_batch = self.bimanual_regularization(
-                actions_batch, data_actions_left, obs_batch_offline)
+                actions_batch, data_actions_right, obs_batch_offline)
         # value_preds_batch_offline = input_dict_offline['old_values']
         # return_batch_offline = input_dict_offline['returns']
         lr_mul = 1.0
