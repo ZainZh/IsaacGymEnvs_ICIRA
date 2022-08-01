@@ -2,7 +2,11 @@
 
 This repo is based on the Nvidia's repo [IsaacGymEnvs](https://github.com/NVIDIA-Omniverse/IsaacGymEnvs), editted by me for the ICIRA conference and RAS conference experiment.
 
-The paper for ICIRA is accepted, link will be put as soon as possible.
+In this work, we will propose some new training methods about multi-agent RL.
+And we will provide the Isaac Gym's users a test environment to help you monitor your training process.
+Moreover, some multi-agent apis will be provided for multi-agent training in Isaac Gym.
+
+A part of our work will be published in ICIRA conference, the other part of work is still working and expecting accpeted by RAS
 - [IsaacGym Bimanual Franka task](#isaacgym-bimanual-franka-task)
 	- [Handbook about our work](#handbook-about-our-work)
 		- [Installation](#installation)
