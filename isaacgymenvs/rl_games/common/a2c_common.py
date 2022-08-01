@@ -1858,7 +1858,7 @@ class ContinuousMultiA2CBase(A2CBase):
         update_list_left = self.update_list_left
         update_list_right = self.update_list_right
         step_time = 0.0
-
+        interact_time=time.time()
         for n in range(self.horizon_length):
 
             res_dict_left = self.get_action_values_left(self.obs_left)
@@ -1951,7 +1951,8 @@ class ContinuousMultiA2CBase(A2CBase):
             self.current_lengths_left = self.current_lengths_left * not_dones_left
             self.current_rewards_right = self.current_rewards_right * not_dones_right.unsqueeze(1)
             self.current_lengths_right = self.current_lengths_right * not_dones_right
-
+        interact_endtime=time.time()
+        print("the interact time is",interact_endtime-interact_time)
         last_values_left = self.get_values_left(self.obs_left)
         last_values_right = self.get_values_right(self.obs_right)
         fdones = self.dones.float()
@@ -2024,9 +2025,11 @@ class ContinuousMultiA2CBase(A2CBase):
         b_losses_right = []
         entropies_right = []
         kls_right = []
+
         for mini_ep in range(0, self.mini_epochs_num):
             ep_kls_left = []
             ep_kls_right = []
+
             for i in range(len(self.dataset_left)):
                 if self.offlinePPO:
                     a_loss_left, c_loss_left, entropy_left, kl_left, last_lr_left, lr_mul_left, cmu_left, csigma_left, b_loss_left, offloss_left, offvalue_left, \
@@ -2089,6 +2092,7 @@ class ContinuousMultiA2CBase(A2CBase):
         update_time_end = time.time()
         play_time = play_time_end - play_time_start
         update_time = update_time_end - update_time_start
+        print('compute time is',update_time)
         total_time = update_time_end - play_time_start
 
         # Todo: return two arm's loss and other params.
