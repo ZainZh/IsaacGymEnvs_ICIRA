@@ -70,7 +70,7 @@ The camera-ready version:
 > https://mycuhk-my.sharepoint.com/:b:/g/personal/1155169521_link_cuhk_edu_hk/ETAQRHX-UcRJr2E4gKzROZgBYWgVX_5-VrLBOjP8WaIq0w?e=l3X3hg
 
 The powerpoint about our ICIRA work:
->shttps://mycuhk-my.sharepoint.com/:p:/g/personal/1155169521_link_cuhk_edu_hk/EaD-nU8Dc2hHreP4dB2QQ-oB5EnMBSCWO4AFzSCv7wUfpQ?e=D1nHnh
+>https://mycuhk-my.sharepoint.com/:p:/g/personal/1155169521_link_cuhk_edu_hk/EaD-nU8Dc2hHreP4dB2QQ-oB5EnMBSCWO4AFzSCv7wUfpQ?e=D1nHnh
 
 Mixline diagram:
 ![Image](https://pic4.zhimg.com/80/v2-81285504d720391134c6a857056e33bc.png)
