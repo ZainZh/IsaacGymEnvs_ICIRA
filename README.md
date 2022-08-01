@@ -1,12 +1,12 @@
 # IsaacGym Bimanual Franka task
 
-This repo is based on the Nvidia's repo [IsaacGymEnvs](https://github.com/NVIDIA-Omniverse/IsaacGymEnvs), editted by me for the ICIRA conference and RAS conference experiment.
+This repo is based on Nvidia's repo [IsaacGymEnvs](https://github.com/NVIDIA-Omniverse/IsaacGymEnvs), edited by me for the ICIRA conference and RAS conference experiment.
 
-In this work, we will propose some new training methods about multi-agent RL.
-And we will provide the Isaac Gym's users a test environment to help you monitor your training process.
-Moreover, some multi-agent apis will be provided for multi-agent training in Isaac Gym.
+In this work, we propose new training methods for multi-agent RL.
+And we will provide Isaac Gym's users a test environment to help you monitor your training process.
+Moreover, some multi-agent APIs will be provided for multi-agent training in Isaac Gym.
 
-A part of our work will be published in ICIRA conference, the other part of work is still working and expecting accpeted by RAS
+A part of our work will be published at the ICIRA conference; the other part is still working and expected to be accepted by RAS.
 - [IsaacGym Bimanual Franka task](#isaacgym-bimanual-franka-task)
 	- [Handbook about our work](#handbook-about-our-work)
 		- [Installation](#installation)
@@ -18,10 +18,10 @@ A part of our work will be published in ICIRA conference, the other part of work
 
 ## Handbook about our work  
 This is a handbook about our work's difference with Nvidia's work.
-1. We provide a test platform that you can view the rewards, obs or any information you want to know during the training process. What's more, it can be used to record offline datas in Simulate environment to apply the offline algorithm without real environment.
+1. We provide a test platform where you can view the rewards, obs, or any information you want to know during the training process. Moreover, it can record offline data in Simulate environment to apply the offline algorithm without a real environment.
    
-   It provides you more choices to train your tasks with low cost.
-2. We will provide a multi-agent train api with multi-ppo, multi-sac algorithms to help you train your multi-agent tasks. 
+   It provides you more choices to train your tasks at a low cost.
+2. We will provide a multi-agent train API with multi-PPO, multi-sac algorithms to help you train your multi-agent tasks. 
 ### Installation
 
 1. The essential package [rl_games](https://github.com/Denys88/rl_games) use the newest version v1.3.2, have to download the package manually.
@@ -66,7 +66,7 @@ This is a handbook about our work's difference with Nvidia's work.
 
 
 ## Work achievement
-We try to show you our efforts from two papers, the ICIRA one is accepted, as soon as the RAS one is still working!
+We try to show you our efforts from two papers; the ICIRA one is already accepted as soon as the RAS one is still working!
 ### About ICIRA
 **Title: 'Mixline: A Hybrid Reinforcement Learning Framework for Long-horizon Bimanual Coffee Stirring Task'**
 
