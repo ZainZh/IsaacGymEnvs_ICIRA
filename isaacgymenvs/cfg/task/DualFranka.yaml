@@ -33,6 +33,7 @@ env:
   actionPenaltyScale: 0.01
   stage2_3_scale: 200
   multifranka: True
+  stage2begin: True
 
 
   asset:

@@ -37,6 +37,7 @@ class DualFranka(VecTask):
         self.num_agents = self.cfg["env"]["numAgents"]
         self.debug_viz = self.cfg["env"]["enableDebugVis"]
         self.ResetFromReplay = self.cfg["env"]["ResetFromReplay"]
+        self.stage2begin = self.cfg['env']['stage2begin']
 
         self.up_axis = "y"
         self.up_axis_idx = 2
@@ -736,7 +737,7 @@ class DualFranka(VecTask):
             self.gripper_forward_axis_1, self.gripper_up_axis_1, self.contact_forces,
             self.num_envs, self.dist_reward_scale, self.rot_reward_scale, self.around_handle_reward_scale,
             self.lift_reward_scale, self.finger_dist_reward_scale, self.action_penalty_scale, self.distX_offset,
-            self.max_episode_length, self.stage2_3_scale)
+            self.max_episode_length, self.stage2_3_scale, self.stage2begin)
 
         # self.reset_num1 = torch.cat((self.contact_forces[:, 0:5, :], self.contact_forces[:, 6:7, :]), 1)
         # self.reset_num2 = torch.cat((self.contact_forces[:, 10:15, :], self.contact_forces[:, 16:17, :]), 1)
@@ -745,16 +746,25 @@ class DualFranka(VecTask):
 
     def reset_idx_replay_buffer(self, env_ids):
         import h5py
-        with h5py.File('replay_buffer/replay_buff1.hdf5', 'r') as hdf:
-            ls = list(hdf.keys())
-            data = hdf.get('observations')
-            dataset1 = np.array(data)  # get the obversation buffer from replay buffer
+        with h5py.File('replay_buffer/replaybuffer_fullstage.hdf5', 'r') as hdf:
+            data_actions_left = torch.tensor(np.array(hdf['actions_left']), dtype=torch.float,
+                                             device=self.device)
+            # left obs
+            data_obs_left = torch.tensor(np.array(hdf['observations_left']), dtype=torch.float,
+                                         device=self.device)
+            # right action
+            data_actions_right = torch.tensor(np.array(hdf['actions_right']), dtype=torch.float,
+                                              device=self.device)
+            # right obs
+            data_obs_right = torch.tensor(np.array(hdf['observations_right']), dtype=torch.float,
+                                          device=self.device)
+
             # rand_idx = random.randrange(0, dataset1.shape[0], 1)
-            rand_idx = 350
-            rand_franka_cup_pos = dataset1[rand_idx, -9:]
-            rand_franka_spoon_pos = dataset1[rand_idx, -18:-9]
-            rand_cup_pos = dataset1[rand_idx, -25:-18]
-            rand_spoon_pos = dataset1[rand_idx, -32:-25]
+            rand_idx = 300
+            rand_franka_cup_pos = data_actions_right[rand_idx, :]
+            rand_franka_spoon_pos = data_actions_left[rand_idx, :]
+            rand_cup_pos = data_obs_right[rand_idx, -16:-9]
+            rand_spoon_pos = data_obs_left[rand_idx, -16:-9]
         pos = to_torch(rand_franka_spoon_pos, device=self.device)
         # print("pos is ", pos)
         # reset franka with "pos"
@@ -848,7 +858,7 @@ class DualFranka(VecTask):
         # reset cup
         self.cup_positions[env_ids, 0] = -0.3
         self.cup_positions[env_ids, 1] = 0.443
-        self.cup_positions[env_ids, 2] = -0.28
+        self.cup_positions[env_ids, 2] = -0.29
         self.cup_orientations[env_ids, 0:3] = 0.0
         self.cup_orientations[env_ids, 1] = -0.287
         self.cup_orientations[env_ids, 3] = 0.95793058
@@ -902,39 +912,74 @@ class DualFranka(VecTask):
     def reset_idx_spoon(self, env_ids):
         # reset franka
         # self.root_states[env_ids] = self.saved_root_tensor[env_ids]
+        if self.stage2begin:
+            import h5py
+            with h5py.File('replay_buffer/replaybuffer_fullstage.hdf5', 'r') as hdf:
+                data_actions_left = torch.tensor(np.array(hdf['actions_left']), dtype=torch.float,
+                                                 device=self.device)
+                # left obs
+                data_obs_left = torch.tensor(np.array(hdf['observations_left']), dtype=torch.float,
+                                             device=self.device)
+                # right action
+                data_actions_right = torch.tensor(np.array(hdf['actions_right']), dtype=torch.float,
+                                                  device=self.device)
+                # right obs
+                data_obs_right = torch.tensor(np.array(hdf['observations_right']), dtype=torch.float,
+                                              device=self.device)
 
-        pos = tensor_clamp(
-            self.franka_default_dof_pos.unsqueeze(0) + 0.1 * (
-                    torch.rand((len(env_ids), self.num_franka_dofs), device=self.device) - 0.5),
-            self.franka_dof_lower_limits, self.franka_dof_upper_limits)
-        # print("pos is ", pos)
-        # reset franka with "pos"
-        self.franka_dof_pos[env_ids, :] = pos
-        self.franka_dof_vel[env_ids, :] = torch.zeros_like(self.franka_dof_vel[env_ids])
-        self.franka_dof_targets_spoon[env_ids, :self.num_franka_dofs] = pos
-        self.franka_dof_targets[env_ids, :self.num_franka_dofs] = pos
-        self.franka_dof_targets_spoon[env_ids, self.num_franka_dofs: 2 * self.num_franka_dofs] = self.franka_dof_pos_1[
-                                                                                                 env_ids, :]
-        # reset spoon
-        self.spoon_positions[env_ids, 0] = -0.29
-        self.spoon_positions[env_ids, 1] = 0.5
-        if spoon_as_box:
-            self.spoon_positions[env_ids, 1] = 0.5 + 0.015
-        self.spoon_positions[env_ids, 2] = 0.29
-        if turn_spoon:
-            self.spoon_positions[env_ids, 0] = -0.53
-            self.spoon_positions[env_ids, 2] = 0.39
-        self.spoon_orientations[env_ids, 0] = 0.0
-        self.spoon_orientations[env_ids, 1] = 0.0
-        self.spoon_orientations[env_ids, 2] = 0.0
-        self.spoon_orientations[env_ids, 3] = 1.0
-        if turn_spoon:
+                # rand_idx = random.randrange(0, dataset1.shape[0], 1)
+                rand_idx = 300
+                rand_franka_cup_pos = data_actions_right[rand_idx, :]
+                rand_franka_spoon_pos = data_actions_left[rand_idx, :]
+                rand_cup_pos = data_obs_right[rand_idx, -16:-9]
+                rand_spoon_pos = data_obs_left[rand_idx, -16:-9]
+            pos = to_torch(rand_franka_spoon_pos, device=self.device)
+            # print("pos is ", pos)
+            # reset franka with "pos"
+            self.franka_dof_pos[env_ids, :] = pos
+            self.franka_dof_vel[env_ids, :] = torch.zeros_like(self.franka_dof_vel[env_ids])
+            self.franka_dof_targets[env_ids, :self.num_franka_dofs] = pos
+
+            # reset spoon
+            self.spoon_positions[env_ids] = to_torch(rand_spoon_pos[0:3], device=self.device)
+            self.spoon_orientations[env_ids] = to_torch(rand_spoon_pos[3:7], device=self.device)
+            self.spoon_angvels[env_ids] = 0.0
+            self.spoon_linvels[env_ids] = 0.0
+
+        else:
+            pos = tensor_clamp(
+                self.franka_default_dof_pos.unsqueeze(0) + 0.1 * (
+                        torch.rand((len(env_ids), self.num_franka_dofs), device=self.device) - 0.5),
+                self.franka_dof_lower_limits, self.franka_dof_upper_limits)
+            # print("pos is ", pos)
+            # reset franka with "pos"
+            self.franka_dof_pos[env_ids, :] = pos
+            self.franka_dof_vel[env_ids, :] = torch.zeros_like(self.franka_dof_vel[env_ids])
+            self.franka_dof_targets_spoon[env_ids, :self.num_franka_dofs] = pos
+            self.franka_dof_targets[env_ids, :self.num_franka_dofs] = pos
+            self.franka_dof_targets_spoon[env_ids,
+            self.num_franka_dofs: 2 * self.num_franka_dofs] = self.franka_dof_pos_1[
+                                                              env_ids, :]
+            # reset spoon
+            self.spoon_positions[env_ids, 0] = -0.29
+            self.spoon_positions[env_ids, 1] = 0.5
+            if spoon_as_box:
+                self.spoon_positions[env_ids, 1] = 0.5 + 0.015
+            self.spoon_positions[env_ids, 2] = 0.29
+            if turn_spoon:
+                self.spoon_positions[env_ids, 0] = -0.53
+                self.spoon_positions[env_ids, 2] = 0.39
             self.spoon_orientations[env_ids, 0] = 0.0
-            self.spoon_orientations[env_ids, 1] = -0.707
+            self.spoon_orientations[env_ids, 1] = 0.0
             self.spoon_orientations[env_ids, 2] = 0.0
-            self.spoon_orientations[env_ids, 3] = 0.707
-        self.spoon_angvels[env_ids] = 0.0
-        self.spoon_linvels[env_ids] = 0.0
+            self.spoon_orientations[env_ids, 3] = 1.0
+            if turn_spoon:
+                self.spoon_orientations[env_ids, 0] = 0.0
+                self.spoon_orientations[env_ids, 1] = -0.707
+                self.spoon_orientations[env_ids, 2] = 0.0
+                self.spoon_orientations[env_ids, 3] = 0.707
+            self.spoon_angvels[env_ids] = 0.0
+            self.spoon_linvels[env_ids] = 0.0
 
         # reset root state for spoon and cup in selected envs
         actor_indices = self.global_indices[env_ids, 2:4].flatten()
@@ -962,27 +1007,61 @@ class DualFranka(VecTask):
     def reset_idx_cup(self, env_ids):
         # reset franka
         # self.root_states[env_ids] = self.saved_root_tensor[env_ids]
+        if self.stage2begin:
+            import h5py
+            with h5py.File('replay_buffer/replaybuffer_fullstage.hdf5', 'r') as hdf:
+                data_actions_left = torch.tensor(np.array(hdf['actions_left']), dtype=torch.float,
+                                                 device=self.device)
+                # left obs
+                data_obs_left = torch.tensor(np.array(hdf['observations_left']), dtype=torch.float,
+                                             device=self.device)
+                # right action
+                data_actions_right = torch.tensor(np.array(hdf['actions_right']), dtype=torch.float,
+                                                  device=self.device)
+                # right obs
+                data_obs_right = torch.tensor(np.array(hdf['observations_right']), dtype=torch.float,
+                                              device=self.device)
+
+                # rand_idx = random.randrange(0, dataset1.shape[0], 1)
+                rand_idx = 300
+                rand_franka_cup_pos = data_actions_right[rand_idx, :]
+                rand_franka_spoon_pos = data_actions_left[rand_idx, :]
+                rand_cup_pos = data_obs_right[rand_idx, -16:-9]
+                rand_spoon_pos = data_obs_left[rand_idx, -16:-9]
+
+            # reset franka1
+            pos_1 = to_torch(rand_franka_cup_pos, device=self.device)
+            self.franka_dof_pos_1[env_ids, :] = pos_1
+            self.franka_dof_vel_1[env_ids, :] = torch.zeros_like(self.franka_dof_vel_1[env_ids])
+            self.franka_dof_targets[env_ids, self.num_franka_dofs: 2 * self.num_franka_dofs] = pos_1
+
+            # # reset cup
+            self.cup_positions[env_ids] = to_torch(rand_cup_pos[0:3], device=self.device)
+            self.cup_orientations[env_ids] = to_torch(rand_cup_pos[3:7], device=self.device)
+            self.cup_angvels[env_ids] = 0.0
+            self.cup_linvels[env_ids] = 0.0
 
         # reset franka1
-        pos_1 = tensor_clamp(
-            self.franka_default_dof_pos_1.unsqueeze(0) + 0.1 * (
-                    torch.rand((len(env_ids), self.num_franka_dofs_1), device=self.device) - 0.5),
-            self.franka_dof_lower_limits, self.franka_dof_upper_limits)
-        self.franka_dof_pos_1[env_ids, :] = pos_1
-        self.franka_dof_vel_1[env_ids, :] = torch.zeros_like(self.franka_dof_vel_1[env_ids])
+        else:
+            pos_1 = tensor_clamp(
+                self.franka_default_dof_pos_1.unsqueeze(0) + 0.1 * (
+                        torch.rand((len(env_ids), self.num_franka_dofs_1), device=self.device) - 0.5),
+                self.franka_dof_lower_limits, self.franka_dof_upper_limits)
+            self.franka_dof_pos_1[env_ids, :] = pos_1
+            self.franka_dof_vel_1[env_ids, :] = torch.zeros_like(self.franka_dof_vel_1[env_ids])
 
-        self.franka_dof_targets_cup[env_ids, :self.num_franka_dofs] = self.franka_dof_pos[env_ids, :]
-        self.franka_dof_targets_cup[env_ids, self.num_franka_dofs: 2 * self.num_franka_dofs] = pos_1
-        self.franka_dof_targets[env_ids, self.num_franka_dofs: 2 * self.num_franka_dofs] = pos_1
-        # reset cup
-        self.cup_positions[env_ids, 0] = -0.3
-        self.cup_positions[env_ids, 1] = 0.443
-        self.cup_positions[env_ids, 2] = -0.29
-        self.cup_orientations[env_ids, 0:3] = 0.0
-        self.cup_orientations[env_ids, 1] = -0.287
-        self.cup_orientations[env_ids, 3] = 0.95793058
-        self.cup_linvels[env_ids] = 0.0
-        self.cup_angvels[env_ids] = 0.0
+            self.franka_dof_targets_cup[env_ids, :self.num_franka_dofs] = self.franka_dof_pos[env_ids, :]
+            self.franka_dof_targets_cup[env_ids, self.num_franka_dofs: 2 * self.num_franka_dofs] = pos_1
+            self.franka_dof_targets[env_ids, self.num_franka_dofs: 2 * self.num_franka_dofs] = pos_1
+            # reset cup
+            self.cup_positions[env_ids, 0] = -0.3
+            self.cup_positions[env_ids, 1] = 0.443
+            self.cup_positions[env_ids, 2] = -0.29
+            self.cup_orientations[env_ids, 0:3] = 0.0
+            self.cup_orientations[env_ids, 1] = -0.287
+            self.cup_orientations[env_ids, 3] = 0.95793058
+            self.cup_linvels[env_ids] = 0.0
+            self.cup_angvels[env_ids] = 0.0
 
         # reset root state for spoon and cup in selected envs
         actor_indices = self.global_indices[env_ids, 2:4].flatten()
@@ -1248,7 +1327,7 @@ def compute_franka_reward(
         gripper_forward_axis_1, gripper_up_axis_1, contact_forces,
         num_envs: int, dist_reward_scale: float, rot_reward_scale: float, around_handle_reward_scale: float,
         lift_reward_scale: float, finger_dist_reward_scale: float, action_penalty_scale: float, distX_offset: float,
-        max_episode_length: float, stage2_3_scale: float
+        max_episode_length: float, stage2_3_scale: float, stage2begin:bool
 ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Dict[
     str, Union[Dict[str, Tuple[Tensor, Union[Tensor, float]]], Dict[str, Tuple[Tensor, float]], Dict[
         str, Tensor]]], Tensor, Tensor, Tensor, Tensor]:
@@ -1256,6 +1335,7 @@ def compute_franka_reward(
     Tuple[Tensor, Tensor, Dict[str, Union[Dict[str, Tuple[Tensor, float]],
                                            Dict[str, Tensor], Dict[str, Union[Tensor, Tuple[Tensor, float]]]]]]:
     """
+   
     tensor_device = franka_grasp_pos.device
     # turn_spoon = True
 
@@ -1481,7 +1561,10 @@ def compute_franka_reward(
     ## sum of rewards
     sf = 1  # spoon flag
     cf = 1  # cup flag
-    stage1 = 1  # stage1 flag
+    if stage2begin:
+        stage1 = 0  # stage1 flag
+    else:
+        stage1 = 1
     stage2 = 1  # stage2 flag
     stage3 = 1  # stage3 flag
     rewards = stage1 * (dist_reward_scale * (dist_reward * sf + dist_reward_1 * cf) \
@@ -1522,12 +1605,22 @@ def compute_franka_reward(
                                     - action_penalty_scale * action_penalty
                                     - cup_fall_penalty
                                     )
-    left_reward_stage2 = stage2 * fulfill_s1 * (dist_reward_stage2 * dist_reward_scale * stage2_3_scale \
-                                                + rot_reward_stage2 * rot_reward_scale * stage2_3_scale \
-                                                + dist_reward_stage2_y * dist_reward_scale * stage2_3_scale)
-    right_reward_stage2 = stage2 * fulfill_s1 * (dist_reward_stage2 * dist_reward_scale * stage2_3_scale \
-                                                 + rot_reward_stage2 * rot_reward_scale * stage2_3_scale \
-                                                 + dist_reward_stage2_y * dist_reward_scale * stage2_3_scale)
+    if stage2begin:
+        left_reward_stage2 = stage2 * (dist_reward_stage2 * dist_reward_scale * stage2_3_scale \
+                                       + rot_reward_stage2 * rot_reward_scale * stage2_3_scale \
+                                       + dist_reward_stage2_y * dist_reward_scale * stage2_3_scale \
+                                       + 20 * (lift_reward * sf))
+        right_reward_stage2 = stage2 * (dist_reward_stage2 * dist_reward_scale * stage2_3_scale \
+                                        + rot_reward_stage2 * rot_reward_scale * stage2_3_scale \
+                                        + dist_reward_stage2_y * dist_reward_scale * stage2_3_scale \
+                                        + 20 * (lift_reward_1 * cf))
+    else:
+        left_reward_stage2 = stage2 * fulfill_s1 * (dist_reward_stage2 * dist_reward_scale * stage2_3_scale \
+                                                    + rot_reward_stage2 * rot_reward_scale * stage2_3_scale \
+                                                    + dist_reward_stage2_y * dist_reward_scale * stage2_3_scale)
+        right_reward_stage2 = stage2 * fulfill_s1 * (dist_reward_stage2 * dist_reward_scale * stage2_3_scale \
+                                                     + rot_reward_stage2 * rot_reward_scale * stage2_3_scale \
+                                                     + dist_reward_stage2_y * dist_reward_scale * stage2_3_scale)
     left_reward_stage3 = stage3 * fulfill_s1 * (h_reward_s3 * stage2_3_scale \
                                                 + d_reward_s3 * stage2_3_scale \
                                                 + v_reward_s3 * stage2_3_scale)

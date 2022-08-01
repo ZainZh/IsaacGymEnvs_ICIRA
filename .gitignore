@@ -37,3 +37,5 @@ isaacgymenvs/README_skylark.md
 isaacgymenvs/graphics_images/
 
 isaacgymenvs/replay_buffer/
+
+exp_log/
