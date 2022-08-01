@@ -31,10 +31,10 @@ env:
   liftRewardScale: 0.1
   fingerDistRewardScale: 5.0
   actionPenaltyScale: 0.01
-  stage2_3_scale: 200
+  stage2_3_scale: 20
   multifranka: True
-  stage2begin: True
-  ReadExpertData: True
+  stage2begin: False
+  ReadExpertData: False
 
 
   asset:

@@ -864,7 +864,7 @@ class DualFranka(VecTask):
         # reset cup
         self.cup_positions[env_ids, 0] = -0.3
         self.cup_positions[env_ids, 1] = 0.443
-        self.cup_positions[env_ids, 2] = -0.29
+        self.cup_positions[env_ids, 2] = -0.28
         self.cup_orientations[env_ids, 0:3] = 0.0
         self.cup_orientations[env_ids, 1] = -0.287
         self.cup_orientations[env_ids, 3] = 0.95793058
@@ -1586,11 +1586,11 @@ def compute_franka_reward(
         left_reward_stage2 = stage2 * (dist_reward_stage2 * dist_reward_scale * stage2_3_scale \
                                        + rot_reward_stage2 * rot_reward_scale * stage2_3_scale \
                                        + dist_reward_stage2_y * dist_reward_scale * stage2_3_scale \
-                                       + 20 * (lift_reward * sf))
+                                      )
         right_reward_stage2 = stage2 * (dist_reward_stage2 * dist_reward_scale * stage2_3_scale \
                                         + rot_reward_stage2 * rot_reward_scale * stage2_3_scale \
                                         + dist_reward_stage2_y * dist_reward_scale * stage2_3_scale \
-                                        + 20 * (lift_reward_1 * cf))
+                                        + 1 * (lift_reward_1 * cf))
     else:
         left_reward_stage2 = stage2 * fulfill_s1 * (dist_reward_stage2 * dist_reward_scale * stage2_3_scale \
                                                     + rot_reward_stage2 * rot_reward_scale * stage2_3_scale \

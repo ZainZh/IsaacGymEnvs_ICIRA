@@ -205,8 +205,8 @@ def print_state(if_all=False):
         print('obs-', env.compute_observations())
         print('rew-', env.compute_reward())
     
-    # if print_mode >= 2 or if_all==True:
-    #     print_detail_clearly(env.reward_dict)
+    if print_mode >= 2 or if_all==True:
+        print_detail_clearly(env.reward_dict)
 
     # print reset env_ids
     if print_mode >= 1 or if_all == True:
