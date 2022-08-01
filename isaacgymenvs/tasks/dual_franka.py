@@ -2,6 +2,7 @@ import math
 import numpy as np
 import os
 import torch
+import h5py
 from torch import Tensor
 import random
 from isaacgym import gymutil, gymtorch, gymapi
@@ -38,6 +39,7 @@ class DualFranka(VecTask):
         self.debug_viz = self.cfg["env"]["enableDebugVis"]
         self.ResetFromReplay = self.cfg["env"]["ResetFromReplay"]
         self.stage2begin = self.cfg['env']['stage2begin']
+        self.ReadExpertData=self.cfg['env']['ReadExpertData']
 
         self.up_axis = "y"
         self.up_axis_idx = 2
@@ -137,8 +139,25 @@ class DualFranka(VecTask):
         self.franka_dof_targets_spoon = torch.zeros((self.num_envs, self.num_dofs), dtype=torch.float,
                                                     device=self.device)
         self.franka_dof_targets_cup = torch.zeros((self.num_envs, self.num_dofs), dtype=torch.float, device=self.device)
-        self.global_indices = torch.arange(self.num_envs * 7, dtype=torch.int32, device=self.device).view(self.num_envs,
-                                                                                                          -1)
+        self.global_indices = torch.arange(self.num_envs * 7, dtype=torch.int32, device=self.device).view(self.num_envs,-1)
+
+        if self.ReadExpertData:
+            with h5py.File('replay_buffer/replaybuffer_fullstage.hdf5', 'r') as hdf:
+                self.data_actions_left = torch.tensor(np.array(hdf['actions_left']), dtype=torch.float,
+                                                     device=self.device)
+                # left obs
+                self.data_obs_left = torch.tensor(np.array(hdf['observations_left']), dtype=torch.float,
+                                             device=self.device)
+                # right action
+                self.data_actions_right = torch.tensor(np.array(hdf['actions_right']), dtype=torch.float,
+                                                  device=self.device)
+                # right obs
+                self.data_obs_right = torch.tensor(np.array(hdf['observations_right']), dtype=torch.float,
+                                              device=self.device)
+
+            # rand_idx = random.randrange(0, dataset1.shape[0], 1)
+
+
         if self.ResetFromReplay:
             self.reset_idx_replay_buffer(torch.arange(self.num_envs, device=self.device))
         else:
@@ -148,6 +167,7 @@ class DualFranka(VecTask):
         #     # Wait for dt to elapse in real time to sync viewer with
         #     # simulation rate. Not necessary in headless.
         #     self.gym.sync_frame_time(self.sim)
+
 
     def create_sim(self):
         self.sim_params.up_axis = gymapi.UP_AXIS_Y
@@ -745,26 +765,12 @@ class DualFranka(VecTask):
         # self.reset_numm = torch.cat((self.contact_forces[:, 0:7, :], self.contact_forces[:, 10:17, :]), 1)
 
     def reset_idx_replay_buffer(self, env_ids):
-        import h5py
-        with h5py.File('replay_buffer/replaybuffer_fullstage.hdf5', 'r') as hdf:
-            data_actions_left = torch.tensor(np.array(hdf['actions_left']), dtype=torch.float,
-                                             device=self.device)
-            # left obs
-            data_obs_left = torch.tensor(np.array(hdf['observations_left']), dtype=torch.float,
-                                         device=self.device)
-            # right action
-            data_actions_right = torch.tensor(np.array(hdf['actions_right']), dtype=torch.float,
-                                              device=self.device)
-            # right obs
-            data_obs_right = torch.tensor(np.array(hdf['observations_right']), dtype=torch.float,
-                                          device=self.device)
 
-            # rand_idx = random.randrange(0, dataset1.shape[0], 1)
-            rand_idx = 300
-            rand_franka_cup_pos = data_actions_right[rand_idx, :]
-            rand_franka_spoon_pos = data_actions_left[rand_idx, :]
-            rand_cup_pos = data_obs_right[rand_idx, -16:-9]
-            rand_spoon_pos = data_obs_left[rand_idx, -16:-9]
+        rand_idx = 300
+        rand_franka_cup_pos = self.data_actions_right[rand_idx, :]
+        rand_franka_spoon_pos = self.data_actions_left[rand_idx, :]
+        rand_cup_pos = self.data_obs_right[rand_idx, -16:-9]
+        rand_spoon_pos = self.data_obs_left[rand_idx, -16:-9]
         pos = to_torch(rand_franka_spoon_pos, device=self.device)
         # print("pos is ", pos)
         # reset franka with "pos"
@@ -913,26 +919,12 @@ class DualFranka(VecTask):
         # reset franka
         # self.root_states[env_ids] = self.saved_root_tensor[env_ids]
         if self.stage2begin:
-            import h5py
-            with h5py.File('replay_buffer/replaybuffer_fullstage.hdf5', 'r') as hdf:
-                data_actions_left = torch.tensor(np.array(hdf['actions_left']), dtype=torch.float,
-                                                 device=self.device)
-                # left obs
-                data_obs_left = torch.tensor(np.array(hdf['observations_left']), dtype=torch.float,
-                                             device=self.device)
-                # right action
-                data_actions_right = torch.tensor(np.array(hdf['actions_right']), dtype=torch.float,
-                                                  device=self.device)
-                # right obs
-                data_obs_right = torch.tensor(np.array(hdf['observations_right']), dtype=torch.float,
-                                              device=self.device)
-
                 # rand_idx = random.randrange(0, dataset1.shape[0], 1)
-                rand_idx = 300
-                rand_franka_cup_pos = data_actions_right[rand_idx, :]
-                rand_franka_spoon_pos = data_actions_left[rand_idx, :]
-                rand_cup_pos = data_obs_right[rand_idx, -16:-9]
-                rand_spoon_pos = data_obs_left[rand_idx, -16:-9]
+            rand_idx = 300
+            rand_franka_cup_pos = self.data_actions_right[rand_idx, :]
+            rand_franka_spoon_pos = self.data_actions_left[rand_idx, :]
+            rand_cup_pos = self.data_obs_right[rand_idx, -16:-9]
+            rand_spoon_pos = self.data_obs_left[rand_idx, -16:-9]
             pos = to_torch(rand_franka_spoon_pos, device=self.device)
             # print("pos is ", pos)
             # reset franka with "pos"
@@ -1008,26 +1000,11 @@ class DualFranka(VecTask):
         # reset franka
         # self.root_states[env_ids] = self.saved_root_tensor[env_ids]
         if self.stage2begin:
-            import h5py
-            with h5py.File('replay_buffer/replaybuffer_fullstage.hdf5', 'r') as hdf:
-                data_actions_left = torch.tensor(np.array(hdf['actions_left']), dtype=torch.float,
-                                                 device=self.device)
-                # left obs
-                data_obs_left = torch.tensor(np.array(hdf['observations_left']), dtype=torch.float,
-                                             device=self.device)
-                # right action
-                data_actions_right = torch.tensor(np.array(hdf['actions_right']), dtype=torch.float,
-                                                  device=self.device)
-                # right obs
-                data_obs_right = torch.tensor(np.array(hdf['observations_right']), dtype=torch.float,
-                                              device=self.device)
-
-                # rand_idx = random.randrange(0, dataset1.shape[0], 1)
-                rand_idx = 300
-                rand_franka_cup_pos = data_actions_right[rand_idx, :]
-                rand_franka_spoon_pos = data_actions_left[rand_idx, :]
-                rand_cup_pos = data_obs_right[rand_idx, -16:-9]
-                rand_spoon_pos = data_obs_left[rand_idx, -16:-9]
+            rand_idx = 300
+            rand_franka_cup_pos = self.data_actions_right[rand_idx, :]
+            rand_franka_spoon_pos = self.data_actions_left[rand_idx, :]
+            rand_cup_pos = self.data_obs_right[rand_idx, -16:-9]
+            rand_spoon_pos = self.data_obs_left[rand_idx, -16:-9]
 
             # reset franka1
             pos_1 = to_torch(rand_franka_cup_pos, device=self.device)
@@ -1335,7 +1312,7 @@ def compute_franka_reward(
     Tuple[Tensor, Tensor, Dict[str, Union[Dict[str, Tuple[Tensor, float]],
                                            Dict[str, Tensor], Dict[str, Union[Tensor, Tuple[Tensor, float]]]]]]:
     """
-   
+
     tensor_device = franka_grasp_pos.device
     # turn_spoon = True
 
