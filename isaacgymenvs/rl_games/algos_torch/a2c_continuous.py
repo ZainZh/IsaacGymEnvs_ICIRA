@@ -356,7 +356,10 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         # return_batch_offline = input_dict_offline['returns']
         lr_mul = 1.0
         curr_e_clip = self.e_clip
+
         if self.Bimanual_regularization:
+            #todo
+            self.bimanual_loss=nn.MSELoss()
             actions_batch, obs_batch = self.bimanual_regularization(
                 actions_batch, data_actions_left, obs_batch_offline)
 
