@@ -34,7 +34,7 @@ params:
   load_path: ${...checkpoint} # path to the checkpoint to load
 
   config:
-    name: ${resolve_default:DualFrankaMultiPPO_0802_func5_l2r0,${....experiment}}
+    name: ${resolve_default:DualFrankaMultiPPO_0803_newspoon,${....experiment}}
     full_experiment_name: ${.name}
     env_name: rlgpu
     ppo: True
@@ -72,10 +72,10 @@ params:
     seq_len: 4
     bounds_loss_coef: 0.0001
     multi_franka: True
-    lagrange_thresh_left:  2.0
-    lagrange_thresh_right: 0.0
+    lagrange_thresh_left:  5.0
+    lagrange_thresh_right: 5.0
 
-    with_lagrange: True #for function 5
-    offline_ppo: True
-    full_stage : True   # True is fullstage, False is stage1
+    with_lagrange: false #for function 5
+    offline_ppo: false
+    full_stage : false   # True is fullstage, False is stage1
     with_Bimanual_regularization: False #for function 6

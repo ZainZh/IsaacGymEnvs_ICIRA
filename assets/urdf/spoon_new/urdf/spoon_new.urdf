@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-1-g15f4949  Build Version: 1.6.7594.29634
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="spoon_new">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="-0.0147875487624379 0.00499999942893636 0.000112915548687786"
+        rpy="0 0 0" />
+      <mass
+        value="0.0649973856441379" />
+      <inertia
+        ixx="1.11321167338597E-06"
+        ixy="-2.76330220552564E-12"
+        ixz="7.7361327073895E-07"
+        iyy="0.000311802922092045"
+        iyz="5.50986016128356E-13"
+        izz="0.000311719796026498" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://spoon_new/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://spoon_new/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+</robot>

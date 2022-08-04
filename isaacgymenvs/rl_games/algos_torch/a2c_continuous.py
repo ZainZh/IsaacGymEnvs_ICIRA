@@ -288,10 +288,12 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         if self.with_lagrange:
             self.target_action_gap_left = self.config.get('lagrange_thresh_left')
             self.target_action_gap_right = self.config.get('lagrange_thresh_right')
-            self.log_alpha_prime = torch.zeros(1, requires_grad=True, device=self.ppo_device)
-            self.alpha_prime_optimizer = torch.optim.Adam([self.log_alpha_prime], lr=self.config['learning_rate']
+            self.log_alpha_prime_left = torch.zeros(1, requires_grad=True, device=self.ppo_device)
+            self.log_alpha_prime_right = torch.zeros(1, requires_grad=True, device=self.ppo_device)
+            self.alpha_prime_optimizer_left = torch.optim.Adam([self.log_alpha_prime_left], lr=self.config['learning_rate']
                                                           )
-
+            self.alpha_prime_optimizer_right = torch.optim.Adam([self.log_alpha_prime_right], lr=self.config['learning_rate']
+                                                          )
     def bimanual_regularization(self, current_actions, offline_actions, offline_obs):
         # update obs, action, reward, next_obs, done from replay_buffer(one step)
 
@@ -358,8 +360,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         curr_e_clip = self.e_clip
 
         if self.Bimanual_regularization:
-            #todo
-            self.bimanual_loss=nn.MSELoss()
+            # todo
+            self.bimanual_loss = nn.MSELoss()
             actions_batch, obs_batch = self.bimanual_regularization(
                 actions_batch, data_actions_left, obs_batch_offline)
 
@@ -380,7 +382,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             rnn_masks = input_dict['rnn_masks']
             batch_dict['rnn_states'] = input_dict['rnn_states']
             batch_dict['seq_length'] = self.seq_len
-
+        if self.with_lagrange:
+            self.alpha_prime_optimizer_left.zero_grad()
         with torch.cuda.amp.autocast(enabled=self.mixed_precision):
             res_dict = self.model_left(batch_dict)
             res_dict_offline = self.model_left(batch_dict_offline)
@@ -398,7 +401,6 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                                                           self.num_random, actions_batch.shape[-1]).uniform_(-1, 1).to(
                     self.ppo_device)
 
-
                 batch_dict_random = {
                     'is_train': True,
                     'prev_actions': random_actions_tensor,
@@ -413,15 +415,14 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 min_qf1_loss = min_qf1_loss - values_offline.mean()
 
                 if self.with_lagrange:
-                    alpha_prime = torch.clamp(self.log_alpha_prime.exp(), min=0.0, max=1000000.0)
+                    alpha_prime = torch.clamp(self.log_alpha_prime_left.exp(), min=0.0, max=1000000.0)
                     min_qf1_loss = alpha_prime * (min_qf1_loss - self.target_action_gap_left)
 
-                    self.alpha_prime_optimizer.zero_grad()
+
                     alpha_prime_loss = -min_qf1_loss
-                    alpha_prime_loss.backward(retain_graph=True)
-                    self.alpha_prime_optimizer.step()
 
                 """Subtract the log likelihood of data"""
+
             a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo,
                                           curr_e_clip)
             if self.has_value_loss:
@@ -451,7 +452,9 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             else:
                 for param in self.model_left.parameters():
                     param.grad = None
-
+        if self.with_lagrange:
+            alpha_prime_loss.backward(retain_graph=True)
+            self.alpha_prime_optimizer_left.step()
         self.scaler_left.scale(loss).backward()
         # TODO: Refactor this ugliest code of they year
         self.trancate_gradients_and_step_left()
@@ -514,7 +517,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             rnn_masks = input_dict['rnn_masks']
             batch_dict['rnn_states'] = input_dict['rnn_states']
             batch_dict['seq_length'] = self.seq_len
-
+        if self.with_lagrange:
+          self.alpha_prime_optimizer_right.zero_grad()
         with torch.cuda.amp.autocast(enabled=self.mixed_precision):
             res_dict = self.model_right(batch_dict)
             res_dict_offline = self.model_right(batch_dict_offline)
@@ -545,13 +549,12 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean()
                 min_qf1_loss = min_qf1_loss - values_offline.mean()
                 if self.with_lagrange:
-                    alpha_prime = torch.clamp(self.log_alpha_prime.exp(), min=0.0, max=1000000.0)
+                    alpha_prime = torch.clamp(self.log_alpha_prime_right.exp(), min=0.0, max=1000000.0)
                     min_qf1_loss = alpha_prime * (min_qf1_loss - self.target_action_gap_right)
 
-                    self.alpha_prime_optimizer.zero_grad()
+
                     alpha_prime_loss = -min_qf1_loss
-                    alpha_prime_loss.backward(retain_graph=True)
-                    self.alpha_prime_optimizer.step()
+
             """Subtract the log likelihood of data"""
             a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo,
                                           curr_e_clip)
@@ -582,7 +585,9 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             else:
                 for param in self.model_right.parameters():
                     param.grad = None
-
+        if self.with_lagrange:
+            alpha_prime_loss.backward(retain_graph=True)
+            self.alpha_prime_optimizer_right.step()
         self.scaler_right.scale(loss).backward()
         # TODO: Refactor this ugliest code of they year
         self.trancate_gradients_and_step_right()
