@@ -8,7 +8,7 @@
     name="base_link">
     <inertial>
       <origin
-        xyz="4.1217E-18 0.042982 -5.1149E-19"
+        xyz="0 0 0"
         rpy="0 0 0" />
       <mass
         value="0.1035" />
@@ -25,9 +25,8 @@
         xyz="0 0 0"
         rpy="0 0 0" />
       <geometry>
-        <!--mesh
-          filename="package://cup3/meshes/base_link.STL" /-->
-          <box size="0.05 0.01 0.05"/>
+        <mesh filename="package://cup_appearance/meshes/base_link.STL" />
+
       </geometry>
       <material
         name="">
@@ -36,61 +35,6 @@
       </material>
     </visual>
 
-    <visual>
-      <origin
-        xyz="0.024 0.055 0"
-        rpy="0 0 0" />
-      <geometry>
-          <box size="0.002 0.1 0.05"/>
-      </geometry>
-      <material
-        name="">
-        <color
-          rgba="1 1 1 1" />
-      </material>
-    </visual>
-
-     <visual>
-          <origin
-            xyz="-0.024 0.055 0"
-            rpy="0 0 0" />
-          <geometry>
-              <box size="0.002 0.1 0.05"/>
-          </geometry>
-          <material
-            name="">
-            <color
-              rgba="1 1 1 1" />
-          </material>
-    </visual>
-
-    <visual>
-      <origin
-        xyz="0 0.055 -0.024"
-        rpy="0 0 0" />
-      <geometry>
-          <box size="0.046 0.1 0.002"/>
-      </geometry>
-      <material
-        name="">
-        <color
-          rgba="1 1 1 1" />
-      </material>
-    </visual>
-
-     <visual>
-          <origin
-            xyz="0 0.055 0.024"
-            rpy="0 0 0" />
-          <geometry>
-              <box size="0.046 0.1 0.002"/>
-          </geometry>
-          <material
-            name="">
-            <color
-              rgba="1 1 1 1" />
-          </material>
-    </visual>
 
 
     <!--collision-->

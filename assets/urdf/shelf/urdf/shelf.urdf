@@ -22,10 +22,11 @@
     </inertial>
     <visual>
       <origin
-        xyz="0 0 0 "
+        xyz="0 0.005 0 "
         rpy="0 0 0" />
       <geometry>
-           <box size="0.11 0.01 0.085"/>
+       <mesh
+          filename="package://shelf_appearance/meshes/base_link_new.STL" />
       </geometry>
       <material
         name="">
@@ -34,61 +35,7 @@
       </material>
     </visual>
 
-     <visual>
-      <origin
-        xyz="0.056 0.05 0"
-        rpy="0 0 0" />
-      <geometry>
-          <box size="0.002 0.1 0.085"/>
-      </geometry>
-      <material
-        name="">
-        <color
-          rgba="1 1 1 1" />
-      </material>
-    </visual>
 
-     <visual>
-          <origin
-            xyz="-0.056 0.05 0"
-            rpy="0 0 0" />
-          <geometry>
-              <box size="0.002 0.1 0.085"/>
-          </geometry>
-          <material
-            name="">
-            <color
-              rgba="1 1 1 1" />
-          </material>
-    </visual>
-
-    <visual>
-      <origin
-        xyz="0 0.05 -0.042"
-        rpy="0 0 0" />
-      <geometry>
-          <box size="0.11 0.1 0.002"/>
-      </geometry>
-      <material
-        name="">
-        <color
-          rgba="1 1 1 1" />
-      </material>
-    </visual>
-
-     <visual>
-          <origin
-            xyz="0 0.05 0.042"
-            rpy="0 0 0" />
-          <geometry>
-              <box size="0.11 0.1 0.002"/>
-          </geometry>
-          <material
-            name="">
-            <color
-              rgba="1 1 1 1" />
-          </material>
-    </visual>
 
 
 
