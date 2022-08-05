@@ -401,7 +401,7 @@ def ee_position_drive(franka, dist: list):
 
 
 def get_franka():
-    franka_dof = env.dof_state[:,0].view(2,-1)
+    franka_dof = env.dof_state[:,0][3:].view(2,-1)
     gripper_dof = franka_dof[:,-2:]
     ee_pose = torch.cat((env.rigid_body_states[:, env.hand_handle][:,0:7],env.rigid_body_states[:, env.hand_handle_1][:,0:7]))
     return franka_dof, gripper_dof, ee_pose
