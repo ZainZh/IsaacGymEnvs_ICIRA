@@ -393,7 +393,7 @@ def control_ik(dpose, jacobian):
 def ee_position_drive(franka, dist: list):
     global manual_drive, now_target
     manual_drive |= 0b10
-    env.franka_dof_targets[:,:18] = franka_dof.flatten()
+    env.curi_dof_targets[:,3:21] = franka_dof.flatten()
     now_target[:, :, :7] = ee_pose.view(-1,2,7)[...,:7]
     now_target[:, :, -2:] = gripper_dof
     now_target[:, franka, 0:3] += torch.tensor(dist, dtype=torch.float, device=env.device)
@@ -621,10 +621,10 @@ if __name__ == "__main__":
             ## Calculation here
             # get jacobian tensor
             # for fixed-base franka, tensor has shape (num envs, 10, 6, 9)
-            _jacobian = env.gym.acquire_jacobian_tensor(env.sim, "franka")
-            _jacobian_1 = env.gym.acquire_jacobian_tensor(env.sim, "franka1")
-            jacobian_left = gymtorch.wrap_tensor(_jacobian_1)
-            jacobian_right = gymtorch.wrap_tensor(_jacobian)
+            jacobian_curi = env.gym.acquire_jacobian_tensor(env.sim, "curi")
+
+            jacobian_left = gymtorch.wrap_tensor(jacobian_curi)[:,3:12,:,3:12]
+            jacobian_right = gymtorch.wrap_tensor(jacobian_curi)[:,12:,:,12:]
 
             # get link index of panda hand, which we will use as end effector
             # franka_link_dict = env.gym.get_asset_rigid_body_dict(franka_asset)
