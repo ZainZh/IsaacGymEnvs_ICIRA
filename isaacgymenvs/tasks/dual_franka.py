@@ -317,7 +317,7 @@ class DualFranka(VecTask):
         curi_dof_props[3 + self.num_franka_dofs:3 + 2 * self.num_franka_dofs] = franka_dof_props
         # create pose
         table_pose = gymapi.Transform()
-        table_pose.p = gymapi.Vec3(1.0,  table_dims.y, 0.0)
+        table_pose.p = gymapi.Vec3(0.0, 0.5*table_dims.y, 0.0)
 
         curi_pose = gymapi.Transform()
         curi_pose.p = gymapi.Vec3(-1.3, 0.0, 0.0)
@@ -325,7 +325,7 @@ class DualFranka(VecTask):
 
         box_pose = gymapi.Transform()
         box_pose.p.x = table_pose.p.x
-        box_pose.p.y = table_pose.p.y + 0.5 * table_dims.y + 0.5 * box_dims.y+1
+        box_pose.p.y = table_pose.p.y + 0.5 * table_dims.y + 0.5 * box_dims.y
         box_pose.p.z = -0.29
         box_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)
 
@@ -337,7 +337,7 @@ class DualFranka(VecTask):
 
         shelf_pose = gymapi.Transform()
         shelf_pose.p.x = table_pose.p.x
-        shelf_pose.p.y = table_pose.p.y + table_dims.y * 0.5+1
+        shelf_pose.p.y = table_pose.p.y + table_dims.y * 0.5
         shelf_pose.p.z = 0.29
         shelf_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)
 
@@ -348,8 +348,8 @@ class DualFranka(VecTask):
         spoon_pose.r = gymapi.Quat(0.0, 0.0, 0.6, 0.707)
 
         # compute aggregate size
-        num_franka_bodies = self.gym.get_asset_rigid_body_count(franka_asset)
-        num_franka_shapes = self.gym.get_asset_rigid_shape_count(franka_asset)
+        num_franka_bodies = self.gym.get_asset_rigid_body_count(curi_asset)
+        num_franka_shapes = self.gym.get_asset_rigid_shape_count(curi_asset)
         num_table_bodies = self.gym.get_asset_rigid_body_count(table_asset)
         num_table_shapes = self.gym.get_asset_rigid_shape_count(table_asset)
         num_cup_bodies = self.gym.get_asset_rigid_body_count(cup_asset)
