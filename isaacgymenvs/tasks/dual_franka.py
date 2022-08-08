@@ -86,10 +86,15 @@ class DualFranka(VecTask):
         self.shelf_orientations = self.root_tensor[..., 3, 3:7]
         self.shelf_linvels = self.root_tensor[..., 3, 7:10]
         self.shelf_angvels = self.root_tensor[..., 3, 10:13]
-        self.table_positions = self.root_tensor[..., 4, 0:3]
-        self.table_orientations = self.root_tensor[..., 4, 3:7]
-        self.table_linvels = self.root_tensor[..., 4, 7:10]
-        self.table_angvels = self.root_tensor[..., 4, 10:13]
+        self.box_positions = self.root_tensor[..., 4, 0:3]
+        self.box_orientations = self.root_tensor[..., 4, 3:7]
+        self.box_linvels = self.root_tensor[..., 4, 7:10]
+        self.box_angvels = self.root_tensor[..., 4, 10:13]
+        self.table_positions = self.root_tensor[..., 5, 0:3]
+        self.table_orientations = self.root_tensor[..., 5, 3:7]
+        self.table_linvels = self.root_tensor[..., 5, 7:10]
+        self.table_angvels = self.root_tensor[..., 5, 10:13]
+
         # self.all_actor_indices = torch.arange(actors_per_env * self.num_envs, dtype=torch.int32, device=self.device).view(self.num_envs, actors_per_env)
 
         # create some wrapper tensors for different slices
@@ -141,7 +146,7 @@ class DualFranka(VecTask):
                                                   device=self.device)
         self.curi_dof_targets_cup = torch.zeros((self.num_envs, self.num_dofs), dtype=torch.float, device=self.device)
         self.global_indices = torch.arange(self.num_envs * actors_per_env, dtype=torch.int32, device=self.device).view(self.num_envs,
-                                                                                                          -1)
+                                                                                                                       -1)
 
         if self.ReadExpertData:
             with h5py.File('replay_buffer/replaybuffer_fullstage.hdf5', 'r') as hdf:
@@ -163,7 +168,6 @@ class DualFranka(VecTask):
             self.reset_idx_replay_buffer(torch.arange(self.num_envs, device=self.device))
         else:
             self.reset_idx(torch.arange(self.num_envs, device=self.device))
-
 
     def create_sim(self):
         self.sim_params.up_axis = gymapi.UP_AXIS_Y
@@ -296,7 +300,7 @@ class DualFranka(VecTask):
         curi_dof_props[3 + self.num_franka_dofs:3 + 2 * self.num_franka_dofs] = franka_dof_props
         # create pose
         table_pose = gymapi.Transform()
-        table_pose.p = gymapi.Vec3(0.0, 0.5*table_dims.y, 0.0)
+        table_pose.p = gymapi.Vec3(0.0, 0.5 * table_dims.y, 0.0)
 
         curi_pose = gymapi.Transform()
         curi_pose.p = gymapi.Vec3(-1.3, 0.0, 0.0)
@@ -307,24 +311,28 @@ class DualFranka(VecTask):
         box_pose.p.y = table_pose.p.y + 0.5 * table_dims.y + 0.5 * box_dims.y
         box_pose.p.z = -0.29
         box_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)
+        self.box_default_postion = to_torch([0.0, 0.77, 0.29], device=self.device)
 
         cup_pose = gymapi.Transform()
         cup_pose.p.x = table_pose.p.x
         cup_pose.p.y = box_pose.p.y + 0.5 * box_dims.y
         cup_pose.p.z = -0.29
         cup_pose.r = gymapi.Quat(0.0, -0.287, 0.0, 0.95793058)
+        self.cup_default_postion = to_torch([0.0, 0.9, -0.29], device=self.device)
 
         shelf_pose = gymapi.Transform()
         shelf_pose.p.x = table_pose.p.x
         shelf_pose.p.y = table_pose.p.y + table_dims.y * 0.5
         shelf_pose.p.z = 0.29
         shelf_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)
+        self.shelf_default_postion = to_torch([0.0, 0.75, 0.29], device=self.device)
 
         spoon_pose = gymapi.Transform()
         spoon_pose.p.x = table_pose.p.x
         spoon_pose.p.y = shelf_pose.p.y + 0.12
         spoon_pose.p.z = 0.29
         spoon_pose.r = gymapi.Quat(0.0, 0.0, 0.6, 0.707)
+        self.spoon_default_postion = to_torch([0.0, 0.95, 0.29], device=self.device)
 
         # compute aggregate size
         num_franka_bodies = self.gym.get_asset_rigid_body_count(curi_asset)
@@ -360,9 +368,8 @@ class DualFranka(VecTask):
             cup_actor = self.gym.create_actor(self.env_ptr, cup_asset, cup_pose, "cup", i, 0)
             spoon_actor = self.gym.create_actor(self.env_ptr, spoon_asset, spoon_pose, "spoon", i, 0)
             shelf_actor = self.gym.create_actor(self.env_ptr, shelf_asset, shelf_pose, "shelf", i, 0)
-            table_actor = self.gym.create_actor(self.env_ptr, table_asset, table_pose, "table", i, 0)
             box_actor = self.gym.create_actor(self.env_ptr, box_asset, box_pose, "box", i, 0)
-
+            table_actor = self.gym.create_actor(self.env_ptr, table_asset, table_pose, "table", i, 0)
             if self.aggregate_mode == 1:
                 self.gym.begin_aggregate(self.env_ptr, max_agg_bodies, max_agg_shapes, True)
             if self.aggregate_mode > 0:
@@ -675,7 +682,7 @@ class DualFranka(VecTask):
             self.gripper_forward_axis_1, self.gripper_up_axis_1, self.contact_forces,
             self.num_envs, self.dist_reward_scale, self.rot_reward_scale, self.around_handle_reward_scale,
             self.lift_reward_scale, self.finger_dist_reward_scale, self.action_penalty_scale, self.distX_offset,
-            self.max_episode_length, self.stage2_3_scale, self.stage2begin ,self.spoon_z_axis)
+            self.max_episode_length, self.stage2_3_scale, self.stage2begin, self.spoon_z_axis)
 
         # self.reset_num1 = torch.cat((self.contact_forces[:, 0:5, :], self.contact_forces[:, 6:7, :]), 1)
         # self.reset_num2 = torch.cat((self.contact_forces[:, 10:15, :], self.contact_forces[:, 16:17, :]), 1)
@@ -779,29 +786,44 @@ class DualFranka(VecTask):
         self.franka_dof_vel_1[env_ids, :] = torch.zeros_like(self.franka_dof_vel_1[env_ids])
         self.curi_dof_targets[env_ids, 3:3 + self.num_franka_dofs] = pos_1
 
+        # define rand trans by adding gaussian noise
+        cup_xtrans = tensor_clamp(0.05 * torch.randn((len(env_ids)), device=self.device),
+                                  to_torch([-0.05], device=self.device), to_torch([0.05], device=self.device))
+        cup_ztrans = tensor_clamp(0.05 * torch.randn((len(env_ids)), device=self.device),
+                                  to_torch([-0.05], device=self.device), to_torch([0.05], device=self.device))
+        spoon_xtrans = tensor_clamp(0.05 * torch.randn((len(env_ids)), device=self.device),
+                                    to_torch([-0.05], device=self.device), to_torch([0.05], device=self.device))
+        spoon_ztrans = tensor_clamp(0.05 * torch.randn((len(env_ids)), device=self.device),
+                                    to_torch([-0.05], device=self.device), to_torch([0.05], device=self.device))
         # reset cup
-        self.cup_positions[env_ids, 0] = 0
+        self.cup_positions[env_ids, 0] = 0 + cup_xtrans
         self.cup_positions[env_ids, 1] = 0.9
-        self.cup_positions[env_ids, 2] = -0.29
+        self.cup_positions[env_ids, 2] = -0.29 + cup_ztrans
         self.cup_orientations[env_ids, 0:3] = 0.0
         self.cup_orientations[env_ids, 1] = -0.287
         self.cup_orientations[env_ids, 3] = 0.95793058
         self.cup_linvels[env_ids] = 0.0
         self.cup_angvels[env_ids] = 0.0
-
+        self.box_positions[env_ids, 0] = 0 + cup_xtrans
+        self.box_positions[env_ids, 1] = 0.770
+        self.box_positions[env_ids, 2] = -0.29 + cup_ztrans
+        self.box_orientations[env_ids, 0:4] = to_torch([0.0, 0.0, 0.0, 1.0], device=self.device)
         # reset spoon
-        self.spoon_positions[env_ids, 0] = 0
+        self.spoon_positions[env_ids, 0] = 0 + spoon_xtrans
         self.spoon_positions[env_ids, 1] = 0.95
-        self.spoon_positions[env_ids, 2] = 0.29
+        self.spoon_positions[env_ids, 2] = 0.29 + spoon_ztrans
         self.spoon_orientations[env_ids, 0] = 0
         self.spoon_orientations[env_ids, 1] = 0.0
         self.spoon_orientations[env_ids, 2] = 0.6
         self.spoon_orientations[env_ids, 3] = 0.707
         self.spoon_angvels[env_ids] = 0.0
         self.spoon_linvels[env_ids] = 0.0
-
+        self.shelf_positions[env_ids, 0] = 0 + spoon_xtrans
+        self.shelf_positions[env_ids, 1] = 0.75
+        self.shelf_positions[env_ids, 2] = 0.29 + spoon_ztrans
+        self.shelf_orientations[env_ids, 0:4] = to_torch([0.0, 0.0, 0.0, 1.0], device=self.device)
         # reset root state for spoon and cup in selected envs
-        actor_indices = self.global_indices[env_ids, 1:3].flatten()
+        actor_indices = self.global_indices[env_ids, 1:5].flatten()
 
         actor_indices_32 = actor_indices.to(torch.int32)
 
@@ -861,18 +883,26 @@ class DualFranka(VecTask):
             3: 3 + self.num_franka_dofs] = self.franka_dof_pos_1[
                                            env_ids, :]
             # reset spoon
-            self.spoon_positions[env_ids, 0] = 0
+            spoon_xtrans = tensor_clamp(0.05 * torch.randn((len(env_ids)), device=self.device),
+                                        to_torch([-0.05], device=self.device), to_torch([0.05], device=self.device))
+            spoon_ztrans = tensor_clamp(0.05 * torch.randn((len(env_ids)), device=self.device),
+                                        to_torch([-0.05], device=self.device), to_torch([0.05], device=self.device))
+            # reset spoon
+            self.spoon_positions[env_ids, 0] = 0 + spoon_xtrans
             self.spoon_positions[env_ids, 1] = 0.95
-            self.spoon_positions[env_ids, 2] = 0.29
+            self.spoon_positions[env_ids, 2] = 0.29 + spoon_ztrans
             self.spoon_orientations[env_ids, 0] = 0
             self.spoon_orientations[env_ids, 1] = 0.0
             self.spoon_orientations[env_ids, 2] = 0.6
             self.spoon_orientations[env_ids, 3] = 0.707
             self.spoon_angvels[env_ids] = 0.0
             self.spoon_linvels[env_ids] = 0.0
-
+            self.shelf_positions[env_ids, 0] = 0 + spoon_xtrans
+            self.shelf_positions[env_ids, 1] = 0.75
+            self.shelf_positions[env_ids, 2] = 0.29 + spoon_ztrans
+            self.shelf_orientations[env_ids, 0:4] = to_torch([0.0, 0.0, 0.0, 1.0], device=self.device)
         # reset root state for spoon and cup in selected envs
-        actor_indices = self.global_indices[env_ids, 1:3].flatten()
+        actor_indices = self.global_indices[env_ids, 1:5].flatten()
 
         actor_indices_32 = actor_indices.to(torch.int32)
 
@@ -929,18 +959,26 @@ class DualFranka(VecTask):
             3 + self.num_franka_dofs:3 + 2 * self.num_franka_dofs] = self.franka_dof_pos[env_ids, :]
             self.curi_dof_targets_cup[env_ids, 3:3 + self.num_franka_dofs] = pos_1
             self.curi_dof_targets[env_ids, 3:3 + self.num_franka_dofs] = pos_1
+            cup_xtrans = tensor_clamp(0.05 * torch.randn((len(env_ids)), device=self.device),
+                                      to_torch([-0.05], device=self.device), to_torch([0.05], device=self.device))
+            cup_ztrans = tensor_clamp(0.05 * torch.randn((len(env_ids)), device=self.device),
+                                      to_torch([-0.05], device=self.device), to_torch([0.05], device=self.device))
             # reset cup
-            self.cup_positions[env_ids, 0] = 0
-            self.cup_positions[env_ids, 1] = 0.792
-            self.cup_positions[env_ids, 2] = -0.29
+            self.cup_positions[env_ids, 0] = 0 + cup_xtrans
+            self.cup_positions[env_ids, 1] = 0.9
+            self.cup_positions[env_ids, 2] = -0.29 + cup_ztrans
             self.cup_orientations[env_ids, 0:3] = 0.0
             self.cup_orientations[env_ids, 1] = -0.287
             self.cup_orientations[env_ids, 3] = 0.95793058
             self.cup_linvels[env_ids] = 0.0
             self.cup_angvels[env_ids] = 0.0
+            self.box_positions[env_ids, 0] = 0 + cup_xtrans
+            self.box_positions[env_ids, 1] = 0.770
+            self.box_positions[env_ids, 2] = -0.29 + cup_ztrans
+            self.box_orientations[env_ids, 0:4] = to_torch([0.0, 0.0, 0.0, 1.0], device=self.device)
 
         # reset root state for spoon and cup in selected envs
-        actor_indices = self.global_indices[env_ids, 1:3].flatten()
+        actor_indices = self.global_indices[env_ids, 1:5].flatten()
 
         actor_indices_32 = actor_indices.to(torch.int32)
 
@@ -977,7 +1015,7 @@ class DualFranka(VecTask):
         targets_1 = self.curi_dof_targets[:,
                     3:3 + self.num_franka_dofs] + self.franka_dof_speed_scales * self.dt \
                     * self.actions[:, 9:18] * self.action_scale
-        self.curi_dof_targets[:,3:3 + self.num_franka_dofs] = tensor_clamp(
+        self.curi_dof_targets[:, 3:3 + self.num_franka_dofs] = tensor_clamp(
             targets_1, self.franka_dof_lower_limits, self.franka_dof_upper_limits)
         # grip_act_spoon=torch.where(self.gripped==1,torch.Tensor([[0.004, 0.004]] * self.num_envs).to(self.device), torch.Tensor([[0.04, 0.04]] * self.num_envs).to(self.device))
 
@@ -1276,7 +1314,7 @@ def compute_franka_reward(
                                          > quat_rotate_inverse(cup_orientations, cup_positions)[:, 1],
                                          torch.where(quat_rotate_inverse(cup_orientations, franka_rfinger_pos_1)[:, 1] \
                                                      < quat_rotate_inverse(cup_orientations, cup_positions)[:, 1] + (
-                                                              cup_size[1]),
+                                                         cup_size[1]),
                                                      around_handle_reward_1 + 0.5, around_handle_reward_1),
                                          around_handle_reward_1)
     gripped_1 = (around_handle_reward_1 == 1.5)
@@ -1479,7 +1517,7 @@ def compute_franka_reward(
     reset_buf = torch.where(spoon_positions[:, 1] > 1.9, torch.ones_like(reset_buf), reset_buf)
     reset_buf = torch.where(cup_positions[:, 1] > 1.1, torch.ones_like(reset_buf), reset_buf)  #
     '''fall'''
-    reset_buf = torch.where(cup_positions[:, 1] < 0.78, torch.ones_like(reset_buf),
+    reset_buf = torch.where(cup_positions[:, 1] < 0.75, torch.ones_like(reset_buf),
                             reset_buf)  # cup fall to table or ground
     reset_buf = torch.where(torch.acos(dot_cup_reverse) * 180 / torch.pi > 90, torch.ones_like(reset_buf),
                             reset_buf)  # cup fall direction
@@ -1501,7 +1539,7 @@ def compute_franka_reward(
     # reset_buf_cup
     reset_buf_cup = torch.where(cup_positions[:, 1] > 1.1, torch.ones_like(reset_buf_cup), reset_buf_cup)  #
     '''fall'''
-    reset_buf_cup = torch.where(cup_positions[:, 1] < 0.78, torch.ones_like(reset_buf_cup),
+    reset_buf_cup = torch.where(cup_positions[:, 1] < 0.75, torch.ones_like(reset_buf_cup),
                                 reset_buf_cup)  # cup fall to table or ground
     reset_buf_cup = torch.where(torch.acos(dot_cup_reverse) * 180 / torch.pi > 90, torch.ones_like(reset_buf_cup),
                                 reset_buf_cup)  # cup fall direction
