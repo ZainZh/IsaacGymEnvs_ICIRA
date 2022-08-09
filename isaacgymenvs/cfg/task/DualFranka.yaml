@@ -35,6 +35,8 @@ env:
   multifranka: True
   stage2begin: False
   ReadExpertData: False
+  Damping: 0.05
+  UsingIK: True
 
 
   asset:
