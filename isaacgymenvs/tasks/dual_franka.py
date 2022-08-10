@@ -842,15 +842,14 @@ class DualFranka(VecTask):
         if self.UsingIK:
             hand_pos = self.rigid_body_states[:, self.hand_handle][:, 0:3]
             hand_rot = self.rigid_body_states[:, self.hand_handle][:, 3:7]
-
             hand_pos_1 = self.rigid_body_states[:, self.hand_handle_1][:, 0:3]
             hand_rot_1 = self.rigid_body_states[:, self.hand_handle_1][:, 3:7]
             dpose_spoon = self.compute_dpose(spoon_tail_pos, self.spoon_orientations,
                                              hand_pos, hand_rot)
             dpose_cup = self.compute_dpose(self.cup_positions, self.cup_orientations,
                                            hand_pos_1, hand_rot_1)
-            left_action = self.control_k * self.control_ik(dpose_spoon, self.j_eef_left)
-            right_action = self.control_k * self.control_ik(dpose_cup, self.j_eef_right)
+            left_action = self.franka_dof_pos.squeeze(-1)[:, :7] + self.control_ik(dpose_spoon, self.j_eef_left)
+            right_action = self.franka_dof_pos_1.squeeze(-1)[:, :7] + self.control_ik(dpose_cup, self.j_eef_right)
             pos[:, :7] = left_action
             pos[:, 7:9] = to_torch([0.0046, 0.0046], device=self.device)
             pos_1[:, :7] = right_action
@@ -866,6 +865,12 @@ class DualFranka(VecTask):
                 self.franka_default_dof_pos_1.unsqueeze(0) + 0.1 * (
                         torch.rand((len(env_ids), self.num_franka_dofs_1), device=self.device) - 0.5),
                 self.franka_dof_lower_limits, self.franka_dof_upper_limits)
+            self.franka_dof_pos[env_ids, :] = pos
+            self.franka_dof_vel[env_ids, :] = torch.zeros_like(self.franka_dof_vel[env_ids])
+            self.curi_dof_targets[env_ids, 3 + self.num_franka_dofs:3 + 2 * self.num_franka_dofs] = pos
+            self.franka_dof_pos_1[env_ids, :] = pos_1
+            self.franka_dof_vel_1[env_ids, :] = torch.zeros_like(self.franka_dof_vel_1[env_ids])
+            self.curi_dof_targets[env_ids, 3:3 + self.num_franka_dofs] = pos_1
         # reset franka with "pos"
         self.franka_dof_pos[env_ids, :] = pos
         self.franka_dof_vel[env_ids, :] = torch.zeros_like(self.franka_dof_vel[env_ids])
