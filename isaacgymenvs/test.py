@@ -562,16 +562,22 @@ if __name__ == "__main__":
                         print("Empty key")
                 elif evt.action == "drive_xminus":
                     ee_position_drive(manual_drive & 0b01, dist=[-manual_drive_k, 0, 0])
+                    print('Franka ',manual_drive & 0b01,' drive_xminus')
                 elif evt.action == "drive_xplus":
                     ee_position_drive(manual_drive & 0b01, dist=[manual_drive_k, 0, 0])
+                    print('Franka ', manual_drive & 0b01, ' drive_xplus')
                 elif evt.action == "drive_yminus":
                     ee_position_drive(manual_drive & 0b01, dist=[0, -manual_drive_k, 0])
+                    print('Franka ', manual_drive & 0b01, ' drive_yminus')
                 elif evt.action == "drive_yplus":
                     ee_position_drive(manual_drive & 0b01, dist=[0, manual_drive_k, 0])
+                    print('Franka ', manual_drive & 0b01, ' drive_yplus')
                 elif evt.action == "drive_zminus":
                     ee_position_drive(manual_drive & 0b01, dist=[0, 0, -manual_drive_k])
+                    print('Franka ', manual_drive & 0b01, ' drive_zminus')
                 elif evt.action == "drive_zplus":
                     ee_position_drive(manual_drive & 0b01, dist=[0, 0, manual_drive_k])
+                    print('Franka ', manual_drive & 0b01, ' drive_zplus')
 
         # Step the physics
         env.gym.simulate(env.sim)

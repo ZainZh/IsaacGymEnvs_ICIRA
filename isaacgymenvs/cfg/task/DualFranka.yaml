@@ -36,7 +36,8 @@ env:
   stage2begin: False
   ReadExpertData: False
   Damping: 0.05
-  UsingIK: True
+  UsingIK: False
+  HighStiffness: False
 
 
   asset:

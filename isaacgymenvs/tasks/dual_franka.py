@@ -42,6 +42,7 @@ class DualFranka(VecTask):
         self.ReadExpertData = self.cfg['env']['ReadExpertData']
         self.damping = self.cfg['env']['Damping']
         self.UsingIK = self.cfg['env']['UsingIK']
+        self.High_stiffness=self.cfg['env']['HighStiffness']
         self.up_axis = "y"
         self.up_axis_idx = 2
 
@@ -237,8 +238,12 @@ class DualFranka(VecTask):
             spoon_asset = self.gym.create_box(self.sim, spoon_box_dims.x, spoon_box_dims.y, spoon_box_dims.z,
                                               other_asset_options)
 
-        franka_dof_stiffness = to_torch([400, 400, 400, 400, 400, 400, 400, 1.0e6, 1.0e6], dtype=torch.float,
-                                        device=self.device)
+        if self.High_stiffness:
+            franka_dof_stiffness = to_torch([1.0e6, 1.0e6, 1.0e6, 1.0e6, 1.0e6, 1.0e6, 1.0e6, 1.0e6, 1.0e6], dtype=torch.float,
+                                            device=self.device)
+        else:
+            franka_dof_stiffness = to_torch([400, 400, 400, 400, 400, 400, 400, 1.0e6, 1.0e6], dtype=torch.float,
+                                            device=self.device)
         franka_dof_damping = to_torch([80, 80, 80, 80, 80, 80, 80, 1.0e2, 1.0e2], dtype=torch.float, device=self.device)
 
         self.num_franka_bodies = self.gym.get_asset_rigid_body_count(franka_asset)
