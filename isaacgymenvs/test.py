@@ -438,7 +438,7 @@ if __name__ == "__main__":
 
     sim_params = gymapi.SimParams()
     sim_params.up_axis = gymapi.UP_AXIS_Y
-    sim_params.gravity = gymapi.Vec3(0.0, -9.8, 0)
+    sim_params.gravity = gymapi.Vec3(0.0, -1, 0)
     sim_params.dt = 1.0 / 60.0
     sim_params.substeps = 2
     if args.physics_engine == gymapi.SIM_PHYSX:
@@ -562,22 +562,16 @@ if __name__ == "__main__":
                         print("Empty key")
                 elif evt.action == "drive_xminus":
                     ee_position_drive(manual_drive & 0b01, dist=[-manual_drive_k, 0, 0])
-                    print('Franka ',manual_drive & 0b01,' drive_xminus')
                 elif evt.action == "drive_xplus":
                     ee_position_drive(manual_drive & 0b01, dist=[manual_drive_k, 0, 0])
-                    print('Franka ', manual_drive & 0b01, ' drive_xplus')
                 elif evt.action == "drive_yminus":
                     ee_position_drive(manual_drive & 0b01, dist=[0, -manual_drive_k, 0])
-                    print('Franka ', manual_drive & 0b01, ' drive_yminus')
                 elif evt.action == "drive_yplus":
                     ee_position_drive(manual_drive & 0b01, dist=[0, manual_drive_k, 0])
-                    print('Franka ', manual_drive & 0b01, ' drive_yplus')
                 elif evt.action == "drive_zminus":
                     ee_position_drive(manual_drive & 0b01, dist=[0, 0, -manual_drive_k])
-                    print('Franka ', manual_drive & 0b01, ' drive_zminus')
                 elif evt.action == "drive_zplus":
                     ee_position_drive(manual_drive & 0b01, dist=[0, 0, manual_drive_k])
-                    print('Franka ', manual_drive & 0b01, ' drive_zplus')
 
         # Step the physics
         env.gym.simulate(env.sim)
