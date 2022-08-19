@@ -476,7 +476,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         if self.offlinePPO:
             self.train_result_left = (a_loss, c_loss, entropy, \
                                       kl_dist, self.last_lr_left, lr_mul, \
-                                      mu.detach(), sigma.detach(), b_loss, min_qf1_loss, values_offline.mean())
+                                      mu.detach(), sigma.detach(), b_loss, min_qf1_loss, values_offline.mean(),alpha_prime.mean())
         else:
             self.train_result_left = (a_loss, c_loss, entropy, \
                                       kl_dist, self.last_lr_left, lr_mul, \
@@ -609,7 +609,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         if self.offlinePPO:
             self.train_result_right = (a_loss, c_loss, entropy, \
                                        kl_dist, self.last_lr_right, lr_mul, \
-                                       mu.detach(), sigma.detach(), b_loss, min_qf1_loss, values_offline.mean())
+                                       mu.detach(), sigma.detach(), b_loss, min_qf1_loss, values_offline.mean(),alpha_prime.mean())
         else:
             self.train_result_right = (a_loss, c_loss, entropy, \
                                        kl_dist, self.last_lr_right, lr_mul, \
