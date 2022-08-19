@@ -28,6 +28,7 @@ print_mode = test_config['PRESET'].getint('print_mode', 0)
 debug_mode = test_config['PRESET'].getint('debug_mode', 0)
 target_data_path = test_config["SIM"].get('target_data_path', None)
 auto_track_pose = test_config["DEFAULT"].getboolean('auto_track_pose', False)
+read_from_origindata=test_config["DEFAULT"].getboolean('read_from_origindata', False)
 left_control_k = test_config["SIM"].getfloat('left_control_k', 0.6)
 right_control_k = test_config["SIM"].getfloat('right_control_k', 0.6)
 gripper_control_k = test_config["SIM"].getfloat('gripper_control_k', 0.6)
@@ -426,8 +427,38 @@ def ready_to_track():
     prev_task_stage = 0
     print_mode = 0
     now_stage = 0
-    target_pose = load_target_ee(target_data_path, 9).to(env.device)
+    if read_from_origindata:
+        target_pose = load_target_ee(target_data_path, 9).to(env.device)
+    else:
+        cup_npy = np.load('test_save/cup.npy')
+        spoon_npy = np.load('test_save/spoon.npy')
+        cup_pos = cup_npy[:, :7]
+        spoon_pos = spoon_npy[:, :7]
+        # cup_interpos = np.zeros([500, 7], dtype=float)
+        # spoon_interpos = np.zeros([500, 7], dtype=float)
+        # j = 0
+        # for i in range(int(cup_pos.shape[0] / 5)):
+        #     cup_interpos[i, :] = cup_pos[j, :]
+        #     spoon_interpos[i, :] = spoon_pos[j, :]
+        #     j += 5
+        # cup_interpos[80:,:]=cup_pos[400:,:]
+        # spoon_interpos[80:,:]=spoon_pos[400:,:]
+        spoon_gripper = np.zeros([cup_pos.shape[0], 2], dtype=float)
+        total_stage = np.zeros([cup_pos.shape[0], 2, 9], dtype=float)
+        spoon_gripper[170:, :] = [0.0035, 0.0035]
+        spoon_gripper[:170, :] = [0.04, 0.04]
+
+        cup_gripper = np.zeros([cup_pos.shape[0], 2], dtype=float)
+        cup_gripper[44:, :] = [0.024, 0.024]
+        cup_gripper[:44, :] = [0.04, 0.04]
+
+        franka1_pos = np.hstack((cup_pos, spoon_gripper))
+        franka_pos = np.hstack((spoon_pos, cup_gripper))
+        total_stage[:, 0, :] = franka1_pos
+        total_stage[:, 1, :] = franka_pos
+        target_pose=torch.from_numpy(total_stage).float()
     total_stage = target_pose.shape[0]
+    print("The num of total stage is: ",total_stage)
     track_time = time.time()
     print('Start tracking, stage 0')
 
