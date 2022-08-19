@@ -154,7 +154,7 @@ class DualFranka(VecTask):
             -1)
 
         if self.ReadExpertData:
-            with h5py.File('replay_buffer/replaybuffer_fullstage.hdf5', 'r') as hdf:
+            with h5py.File('replay_buffer/replaybuffer_fullstage_curi.hdf5  ', 'r') as hdf:
                 self.data_actions_left = torch.tensor(np.array(hdf['actions_left']), dtype=torch.float,
                                                       device=self.device)
                 # left obs
@@ -1103,12 +1103,13 @@ class DualFranka(VecTask):
         self.curi_dof_targets[:, 3:3 + self.num_franka_dofs] = tensor_clamp(
             targets_1, self.franka_dof_lower_limits, self.franka_dof_upper_limits)
         # grip_act_spoon=torch.where(self.gripped==1,torch.Tensor([[0.004, 0.004]] * self.num_envs).to(self.device), torch.Tensor([[0.04, 0.04]] * self.num_envs).to(self.device))
-        # self.curi_dof_targets[:, -1] = torch.where(self.gripped == 1, 0.0046, 0.04)
-        # self.curi_dof_targets[:, -2] = torch.where(self.gripped == 1, 0.0046, 0.04)
-        self.curi_dof_targets[:, -1] = torch.where(self.curi_dof_targets[:, -1]<0.005, 0.0035,
-                                                   self.curi_dof_targets[:, -1].to(torch.double))
-        self.curi_dof_targets[:, -2] = torch.where(self.curi_dof_targets[:, -2]<0.005, 0.0035,
-                                                   self.curi_dof_targets[:, -2].to(torch.double))
+        self.curi_dof_targets[:, -1] = torch.where(self.gripped == 1, 0.0046, 0.04)
+        self.curi_dof_targets[:, -2] = torch.where(self.gripped == 1, 0.0046, 0.04)
+        ## for offlinedata collection in test.py
+        # self.curi_dof_targets[:, -1] = torch.where(self.curi_dof_targets[:, -1]<0.005, 0.0035,
+        #                                            self.curi_dof_targets[:, -1].to(torch.double))
+        # self.curi_dof_targets[:, -2] = torch.where(self.curi_dof_targets[:, -2]<0.005, 0.0035,
+        #                                            self.curi_dof_targets[:, -2].to(torch.double))
         self.curi_dof_targets[:, 10] = torch.where(self.gripped_1 == 1, 0.024, 0.04)
         self.curi_dof_targets[:, 11] = torch.where(self.gripped_1 == 1, 0.024, 0.04)
         # give to gym

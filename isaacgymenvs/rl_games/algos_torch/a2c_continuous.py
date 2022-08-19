@@ -10,6 +10,7 @@ from torch import optim
 import torch
 from torch import nn
 import numpy as np
+import time
 import gym
 from torch.nn import functional as F
 
@@ -235,6 +236,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         self.last_lr_left = float(self.last_lr_left)
         self.last_lr_right = float(self.last_lr_right)
         self.offlinePPO = self.config.get('offline_ppo')
+        self.alpha_lr = self.config.get('alpha_lr_rate')
+        self.FrankaLimit = self.config.get('franka_limit')
         self.Bimanual_regularization = self.config.get('with_Bimanual_regularization')
         self.bound_loss_type = self.config.get('bound_loss_type', 'bound')  # 'regularisation' or 'bound'
         self.optimizer = optim.Adam([
@@ -290,10 +293,13 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             self.target_action_gap_right = self.config.get('lagrange_thresh_right')
             self.log_alpha_prime_left = torch.zeros(1, requires_grad=True, device=self.ppo_device)
             self.log_alpha_prime_right = torch.zeros(1, requires_grad=True, device=self.ppo_device)
-            self.alpha_prime_optimizer_left = torch.optim.Adam([self.log_alpha_prime_left], lr=self.config['learning_rate']
-                                                          )
-            self.alpha_prime_optimizer_right = torch.optim.Adam([self.log_alpha_prime_right], lr=self.config['learning_rate']
-                                                          )
+            self.alpha_prime_optimizer_left = torch.optim.Adam([self.log_alpha_prime_left],
+                                                               lr=self.alpha_lr
+                                                               )
+            self.alpha_prime_optimizer_right = torch.optim.Adam([self.log_alpha_prime_right],
+                                                                lr=self.alpha_lr
+                                                                )
+
     def bimanual_regularization(self, current_actions, offline_actions, offline_obs):
         # update obs, action, reward, next_obs, done from replay_buffer(one step)
 
@@ -308,6 +314,17 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         current_obs = offline_obs[min]
 
         return current_action, current_obs
+
+    def create_random_action(self, values_offline, actions_batch):
+        random_actions_tensor = torch.FloatTensor(values_offline.size(0) *
+                                                  self.num_random, actions_batch.shape[-1]).to(
+            self.ppo_device)
+
+        for i in range(random_actions_tensor.size()[1]):
+            random_actions_tensor[:,i].uniform_(self.FrankaLimit[1][i],self.FrankaLimit[0][i]).size()
+
+
+        return random_actions_tensor
 
     def update_epoch(self):
         self.epoch_num += 1
@@ -397,10 +414,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             if self.offlinePPO:
                 ## add CQL
                 # add CQL here
-                random_actions_tensor = torch.FloatTensor(values_offline.size(0) *
-                                                          self.num_random, actions_batch.shape[-1]).uniform_(-1, 1).to(
-                    self.ppo_device)
-
+                random_actions_tensor = self.create_random_action(values_offline, actions_batch)
                 batch_dict_random = {
                     'is_train': True,
                     'prev_actions': random_actions_tensor,
@@ -416,10 +430,9 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
                 if self.with_lagrange:
                     alpha_prime = torch.clamp(self.log_alpha_prime_left.exp(), min=0.0, max=1000000.0)
-                    min_qf1_loss = alpha_prime * (min_qf1_loss - self.target_action_gap_left)
+                    min_qf1_loss_alpha = alpha_prime * (min_qf1_loss - self.target_action_gap_left)
 
-
-                    alpha_prime_loss = -min_qf1_loss
+                    alpha_prime_loss = -min_qf1_loss_alpha
 
                 """Subtract the log likelihood of data"""
 
@@ -431,7 +444,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch,
                                                    self.clip_value)
                 if self.offlinePPO:
-                    c_loss = c_loss + min_qf1_loss
+                    c_loss = c_loss + min_qf1_loss_alpha
             else:
                 c_loss = torch.zeros(1, device=self.ppo_device)
             if self.bound_loss_type == 'regularisation':
@@ -476,7 +489,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         if self.offlinePPO:
             self.train_result_left = (a_loss, c_loss, entropy, \
                                       kl_dist, self.last_lr_left, lr_mul, \
-                                      mu.detach(), sigma.detach(), b_loss, min_qf1_loss, values_offline.mean(),alpha_prime.mean())
+                                      mu.detach(), sigma.detach(), b_loss, min_qf1_loss_alpha, values_offline.mean(),
+                                      alpha_prime.mean(), min_qf1_loss)
         else:
             self.train_result_left = (a_loss, c_loss, entropy, \
                                       kl_dist, self.last_lr_left, lr_mul, \
@@ -518,7 +532,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             batch_dict['rnn_states'] = input_dict['rnn_states']
             batch_dict['seq_length'] = self.seq_len
         if self.with_lagrange:
-          self.alpha_prime_optimizer_right.zero_grad()
+            self.alpha_prime_optimizer_right.zero_grad()
         with torch.cuda.amp.autocast(enabled=self.mixed_precision):
             res_dict = self.model_right(batch_dict)
             res_dict_offline = self.model_right(batch_dict_offline)
@@ -532,10 +546,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             if self.offlinePPO:
                 ## add CQL
                 # add CQL here
-                random_actions_tensor = torch.FloatTensor(values_offline.size(0) *
-                                                          self.num_random, actions_batch.shape[-1]).uniform_(-1, 1).to(
-                    self.ppo_device)
-
+                random_actions_tensor = self.create_random_action(values_offline, actions_batch)
                 batch_dict_random = {
                     'is_train': True,
                     'prev_actions': random_actions_tensor,
@@ -550,10 +561,9 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 min_qf1_loss = min_qf1_loss - values_offline.mean()
                 if self.with_lagrange:
                     alpha_prime = torch.clamp(self.log_alpha_prime_right.exp(), min=0.0, max=1000000.0)
-                    min_qf1_loss = alpha_prime * (min_qf1_loss - self.target_action_gap_right)
+                    min_qf1_loss_alpha = alpha_prime * (min_qf1_loss - self.target_action_gap_right)
 
-
-                    alpha_prime_loss = -min_qf1_loss
+                    alpha_prime_loss = -min_qf1_loss_alpha
 
             """Subtract the log likelihood of data"""
             a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo,
@@ -564,7 +574,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch,
                                                    self.clip_value)
                 if self.offlinePPO:
-                    c_loss = c_loss + min_qf1_loss
+                    c_loss = c_loss + min_qf1_loss_alpha
             else:
                 c_loss = torch.zeros(1, device=self.ppo_device)
             if self.bound_loss_type == 'regularisation':
@@ -609,7 +619,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         if self.offlinePPO:
             self.train_result_right = (a_loss, c_loss, entropy, \
                                        kl_dist, self.last_lr_right, lr_mul, \
-                                       mu.detach(), sigma.detach(), b_loss, min_qf1_loss, values_offline.mean(),alpha_prime.mean())
+                                       mu.detach(), sigma.detach(), b_loss, min_qf1_loss_alpha, values_offline.mean(),
+                                       alpha_prime.mean(), min_qf1_loss)
         else:
             self.train_result_right = (a_loss, c_loss, entropy, \
                                        kl_dist, self.last_lr_right, lr_mul, \

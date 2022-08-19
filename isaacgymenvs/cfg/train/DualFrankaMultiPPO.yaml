@@ -21,7 +21,7 @@ params:
           val: 0
         fixed_sigma: True
     mlp:
-      units: [256, 128, 64]
+      units: [ 256, 128, 64 ]
       activation: elu
       d2rl: False
 
@@ -34,7 +34,7 @@ params:
   load_path: ${...checkpoint} # path to the checkpoint to load
 
   config:
-    name: ${resolve_default:DualFrankaMultiPPO_0819_curioffline,${....experiment}}
+    name: ${resolve_default:DualFrankaMultiPPO_0819_curioffline_fixrandom,${....experiment}}
     full_experiment_name: ${.name}
     env_name: rlgpu
     ppo: True
@@ -65,17 +65,19 @@ params:
     e_clip: 0.2
     horizon_length: 500
     minibatch_size: 2048
-#    minibatch_size: 10
+    #    minibatch_size: 10
     mini_epochs: 8
     critic_coef: 4
     clip_value: True
     seq_len: 4
     bounds_loss_coef: 0.0001
     multi_franka: True
-    lagrange_thresh_left:  5.0
+    lagrange_thresh_left: 5.0
     lagrange_thresh_right: 5.0
 
     with_lagrange: True #for function 5
     offline_ppo: True
-    full_stage : True   # True is fullstage, False is stage1
+    full_stage: True   # True is fullstage, False is stage1
     with_Bimanual_regularization: False #for function 6
+    alpha_lr_rate: 1e-3
+    franka_limit: [ [ 2.8973,1.7628,2.8973,-0.0698,2.8973,3.7525,2.8973,0.04,0.04 ],[ -2.8973,-1.7628,-2.8973,-3.0718,-2.8973,-0.00175,-2.8973,0.00,0.00 ] ]
