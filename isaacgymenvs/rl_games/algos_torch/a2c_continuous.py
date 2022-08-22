@@ -225,7 +225,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             'normalize_input': self.normalize_input,
         }
         self.num_random = 1
-        self.min_q_weight = 1.0
+        self.min_q_weight = self.config.get('min_q_weight')
         self.model_left = self.network.build(build_config)
         self.model_right = self.network.build(build_config)
         self.model_left.to(self.ppo_device)
@@ -448,7 +448,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 values_random = res_dict_random['values']
                 cat_q1 = torch.cat([values_random, Qvalues_offline, Q_next_action, Q_curr_action], 1)
                 ## logsumexp= Log(Sum(Exp()))
-                min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean()
+                min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean()*self.min_q_weight
                 min_qf1_loss = min_qf1_loss - Qvalues_offline.mean()
 
                 if self.with_lagrange:
@@ -513,7 +513,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             self.train_result_left = (a_loss, c_loss, entropy, \
                                       kl_dist, self.last_lr_left, lr_mul, \
                                       mu.detach(), sigma.detach(), b_loss, min_qf1_loss_alpha, Qvalues_offline.mean(),
-                                      alpha_prime.mean(), min_qf1_loss)
+                                      alpha_prime.mean(), min_qf1_loss,values_random)
         else:
             self.train_result_left = (a_loss, c_loss, entropy, \
                                       kl_dist, self.last_lr_left, lr_mul, \
@@ -605,7 +605,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 values_random = res_dict_random['values']
                 cat_q1 = torch.cat([values_random, Qvalues_offline, Q_next_action, Q_curr_action], 1)
                 ## logsumexp= Log(Sum(Exp()))
-                min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean()
+                min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean()*self.min_q_weight
                 min_qf1_loss = min_qf1_loss - Qvalues_offline.mean()
                 if self.with_lagrange:
                     alpha_prime = torch.clamp(self.log_alpha_prime_right.exp(), min=0.0, max=1000000.0)
@@ -668,7 +668,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             self.train_result_right = (a_loss, c_loss, entropy, \
                                        kl_dist, self.last_lr_right, lr_mul, \
                                        mu.detach(), sigma.detach(), b_loss, min_qf1_loss_alpha, Qvalues_offline.mean(),
-                                       alpha_prime.mean(), min_qf1_loss)
+                                       alpha_prime.mean(), min_qf1_loss,values_random)
         else:
             self.train_result_right = (a_loss, c_loss, entropy, \
                                        kl_dist, self.last_lr_right, lr_mul, \

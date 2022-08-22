@@ -74,6 +74,7 @@ params:
     multi_franka: True
     lagrange_thresh_left: 5.0
     lagrange_thresh_right: 5.0
+    min_q_weight: 10.0
 
     with_lagrange: True #for function 5
     offline_ppo: True
