@@ -42,8 +42,8 @@ class DualFranka(VecTask):
         self.ReadExpertData = self.cfg['env']['ReadExpertData']
         self.damping = self.cfg['env']['Damping']
         self.UsingIK = self.cfg['env']['UsingIK']
-        self.High_stiffness=self.cfg['env']['HighStiffness']
-        self.LocationNoise=self.cfg['env']['LocationNoise']
+        self.High_stiffness = self.cfg['env']['HighStiffness']
+        self.LocationNoise = self.cfg['env']['LocationNoise']
         self.up_axis = "y"
         self.up_axis_idx = 2
 
@@ -240,7 +240,8 @@ class DualFranka(VecTask):
                                               other_asset_options)
 
         if self.High_stiffness:
-            franka_dof_stiffness = to_torch([1.0e6, 1.0e6, 1.0e6, 1.0e6, 1.0e6, 1.0e6, 1.0e6, 1.0e6, 1.0e6], dtype=torch.float,
+            franka_dof_stiffness = to_torch([1.0e6, 1.0e6, 1.0e6, 1.0e6, 1.0e6, 1.0e6, 1.0e6, 1.0e6, 1.0e6],
+                                            dtype=torch.float,
                                             device=self.device)
         else:
             franka_dof_stiffness = to_torch([400, 400, 400, 400, 400, 400, 400, 1.0e6, 1.0e6], dtype=torch.float,
@@ -621,7 +622,7 @@ class DualFranka(VecTask):
         self.gym.refresh_net_contact_force_tensor(self.sim)
         self.gym.refresh_rigid_body_state_tensor(self.sim)
         if self.UsingIK:
-         self.gym.refresh_jacobian_tensors(self.sim)
+            self.gym.refresh_jacobian_tensors(self.sim)
         self.gym.step_graphics(self.sim)
         self.gym.render_all_camera_sensors(self.sim)
         # get pic's tensor
@@ -1103,13 +1104,13 @@ class DualFranka(VecTask):
         self.curi_dof_targets[:, 3:3 + self.num_franka_dofs] = tensor_clamp(
             targets_1, self.franka_dof_lower_limits, self.franka_dof_upper_limits)
         # grip_act_spoon=torch.where(self.gripped==1,torch.Tensor([[0.004, 0.004]] * self.num_envs).to(self.device), torch.Tensor([[0.04, 0.04]] * self.num_envs).to(self.device))
-        self.curi_dof_targets[:, -1] = torch.where(self.gripped == 1, 0.0046, 0.04)
-        self.curi_dof_targets[:, -2] = torch.where(self.gripped == 1, 0.0046, 0.04)
+        # self.curi_dof_targets[:, -1] = torch.where(self.gripped == 1, 0.0046, 0.04)
+        # self.curi_dof_targets[:, -2] = torch.where(self.gripped == 1, 0.0046, 0.04)
         ## for offlinedata collection in test.py
-        # self.curi_dof_targets[:, -1] = torch.where(self.curi_dof_targets[:, -1]<0.005, 0.0035,
-        #                                            self.curi_dof_targets[:, -1].to(torch.double))
-        # self.curi_dof_targets[:, -2] = torch.where(self.curi_dof_targets[:, -2]<0.005, 0.0035,
-        #                                            self.curi_dof_targets[:, -2].to(torch.double))
+        self.curi_dof_targets[:, -1] = torch.where(self.curi_dof_targets[:, -1] < 0.005, 0.0035,
+                                                   self.curi_dof_targets[:, -1].to(torch.double))
+        self.curi_dof_targets[:, -2] = torch.where(self.curi_dof_targets[:, -2] < 0.005, 0.0035,
+                                                   self.curi_dof_targets[:, -2].to(torch.double))
         self.curi_dof_targets[:, 10] = torch.where(self.gripped_1 == 1, 0.024, 0.04)
         self.curi_dof_targets[:, 11] = torch.where(self.gripped_1 == 1, 0.024, 0.04)
         # give to gym
@@ -1358,26 +1359,25 @@ def compute_franka_reward(
     spoon_size = [0.21, 0.01, 0.01]
     around_handle_reward = torch.zeros_like(rot_reward)
     around_handle_reward = torch.where(quat_rotate_inverse(spoon_orientations, franka_lfinger_pos)[:, 2] \
-                                       > quat_rotate_inverse(spoon_orientations, spoon_tail_pos)[:, 2] - (
-                                               0.5 * spoon_size[2] + 0.002),
+                                       > quat_rotate_inverse(spoon_orientations, spoon_positions)[:, 2] - (
+                                                spoon_size[2]),
                                        torch.where(quat_rotate_inverse(spoon_orientations, franka_rfinger_pos)[:, 2] \
-                                                   < quat_rotate_inverse(spoon_orientations, spoon_tail_pos)[:, 2] + (
-                                                           0.5 * spoon_size[2] + 0.002),
+                                                   < quat_rotate_inverse(spoon_orientations, spoon_positions)[:, 2] + (
+                                                          spoon_size[2]),
                                                    around_handle_reward + 0.5, around_handle_reward),
                                        around_handle_reward)
     around_handle_reward = torch.where(quat_rotate_inverse(spoon_orientations, franka_lfinger_pos)[:, 0] \
-                                       > quat_rotate_inverse(spoon_orientations, spoon_tail_pos)[:, 0] - (
-                                               0.5 * spoon_size[0] + 0.002),
+                                       > quat_rotate_inverse(spoon_orientations, spoon_positions)[:, 0],
                                        torch.where(quat_rotate_inverse(spoon_orientations, franka_rfinger_pos)[:, 0] \
-                                                   < quat_rotate_inverse(spoon_orientations, spoon_tail_pos)[:, 0],
+                                                   < quat_rotate_inverse(spoon_orientations, spoon_positions)[:, 0] + (
+                                                           0.5 * spoon_size[0]),
                                                    around_handle_reward + 0.5, around_handle_reward),
                                        around_handle_reward)
     around_handle_reward = torch.where(quat_rotate_inverse(spoon_orientations, franka_lfinger_pos)[:, 1] \
-                                       > quat_rotate_inverse(spoon_orientations, spoon_tail_pos)[:, 1] - (
-                                               0.5 * spoon_size[1] + 0.002),
+                                       <(quat_rotate_inverse(spoon_orientations, spoon_positions)[:, 1]+0.02),
                                        torch.where(quat_rotate_inverse(spoon_orientations, franka_rfinger_pos)[:, 1] \
-                                                   < quat_rotate_inverse(spoon_orientations, spoon_tail_pos)[:, 1] + (
-                                                           0.5 * spoon_size[1] + 0.002),
+                                                   > quat_rotate_inverse(spoon_orientations, spoon_positions)[:, 1] + (
+                                                       spoon_size[1]-0.02),
                                                    around_handle_reward + 0.5, around_handle_reward),
                                        around_handle_reward)
     gripped = (around_handle_reward == 1.5)

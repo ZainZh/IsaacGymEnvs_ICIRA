@@ -1827,7 +1827,7 @@ class ContinuousMultiA2CBase(A2CBase):
         update_list_left = self.update_list_left
         update_list_right = self.update_list_right
         step_time = 0.0
-        interact_time = time.time()
+
         for n in range(self.horizon_length):
 
             res_dict_left = self.get_action_values_left(self.obs_left)
@@ -1920,8 +1920,8 @@ class ContinuousMultiA2CBase(A2CBase):
             self.current_lengths_left = self.current_lengths_left * not_dones_left
             self.current_rewards_right = self.current_rewards_right * not_dones_right.unsqueeze(1)
             self.current_lengths_right = self.current_lengths_right * not_dones_right
-        interact_endtime = time.time()
-        print("the interact time is", interact_endtime - interact_time)
+
+        print("the interact time is", step_time)
         last_values_left = self.get_values_left(self.obs_left)
         last_values_right = self.get_values_right(self.obs_right)
         fdones = self.dones.float()
@@ -1998,8 +1998,7 @@ class ContinuousMultiA2CBase(A2CBase):
         alphas_right = []
         min_qf1_losses_left = []
         min_qf1_losses_right = []
-        Qvalues_random_left = []
-        Qvalues_random_right = []
+
 
         for mini_ep in range(0, self.mini_epochs_num):
             ep_kls_left = []
@@ -2008,9 +2007,9 @@ class ContinuousMultiA2CBase(A2CBase):
             for i in range(len(self.dataset_left)):
                 if self.offlinePPO:
                     a_loss_left, c_loss_left, entropy_left, kl_left, last_lr_left, lr_mul_left, cmu_left, \
-                    csigma_left, b_loss_left, offloss_left, offvalue_left, alpha_left, min_qf1_loss_left, Qvalue_random_left, \
+                    csigma_left, b_loss_left, offloss_left, offvalue_left, alpha_left, min_qf1_loss_left,  \
                     a_loss_right, c_loss_right, entropy_right, kl_right, last_lr_right, lr_mul_right, cmu_right, \
-                    csigma_right, b_loss_right, offloss_right, offvalue_right, alpha_right, min_qf1_loss_right, Qvalue_random_right = \
+                    csigma_right, b_loss_right, offloss_right, offvalue_right, alpha_right, min_qf1_loss_right,  = \
                         self.train_actor_critic_multi(self.dataset_left[i], self.dataset_right[i],
                                                       self.data_actions_left, self.data_obs_left,
                                                       self.data_next_obs_left, self.data_actions_right,
@@ -2036,8 +2035,7 @@ class ContinuousMultiA2CBase(A2CBase):
                     alphas_right.append(alpha_right)
                     min_qf1_losses_left.append(min_qf1_loss_left)
                     min_qf1_losses_right.append(min_qf1_loss_right)
-                    Qvalues_random_left.append((Qvalue_random_left))
-                    Qvalues_random_right.append((Qvalue_random_right))
+
                 ep_kls_left.append(kl_left)
                 entropies_left.append(entropy_left)
                 if self.bounds_loss_coef is not None:
@@ -2088,9 +2086,9 @@ class ContinuousMultiA2CBase(A2CBase):
             return batch_dict_left[
                        'step_time'], play_time, update_time, total_time, \
                    a_losses_left, c_losses_left, b_losses_left, entropies_left, kls_left, last_lr_left, \
-                   lr_mul_left, offlosses_left, offvalues_left, alphas_left, min_qf1_losses_left, Qvalues_random_left, \
+                   lr_mul_left, offlosses_left, offvalues_left, alphas_left, min_qf1_losses_left, \
                    a_losses_right, c_losses_right, b_losses_right, entropies_right, kls_right, last_lr_right, \
-                   lr_mul_right, offlosses_right, offvalues_right, alphas_right, min_qf1_losses_right, Qvalues_random_right
+                   lr_mul_right, offlosses_right, offvalues_right, alphas_right, min_qf1_losses_right,
         else:
             return batch_dict_left[
                        'step_time'], play_time, update_time, total_time, \
@@ -2230,9 +2228,9 @@ class ContinuousMultiA2CBase(A2CBase):
             if self.offlinePPO:
                 step_time, play_time, update_time, sum_time, \
                 a_losses_left, c_losses_left, b_losses_left, entropies_left, kls_left, last_lr_left, lr_mul_left, \
-                offlosses_left, offvalues_left, alphas_left, min_qf1_losses_left, Qvalues_left, \
+                offlosses_left, offvalues_left, alphas_left, min_qf1_losses_left,  \
                 a_losses_right, c_losses_right, b_losses_right, entropies_right, kls_right, last_lr_right, lr_mul_right, \
-                offlosses_right, offvalues_right, alphas_right, min_qf1_losses_right, Qvalues_right = self.train_epoch_multi()
+                offlosses_right, offvalues_right, alphas_right, min_qf1_losses_right,  = self.train_epoch_multi()
             else:
                 step_time, play_time, update_time, sum_time, \
                 a_losses_left, c_losses_left, b_losses_left, entropies_left, kls_left, last_lr_left, lr_mul_left, \
@@ -2304,14 +2302,6 @@ class ContinuousMultiA2CBase(A2CBase):
                     if len(min_qf1_losses_right) > 0:
                         self.writer.add_scalar('offline_losses/min_qf1_losses_right',
                                                torch_ext.mean_list(min_qf1_losses_right).item(),
-                                               frame)
-                    if len(Qvalues_left) > 0:
-                        self.writer.add_scalar('offline_losses/Qvalues_left',
-                                               torch_ext.mean_list(Qvalues_left).item(),
-                                               frame)
-                    if len(Qvalues_right) > 0:
-                        self.writer.add_scalar('offline_losses/Qvalues_right',
-                                               torch_ext.mean_list(Qvalues_right).item(),
                                                frame)
 
                 if self.has_soft_aug:
