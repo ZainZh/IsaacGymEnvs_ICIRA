@@ -359,7 +359,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         preds_q1 = preds_q1.view(obs.shape[0], num_repeat, 1)
         return preds_q1, preds_q2
 
-    def calc_gradients_left(self, input_dict, data_actions_left, data_obs_left,data_next_obs_left):
+    def calc_gradients_left(self, input_dict, data_actions_left, data_obs_left, data_next_obs_left):
         value_preds_batch = input_dict['old_values']
         old_action_log_probs_batch = input_dict['old_logp_actions']
         advantage = input_dict['advantages']
@@ -391,10 +391,10 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             'prev_actions': data_actions_left,
             'obs': obs_batch_offline,
         }
-        next_batch_dict_offline= {
+        next_batch_dict_offline = {
             'is_train': True,
             'prev_actions': data_actions_left,
-            'obs': obs_batch_offline,
+            'obs': next_obs_batch_offline,
         }
 
         rnn_masks = None
@@ -409,16 +409,35 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             res_dict_offline = self.model_left(batch_dict_offline)
             next_res_dict_offline = self.model_left(next_batch_dict_offline)
             action_log_probs = res_dict['prev_neglogp']
-            values = res_dict['values']
-            values_offline = res_dict_offline['values']
+            Qvalues = res_dict['values']
+            Qvalues_offline = res_dict_offline['values']
             entropy = res_dict['entropy']
             mu = res_dict['mus']
+            mu_offline = res_dict_offline['mus']
+            next_mu_offline = next_res_dict_offline['mus']
             sigma = res_dict['sigmas']
 
+            ## the following dict is directed from old offline dataset
+            current_actions_dict = {
+                'is_train': True,
+                'prev_actions': mu_offline,
+                'obs': obs_batch_offline,
+            }
+            next_actions_offline = {
+                'is_train': True,
+                'prev_actions': next_mu_offline,
+                'obs': obs_batch_offline,
+            }
+            res_curr_actions_dict = self.model_left(current_actions_dict)
+            res_next_actions_dict = self.model_left(next_actions_offline)
+
+            Q_curr_action = res_curr_actions_dict['values']
+            Q_next_action = res_next_actions_dict['values']
+            ######################################################
             if self.offlinePPO:
                 ## add CQL
                 # add CQL here
-                random_actions_tensor = self.create_random_action(values_offline, actions_batch)
+                random_actions_tensor = self.create_random_action(Qvalues_offline, actions_batch)
                 batch_dict_random = {
                     'is_train': True,
                     'prev_actions': random_actions_tensor,
@@ -427,10 +446,10 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
                 res_dict_random = self.model_left(batch_dict_random)
                 values_random = res_dict_random['values']
-                cat_q1 = torch.cat([values_random], 1)
+                cat_q1 = torch.cat([values_random, Qvalues_offline, Q_next_action, Q_curr_action], 1)
                 ## logsumexp= Log(Sum(Exp()))
                 min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean()
-                min_qf1_loss = min_qf1_loss - values_offline.mean()
+                min_qf1_loss = min_qf1_loss - Qvalues_offline.mean()
 
                 if self.with_lagrange:
                     alpha_prime = torch.clamp(self.log_alpha_prime_left.exp(), min=0.0, max=1000000.0)
@@ -445,7 +464,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             if self.has_value_loss:
                 # c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch,
                 #                                    self.clip_value)
-                c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch,
+                c_loss = common_losses.critic_loss(value_preds_batch, Qvalues, curr_e_clip, return_batch,
                                                    self.clip_value)
                 if self.offlinePPO:
                     c_loss = c_loss + min_qf1_loss_alpha
@@ -493,14 +512,14 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         if self.offlinePPO:
             self.train_result_left = (a_loss, c_loss, entropy, \
                                       kl_dist, self.last_lr_left, lr_mul, \
-                                      mu.detach(), sigma.detach(), b_loss, min_qf1_loss_alpha, values_offline.mean(),
+                                      mu.detach(), sigma.detach(), b_loss, min_qf1_loss_alpha, Qvalues_offline.mean(),
                                       alpha_prime.mean(), min_qf1_loss)
         else:
             self.train_result_left = (a_loss, c_loss, entropy, \
                                       kl_dist, self.last_lr_left, lr_mul, \
                                       mu.detach(), sigma.detach(), b_loss)
 
-    def calc_gradients_right(self, input_dict, data_actions_right, data_obs_right,data_next_obs_right):
+    def calc_gradients_right(self, input_dict, data_actions_right, data_obs_right, data_next_obs_right):
         value_preds_batch = input_dict['old_values']
         old_action_log_probs_batch = input_dict['old_logp_actions']
         advantage = input_dict['advantages']
@@ -511,6 +530,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         obs_batch = input_dict['obs']
         obs_batch = self._preproc_obs(obs_batch)
         obs_batch_offline = self._preproc_obs(data_obs_right)
+        next_obs_batch_offline = self._preproc_obs(data_next_obs_right)
         if self.Bimanual_regularization:
             actions_batch, obs_batch = self.bimanual_regularization(
                 actions_batch, data_actions_right, obs_batch_offline)
@@ -529,7 +549,11 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             'prev_actions': data_actions_right,
             'obs': obs_batch_offline,
         }
-
+        next_batch_dict_offline = {
+            'is_train': True,
+            'prev_actions': data_actions_right,
+            'obs': next_obs_batch_offline,
+        }
         rnn_masks = None
         if self.is_rnn_right:
             rnn_masks = input_dict['rnn_masks']
@@ -540,17 +564,37 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         with torch.cuda.amp.autocast(enabled=self.mixed_precision):
             res_dict = self.model_right(batch_dict)
             res_dict_offline = self.model_right(batch_dict_offline)
+            next_res_dict_offline = self.model_right(next_batch_dict_offline)
             action_log_probs = res_dict['prev_neglogp']
-            values = res_dict['values']
-            values_offline = res_dict_offline['values']
+            Qvalues = res_dict['values']
+            Qvalues_offline = res_dict_offline['values']
             entropy = res_dict['entropy']
             mu = res_dict['mus']
+            mu_offline = res_dict_offline['mus']
+            next_mu_offline = next_res_dict_offline['mus']
             sigma = res_dict['sigmas']
 
+            ## the following dict is directed from old offline dataset
+            current_actions_dict = {
+                'is_train': True,
+                'prev_actions': mu_offline,
+                'obs': obs_batch_offline,
+            }
+            next_actions_offline = {
+                'is_train': True,
+                'prev_actions': next_mu_offline,
+                'obs': obs_batch_offline,
+            }
+            res_curr_actions_dict = self.model_right(current_actions_dict)
+            res_next_actions_dict = self.model_right(next_actions_offline)
+
+            Q_curr_action = res_curr_actions_dict['values']
+            Q_next_action = res_next_actions_dict['values']
+            ######################################################
             if self.offlinePPO:
                 ## add CQL
                 # add CQL here
-                random_actions_tensor = self.create_random_action(values_offline, actions_batch)
+                random_actions_tensor = self.create_random_action(Qvalues_offline, actions_batch)
                 batch_dict_random = {
                     'is_train': True,
                     'prev_actions': random_actions_tensor,
@@ -559,10 +603,10 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
                 res_dict_random = self.model_right(batch_dict_random)
                 values_random = res_dict_random['values']
-                cat_q1 = torch.cat([values_random], 1)
+                cat_q1 = torch.cat([values_random, Qvalues_offline, Q_next_action, Q_curr_action], 1)
                 ## logsumexp= Log(Sum(Exp()))
                 min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean()
-                min_qf1_loss = min_qf1_loss - values_offline.mean()
+                min_qf1_loss = min_qf1_loss - Qvalues_offline.mean()
                 if self.with_lagrange:
                     alpha_prime = torch.clamp(self.log_alpha_prime_right.exp(), min=0.0, max=1000000.0)
                     min_qf1_loss_alpha = alpha_prime * (min_qf1_loss - self.target_action_gap_right)
@@ -575,7 +619,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             if self.has_value_loss:
                 # c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch,
                 #                                    self.clip_value)
-                c_loss = common_losses.critic_loss(value_preds_batch, values, curr_e_clip, return_batch,
+                c_loss = common_losses.critic_loss(value_preds_batch, Qvalues, curr_e_clip, return_batch,
                                                    self.clip_value)
                 if self.offlinePPO:
                     c_loss = c_loss + min_qf1_loss_alpha
@@ -623,7 +667,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         if self.offlinePPO:
             self.train_result_right = (a_loss, c_loss, entropy, \
                                        kl_dist, self.last_lr_right, lr_mul, \
-                                       mu.detach(), sigma.detach(), b_loss, min_qf1_loss_alpha, values_offline.mean(),
+                                       mu.detach(), sigma.detach(), b_loss, min_qf1_loss_alpha, Qvalues_offline.mean(),
                                        alpha_prime.mean(), min_qf1_loss)
         else:
             self.train_result_right = (a_loss, c_loss, entropy, \
