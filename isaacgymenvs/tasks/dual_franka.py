@@ -1538,8 +1538,8 @@ def compute_franka_reward(
         stage1 = 0  # stage1 flag
     else:
         stage1 = 1
-    stage2 = 1  # stage2 flag
-    stage3 = 1  # stage3 flag
+    stage2 = 0  # stage2 flag
+    stage3 = 0  # stage3 flag
 
     fulfill_s1 = torch.logical_and(spoon_positions[:, 1] - init_spoon_pos[1] > 0.15,
                                    # spoon_y - table_height > x  (shelf height ignored)
@@ -1609,7 +1609,7 @@ def compute_franka_reward(
     reset_buf = torch.where(spoon_positions[:, 1] > 1.9, torch.ones_like(reset_buf), reset_buf)
     reset_buf = torch.where(cup_positions[:, 1] > 1.1, torch.ones_like(reset_buf), reset_buf)  #
     '''fall'''
-    reset_buf = torch.where(cup_positions[:, 1] < 0.75, torch.ones_like(reset_buf),
+    reset_buf = torch.where(cup_positions[:, 1] < 0.755, torch.ones_like(reset_buf),
                             reset_buf)  # cup fall to table or ground
     reset_buf = torch.where(torch.acos(dot_cup_reverse) * 180 / torch.pi > 90, torch.ones_like(reset_buf),
                             reset_buf)  # cup fall direction
@@ -1631,7 +1631,7 @@ def compute_franka_reward(
     # reset_buf_cup
     reset_buf_cup = torch.where(cup_positions[:, 1] > 1.1, torch.ones_like(reset_buf_cup), reset_buf_cup)  #
     '''fall'''
-    reset_buf_cup = torch.where(cup_positions[:, 1] < 0.75, torch.ones_like(reset_buf_cup),
+    reset_buf_cup = torch.where(cup_positions[:, 1] < 0.755, torch.ones_like(reset_buf_cup),
                                 reset_buf_cup)  # cup fall to table or ground
     reset_buf_cup = torch.where(torch.acos(dot_cup_reverse) * 180 / torch.pi > 90, torch.ones_like(reset_buf_cup),
                                 reset_buf_cup)  # cup fall direction
