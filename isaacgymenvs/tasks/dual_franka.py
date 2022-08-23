@@ -176,7 +176,7 @@ class DualFranka(VecTask):
 
     def create_sim(self):
         self.sim_params.up_axis = gymapi.UP_AXIS_Y
-        self.sim_params.gravity = gymapi.Vec3(0.0, -9.8, 0.0)
+        self.sim_params.gravity = gymapi.Vec3(0.0, -1.0, 0.0)
         self.sim = super().create_sim(self.device_id, self.graphics_device_id, self.physics_engine, self.sim_params)
         self._create_ground_plane()
         self._create_envs(self.cfg["env"]['envSpacing'], int(np.sqrt(self.num_envs)))
@@ -218,7 +218,7 @@ class DualFranka(VecTask):
         franka_asset_1 = self.gym.load_asset(self.sim, asset_root, franka_asset_file, asset_options)
         curi_asset = self.gym.load_asset(self.sim, asset_root, curi_asset_file, asset_options)
         # load table, cup asset
-        table_dims = gymapi.Vec3(1, 0.75, 1.5)
+        table_dims = gymapi.Vec3(0.6, 0.75, 0.88)
         table_asset = self.gym.create_box(self.sim, table_dims.x, table_dims.y, table_dims.z, asset_options)
         other_asset_options = gymapi.AssetOptions()
         cup_asset = self.gym.load_asset(self.sim, asset_root, cup_asset_file, other_asset_options)
@@ -1309,10 +1309,12 @@ def compute_franka_reward(
                                            Dict[str, Tensor], Dict[str, Union[Tensor, Tuple[Tensor, float]]]]]]:
     """
     tensor_device = franka_grasp_pos.device
-    spoon_tail_pos = quat_rotate_inverse(spoon_orientations, spoon_positions) + 0.5 * torch.tensor([0.21, 0.0, 0.0],
+    spoon_tail_pos = quat_rotate_inverse(spoon_orientations, spoon_positions) + 0.4 * torch.tensor([0.21, 0.0, 0.0],
                                                                                                    device=tensor_device)
     spoon_tail_pos = quat_rotate(spoon_orientations, spoon_tail_pos)
     # turn_spoon = True
+    init_spoon_pos = torch.tensor([0.0, 0.9, 0.29])  # TODO: need to be changed
+    init_cup_pos = torch.tensor([0.0, 0.792, -0.29])
 
     d = torch.norm(franka_grasp_pos - spoon_tail_pos, p=2, dim=-1)
     dist_reward = 1.0 / (1.0 + d ** 2)
@@ -1403,7 +1405,7 @@ def compute_franka_reward(
                                          > quat_rotate_inverse(cup_orientations, cup_positions)[:, 1],
                                          torch.where(quat_rotate_inverse(cup_orientations, franka_rfinger_pos_1)[:, 1] \
                                                      < quat_rotate_inverse(cup_orientations, cup_positions)[:, 1] + (
-                                                         cup_size[1]),
+                                                         cup_size[1]+0.01),
                                                      around_handle_reward_1 + 0.5, around_handle_reward_1),
                                          around_handle_reward_1)
     gripped_1 = (around_handle_reward_1 == 1.5)
@@ -1455,8 +1457,7 @@ def compute_franka_reward(
 
     # the higher the y coordinates of objects are, the larger the rewards will be set
 
-    init_spoon_pos = torch.tensor([0.0, 0.9, 0.29])  # TODO: need to be changed
-    init_cup_pos = torch.tensor([0.0, 0.792, -0.29])
+
     lift_reward = torch.zeros_like(rot_reward)
     lift_dist = spoon_positions[:, 1] - init_spoon_pos[1]
     lift_reward = torch.where(lift_dist < 0, lift_dist * around_handle_reward + lift_dist, lift_reward)
@@ -1537,8 +1538,13 @@ def compute_franka_reward(
         stage1 = 0  # stage1 flag
     else:
         stage1 = 1
-    stage2 = 0  # stage2 flag
-    stage3 = 0  # stage3 flag
+    stage2 = 1  # stage2 flag
+    stage3 = 1  # stage3 flag
+
+    fulfill_s1 = torch.logical_and(spoon_positions[:, 1] - init_spoon_pos[1] > 0.15,
+                                   # spoon_y - table_height > x  (shelf height ignored)
+                                   cup_positions[:, 1] - init_cup_pos[1] > 0.06,
+                                   )
     rewards = stage1 * (dist_reward_scale * (dist_reward * sf + dist_reward_1 * cf) \
                         + rot_reward_scale * (rot_reward * sf + rot_reward_1 * cf) \
                         + around_handle_reward_scale * (around_handle_reward * sf + around_handle_reward_1 * cf) \
@@ -1547,15 +1553,12 @@ def compute_franka_reward(
                         - action_penalty_scale * action_penalty \
                         - spoon_fall_penalty)
 
-    rewards = rewards + stage2 * (dist_reward_stage2 * dist_reward_scale * 20 \
+    rewards = rewards + stage2 * fulfill_s1* (dist_reward_stage2 * dist_reward_scale * 20 \
                                   + rot_reward_stage2 * rot_reward_scale * 20 \
                                   + dist_reward_stage2_y * dist_reward_scale * 20)
 
     # TODO: add stage 3 reward
-    fulfill_s1 = torch.logical_and(spoon_positions[:, 1] - 0.4 > 0.15,
-                                   # spoon_y - table_height > x  (shelf height ignored)
-                                   cup_positions[:, 1] - 0.4 > 0.15,
-                                   )
+
 
     rewards = rewards + stage3 * fulfill_s1 * (h_reward_s3 * 20 \
                                                + d_reward_s3 * 20 \

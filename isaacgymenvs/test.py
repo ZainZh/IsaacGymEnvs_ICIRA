@@ -743,7 +743,7 @@ if __name__ == "__main__":
                     if s == True:
                         task_stage = index
                 if task_stage != prev_task_stage:
-                    print_highlight("now task stage: {}".format(task_stage))
+                    # print_highlight("now task stage: {}".format(task_stage))
                     prev_task_stage = task_stage
 
             ## debug print
