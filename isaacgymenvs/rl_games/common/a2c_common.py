@@ -2312,14 +2312,14 @@ class ContinuousMultiA2CBase(A2CBase):
                     mean_length_left = self.game_lengths_left.get_mean_left()
                     self.mean_rewards_left = mean_reward_left[0]
                     print(
-                        'mean_rewards_left: {}, mean_length_left: {}'.format(self.mean_rewards_left, mean_length_left))
+                        'mean_rewards_spoon: {}, mean_length_spoon: {}'.format(self.mean_rewards_left, mean_length_left))
                 if self.game_rewards_right.current_size_right > 0:
                     mean_reward_right = self.game_rewards_right.get_mean_right()
                     mean_length_right = self.game_lengths_right.get_mean_right()
                     self.mean_rewards_right = mean_reward_right[0]
                     # print('current length: {}'.format(self.current_lengths))
                     # print('current rewards: {}'.format(self.current_rewards / self.current_lengths)
-                    print('mean_rewards_right: {}, mean_length_right: {}'.format(self.mean_rewards_right,
+                    print('mean_rewards_cup: {}, mean_length_cup: {}'.format(self.mean_rewards_right,
                                                                                  mean_length_right))
 
                     for i in range(self.value_size):

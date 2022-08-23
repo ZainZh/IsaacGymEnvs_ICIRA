@@ -176,7 +176,7 @@ class DualFranka(VecTask):
 
     def create_sim(self):
         self.sim_params.up_axis = gymapi.UP_AXIS_Y
-        self.sim_params.gravity = gymapi.Vec3(0.0, -1.0, 0.0)
+        self.sim_params.gravity = gymapi.Vec3(0.0, -9.8, 0.0)
         self.sim = super().create_sim(self.device_id, self.graphics_device_id, self.physics_engine, self.sim_params)
         self._create_ground_plane()
         self._create_envs(self.cfg["env"]['envSpacing'], int(np.sqrt(self.num_envs)))
@@ -1104,13 +1104,13 @@ class DualFranka(VecTask):
         self.curi_dof_targets[:, 3:3 + self.num_franka_dofs] = tensor_clamp(
             targets_1, self.franka_dof_lower_limits, self.franka_dof_upper_limits)
         # grip_act_spoon=torch.where(self.gripped==1,torch.Tensor([[0.004, 0.004]] * self.num_envs).to(self.device), torch.Tensor([[0.04, 0.04]] * self.num_envs).to(self.device))
-        # self.curi_dof_targets[:, -1] = torch.where(self.gripped == 1, 0.0046, 0.04)
-        # self.curi_dof_targets[:, -2] = torch.where(self.gripped == 1, 0.0046, 0.04)
+        self.curi_dof_targets[:, -1] = torch.where(self.gripped == 1, 0.0035, 0.04)
+        self.curi_dof_targets[:, -2] = torch.where(self.gripped == 1, 0.0035, 0.04)
         ## for offlinedata collection in test.py
-        self.curi_dof_targets[:, -1] = torch.where(self.curi_dof_targets[:, -1] < 0.005, 0.0035,
-                                                   self.curi_dof_targets[:, -1].to(torch.double))
-        self.curi_dof_targets[:, -2] = torch.where(self.curi_dof_targets[:, -2] < 0.005, 0.0035,
-                                                   self.curi_dof_targets[:, -2].to(torch.double))
+        # self.curi_dof_targets[:, -1] = torch.where(self.curi_dof_targets[:, -1] < 0.005, 0.0035,
+        #                                            self.curi_dof_targets[:, -1].to(torch.double))
+        # self.curi_dof_targets[:, -2] = torch.where(self.curi_dof_targets[:, -2] < 0.005, 0.0035,
+        #                                            self.curi_dof_targets[:, -2].to(torch.double))
         self.curi_dof_targets[:, 10] = torch.where(self.gripped_1 == 1, 0.024, 0.04)
         self.curi_dof_targets[:, 11] = torch.where(self.gripped_1 == 1, 0.024, 0.04)
         # give to gym
