@@ -285,7 +285,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             self.value_mean_std_right = self.central_value_net.model.value_mean_std if self.has_central_value else self.model_right.value_mean_std
 
         self.has_value_loss = (self.has_central_value and self.use_experimental_cv) \
-                              or (not self.has_phasic_policy_gradients and not self.has_central_value) # True
+                              or (not self.has_phasic_policy_gradients and not self.has_central_value)  # True
         self.algo_observer_left.after_init(self)
         self.algo_observer_right.after_init(self)
 
@@ -359,7 +359,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         preds_q1 = preds_q1.view(obs.shape[0], num_repeat, 1)
         return preds_q1, preds_q2
 
-    def calc_gradients_left(self, input_dict, data_actions_left, data_obs_left, data_next_obs_left):
+    def calc_gradients_left(self, input_dict, data_actions_left, data_obs_left, data_next_obs_left,data_next_actions_left):
         value_preds_batch = input_dict['old_values']
         old_action_log_probs_batch = input_dict['old_logp_actions']
         advantage = input_dict['advantages']
@@ -393,7 +393,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         }
         next_batch_dict_offline = {
             'is_train': True,
-            'prev_actions': data_actions_left,
+            'prev_actions': data_next_actions_left,
             'obs': next_obs_batch_offline,
         }
 
@@ -501,7 +501,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                                       kl_dist, self.last_lr_left, lr_mul, \
                                       mu.detach(), sigma.detach(), b_loss)
 
-    def calc_gradients_right(self, input_dict, data_actions_right, data_obs_right, data_next_obs_right):
+    def calc_gradients_right(self, input_dict, data_actions_right, data_obs_right, data_next_obs_right,data_next_actions_right):
         value_preds_batch = input_dict['old_values']
         old_action_log_probs_batch = input_dict['old_logp_actions']
         advantage = input_dict['advantages']
@@ -533,7 +533,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         }
         next_actions_offline = {
             'is_train': True,
-            'prev_actions': data_actions_right,
+            'prev_actions': data_next_actions_right,
             'obs': next_obs_batch_offline,
         }
 
@@ -639,10 +639,12 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                                        mu.detach(), sigma.detach(), b_loss)
 
     def train_actor_critic_multi(self, input_dict_left, input_dict_right,
-                                 data_actions_left, data_obs_left, data_next_obs_left,
-                                 data_actions_right, data_obs_right, data_next_obs_right):
-        self.calc_gradients_left(input_dict_left, data_actions_left, data_obs_left, data_next_obs_left)
-        self.calc_gradients_right(input_dict_right, data_actions_right, data_obs_right, data_next_obs_right)
+                                 data_actions_left, data_obs_left, data_next_obs_left, data_next_actions_left,
+                                 data_actions_right, data_obs_right, data_next_obs_right, data_next_actions_right):
+        self.calc_gradients_left(input_dict_left, data_actions_left, data_obs_left,
+                                 data_next_obs_left, data_next_actions_left)
+        self.calc_gradients_right(input_dict_right, data_actions_right, data_obs_right,
+                                  data_next_obs_right, data_next_actions_right)
         self.train_result = self.train_result_left + self.train_result_right
         return self.train_result
 
