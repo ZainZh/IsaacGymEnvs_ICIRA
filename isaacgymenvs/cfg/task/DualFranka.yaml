@@ -37,7 +37,7 @@ env:
   ReadExpertData: False
   Damping: 0.05
   UsingIK: False
-  ForTest: False  # for obtaining offline_data in test.py.  low stiffness makes franka be affected by gravity
+  HighStiffness: False  # for obtaining offline_data in test.py.  low stiffness makes franka be affected by gravity
   LocationNoise: false  # make the location of cup, spoon, shelf and box random, false when test
 
   asset:
