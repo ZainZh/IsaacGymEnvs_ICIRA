@@ -34,6 +34,7 @@ import random
 import os
 import h5py
 
+
 def set_np_formatting():
     """ formats numpy print """
     np.set_printoptions(edgeitems=30, infstr='inf',
@@ -68,9 +69,10 @@ def set_seed(seed, torch_deterministic=False):
 
     return seed
 
+
 # add
 class HDF5DatasetWriter():
-    def __init__(self, outputPath, action_size=18, obs_size=74,bufSize=1000, maxSize=None):
+    def __init__(self, outputPath, action_size=18, obs_size=74, bufSize=1000, maxSize=None):
         # 如果输出文件路径存在，提示异常
         # if os.path.exists(outputPath):
         #     raise ValueError("The supplied 'outputPath' already exists and cannot be overwritten. Manually delete the file before continuing", outputPath)
@@ -80,9 +82,12 @@ class HDF5DatasetWriter():
 
         # 构建两种数据，一种用来存储图像特征一种用来存储标签
         self.db = h5py.File(outputPath, "w")
-        self.actions = self.db.create_dataset('actions', (1, self._action_size), maxshape=(maxSize, self._action_size), dtype="float")
-        self.observations = self.db.create_dataset('observations', (1, self._obs_size), maxshape=(maxSize, self._obs_size), dtype="float")
-        self.next_observations = self.db.create_dataset('next_observations', (1, self._obs_size), maxshape=(maxSize, self._obs_size),
+        self.actions = self.db.create_dataset('actions', (1, self._action_size), maxshape=(maxSize, self._action_size),
+                                              dtype="float")
+        self.observations = self.db.create_dataset('observations', (1, self._obs_size),
+                                                   maxshape=(maxSize, self._obs_size), dtype="float")
+        self.next_observations = self.db.create_dataset('next_observations', (1, self._obs_size),
+                                                        maxshape=(maxSize, self._obs_size),
                                                         dtype="float")
         self.rewards = self.db.create_dataset('rewards', (1, 1), maxshape=(maxSize, 1), dtype="float")
         self.dones = self.db.create_dataset("dones", (1, 1), maxshape=(maxSize, 1), dtype="i8")
@@ -138,9 +143,10 @@ class HDF5DatasetWriter():
         self.db.close()
         print('hdf5 save success')
 
-#add multi datasetwriter
+
+# add multi datasetwriter
 class HDF5DatasetWriter_multi():
-    def __init__(self, outputPath, action_size=9, obs_size=37 ,bufSize=1000, maxSize=None):
+    def __init__(self, outputPath, action_size=9, obs_size=37, bufSize=1000, maxSize=None):
         # 如果输出文件路径存在，提示异常
         # if os.path.exists(outputPath):
         #     raise ValueError("The supplied 'outputPath' already exists and cannot be overwritten. Manually delete the file before continuing", outputPath)
@@ -150,57 +156,66 @@ class HDF5DatasetWriter_multi():
 
         # 构建两种数据，一种用来存储图像特征一种用来存储标签
         self.db = h5py.File(outputPath, "w")
-        self.actions_left = self.db.create_dataset('actions_left', (1, self._action_size), maxshape=(maxSize, self._action_size), dtype="float")
-        self.observations_left = self.db.create_dataset('observations_left', (1, self._obs_size), maxshape=(maxSize, self._obs_size), dtype="float")
-        self.next_observations_left = self.db.create_dataset('next_observations_left', (1, self._obs_size), maxshape=(maxSize, self._obs_size),
-                                                        dtype="float")
-        self.rewards_left = self.db.create_dataset('rewards_left', (1, 1), maxshape=(maxSize, 1), dtype="float")
-        self.dones_left = self.db.create_dataset("dones_left", (1, 1), maxshape=(maxSize, 1), dtype="i8")
-
-        self.actions_right = self.db.create_dataset('actions_right', (1, self._action_size),
+        self.actions_left = self.db.create_dataset('actions_left', (1, self._action_size),
                                                    maxshape=(maxSize, self._action_size), dtype="float")
-        self.observations_right = self.db.create_dataset('observations_right', (1, self._obs_size),
+        self.observations_left = self.db.create_dataset('observations_left', (1, self._obs_size),
                                                         maxshape=(maxSize, self._obs_size), dtype="float")
-        self.next_observations_right = self.db.create_dataset('next_observations_right', (1, self._obs_size),
+        self.next_observations_left = self.db.create_dataset('next_observations_left', (1, self._obs_size),
                                                              maxshape=(maxSize, self._obs_size),
                                                              dtype="float")
+        self.rewards_left = self.db.create_dataset('rewards_left', (1, 1), maxshape=(maxSize, 1), dtype="float")
+        self.dones_left = self.db.create_dataset("dones_left", (1, 1), maxshape=(maxSize, 1), dtype="i8")
+        self.next_actions_left = self.db.create_dataset('next_actions_left', (1, self._action_size),
+                                                        maxshape=(maxSize, self._action_size), dtype="float")
+        self.actions_right = self.db.create_dataset('actions_right', (1, self._action_size),
+                                                    maxshape=(maxSize, self._action_size), dtype="float")
+        self.observations_right = self.db.create_dataset('observations_right', (1, self._obs_size),
+                                                         maxshape=(maxSize, self._obs_size), dtype="float")
+        self.next_observations_right = self.db.create_dataset('next_observations_right', (1, self._obs_size),
+                                                              maxshape=(maxSize, self._obs_size),
+                                                              dtype="float")
         self.rewards_right = self.db.create_dataset('rewards_right', (1, 1), maxshape=(maxSize, 1), dtype="float")
         self.dones_right = self.db.create_dataset("dones_right", (1, 1), maxshape=(maxSize, 1), dtype="i8")
-
+        self.next_actions_right = self.db.create_dataset('next_actions_right', (1, self._action_size),
+                                                         maxshape=(maxSize, self._action_size), dtype="float")
         # 设置buffer大小，并初始化buffer
         self.bufSize = bufSize
         self.buffer = {"actions_left": [], "observations_left": [],
                        "next_observations_left": [], "rewards_left": [],
-                       "dones_left": [],
+                       "dones_left": [], "next_actions_left": [],
                        "actions_right": [], "observations_right": [],
                        "next_observations_right": [], "rewards_right": [],
-                       "dones_right": []}
+                       "dones_right": [], "next_actions_right": []}
         self.idx_left = 0  # 用来进行计数
         self.idx_right = 0  # 用来进行计数
 
-    def add(self, obs_left, action_left, reward_left, next_obs_left, done_left,
-            obs_right, action_right, reward_right, next_obs_right, done_right):
+    def add(self, obs_left, action_left, reward_left, next_obs_left, done_left, next_action_left,
+            obs_right, action_right, reward_right, next_obs_right, done_right, next_action_right):
         if isinstance(obs_left, torch.Tensor):
-            action_left=action_left.cpu().clone().view(-1, self._action_size).numpy()
-            obs_left=obs_left.cpu().clone().view(-1, self._obs_size).numpy()
-            reward_left=reward_left.cpu().clone().view(-1, 1).numpy()
-            next_obs_left=next_obs_left.cpu().clone().view(-1, self._obs_size).numpy()
-            done_left=done_left.cpu().clone().view(-1, 1).numpy()
+            action_left = action_left.cpu().clone().view(-1, self._action_size).numpy()
+            obs_left = obs_left.cpu().clone().view(-1, self._obs_size).numpy()
+            reward_left = reward_left.cpu().clone().view(-1, 1).numpy()
+            next_obs_left = next_obs_left.cpu().clone().view(-1, self._obs_size).numpy()
+            done_left = done_left.cpu().clone().view(-1, 1).numpy()
+            next_action_left = next_action_left.cpu().clone().view(-1, self._action_size).numpy()
             action_right = action_right.cpu().clone().view(-1, self._action_size).numpy()
             obs_right = obs_right.cpu().clone().view(-1, self._obs_size).numpy()
             reward_right = reward_right.cpu().clone().view(-1, 1).numpy()
             next_obs_right = next_obs_right.cpu().clone().view(-1, self._obs_size).numpy()
             done_right = done_right.cpu().clone().view(-1, 1).numpy()
+            next_action_right = next_action_right.cpu().clone().view(-1, self._action_size).numpy()
         self.buffer["actions_left"].extend(action_left)
         self.buffer["observations_left"].extend(obs_left)
         self.buffer["next_observations_left"].extend(next_obs_left)
         self.buffer["rewards_left"].extend(reward_left)
         self.buffer["dones_left"].extend(done_left)
+        self.buffer["next_actions_left"].extend(next_action_left)
         self.buffer["actions_right"].extend(action_right)
         self.buffer["observations_right"].extend(obs_right)
         self.buffer["next_observations_right"].extend(next_obs_right)
         self.buffer["rewards_right"].extend(reward_right)
         self.buffer["dones_right"].extend(done_right)
+        self.buffer["next_actions_right"].extend(next_action_right)
 
         # 查看是否需要将缓冲区的数据添加到磁盘中
         if len(self.buffer["actions_left"]) >= self.bufSize:
@@ -216,11 +231,13 @@ class HDF5DatasetWriter_multi():
             self.next_observations_left.resize((i, self._obs_size))
             self.rewards_left.resize((i, 1))
             self.dones_left.resize((i, 1))
+            self.next_actions_left.resize((i, self._action_size))
         self.actions_left[self.idx_left:i] = self.buffer["actions_left"]
         self.observations_left[self.idx_left:i] = self.buffer["observations_left"]
         self.next_observations_left[self.idx_left:i] = self.buffer["next_observations_left"]
         self.rewards_left[self.idx_left:i] = self.buffer["rewards_left"]
         self.dones_left[self.idx_left:i] = self.buffer["dones_left"]
+        self.next_actions_left[self.idx_left:i] = self.buffer["next_actions_left"]
 
         if j >= len(self.actions_right):
             self.actions_right.resize((j, self._action_size))
@@ -228,20 +245,21 @@ class HDF5DatasetWriter_multi():
             self.next_observations_right.resize((j, self._obs_size))
             self.rewards_right.resize((j, 1))
             self.dones_right.resize((j, 1))
+            self.next_actions_right.resize((j, self._action_size))
         self.actions_right[self.idx_right:j] = self.buffer["actions_right"]
         self.observations_right[self.idx_right:j] = self.buffer["observations_right"]
         self.next_observations_right[self.idx_right:j] = self.buffer["next_observations_right"]
         self.rewards_right[self.idx_right:j] = self.buffer["rewards_right"]
         self.dones_right[self.idx_right:j] = self.buffer["dones_right"]
+        self.next_actions_right[self.idx_right:j] = self.buffer["next_actions_right"]
         self.idx_left = i
         self.idx_right = j
         self.buffer = {"actions_left": [], "observations_left": [],
                        "next_observations_left": [], "rewards_left": [],
-                       "dones_left": [],
+                       "dones_left": [], "next_actions_left": [],
                        "actions_right": [], "observations_right": [],
                        "next_observations_right": [], "rewards_right": [],
-                       "dones_right": []
-                       }
+                       "dones_right": [], "next_actions_right": []}
         print('hdf5 data flush, {} rows'.format(i))
 
     def close(self):

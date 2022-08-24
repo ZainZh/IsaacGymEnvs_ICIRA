@@ -28,7 +28,7 @@ print_mode = test_config['PRESET'].getint('print_mode', 0)
 debug_mode = test_config['PRESET'].getint('debug_mode', 0)
 target_data_path = test_config["SIM"].get('target_data_path', None)
 auto_track_pose = test_config["DEFAULT"].getboolean('auto_track_pose', False)
-read_from_origindata=test_config["DEFAULT"].getboolean('read_from_origindata', False)
+read_from_origindata = test_config["DEFAULT"].getboolean('read_from_origindata', False)
 left_control_k = test_config["SIM"].getfloat('left_control_k', 0.6)
 right_control_k = test_config["SIM"].getfloat('right_control_k', 0.6)
 gripper_control_k = test_config["SIM"].getfloat('gripper_control_k', 0.6)
@@ -125,7 +125,7 @@ def save(path, name, data):
     print('save success to', name)
 
 
-def load_target_ee(filepath,dlen=9):
+def load_target_ee(filepath, dlen=9):
     # read target ee
     with open(filepath, "r") as f:
         txtdata = f.read()
@@ -151,7 +151,8 @@ def load_target_ee(filepath,dlen=9):
 def load_franka_dof(doftxt):
     doftensor = load_target_ee(doftxt, 9).flatten()
     env.load_franka_dof(doftensor)
-    print('load dof target',doftensor)
+    print('load dof target', doftensor)
+
 
 def parse_reward_detail(dictobj: Dict):
     for k, v in dictobj.items():
@@ -205,14 +206,15 @@ def print_state(if_all=False):
         print('ee_pose&gripper', torch.cat((ee_pose, gripper_dof), dim=1))
         print('obs-', env.compute_observations())
         print('rew-', env.compute_reward())
-    
-    if print_mode >= 2 or if_all==True:
+
+    if print_mode >= 2 or if_all == True:
         print_detail_clearly(env.reward_dict)
 
     # print reset env_ids
     if print_mode >= 1 or if_all == True:
         check_reset()
-        
+
+
 def check_reset():
     env_ids = env.reset_buf.nonzero(as_tuple=False).squeeze(-1)
     if env_ids.shape[0] != 0:
@@ -290,7 +292,7 @@ class DualFrankaTest(DualFranka):
     def compute_reward(self, action=None):
         # no action penalty in test
         if action is None:
-            self.actions = torch.zeros((self.num_Envs,self.cfg["env"]["numActions"])).to(self.device)
+            self.actions = torch.zeros((self.num_Envs, self.cfg["env"]["numActions"])).to(self.device)
         else:
             self.actions = action
         super().compute_reward()
@@ -329,43 +331,44 @@ class DualFrankaTest(DualFranka):
         left_franka_grasp_pos = self.franka_grasp_pos_1
         left_franka_grasp_rot = self.franka_grasp_rot_1
 
-        axis0 = quat_rotate_inverse(cup_rot, left_franka_grasp_pos-cup_grasp_pos)
+        axis0 = quat_rotate_inverse(cup_rot, left_franka_grasp_pos - cup_grasp_pos)
         pre_stage_1 = [torch.abs(spoon_grasp_pos - right_franka_grasp_pos)[:, 1] < 0.01,  # y in spoon thickness
-                        torch.gt(torch.tensor([0.025, 0.05, 0.025]), axis0).all(), # in cup volume(cupsize 0.05*0.05*0.1)
-                        # torch.sqrt((left_franka_grasp_pos[:, 0]-cup_grasp_pos[:, 0])**2 \
-                        #     + (left_franka_grasp_pos[:, 2]-cup_grasp_pos[:, 2])**2) < 0.025, # < cup_width/2
-                    ]
+                       torch.gt(torch.tensor([0.025, 0.05, 0.025]), axis0).all(),
+                       # in cup volume(cupsize 0.05*0.05*0.1)
+                       # torch.sqrt((left_franka_grasp_pos[:, 0]-cup_grasp_pos[:, 0])**2 \
+                       #     + (left_franka_grasp_pos[:, 2]-cup_grasp_pos[:, 2])**2) < 0.025, # < cup_width/2
+                       ]
 
-        stage_1 = [spoon_pos[:,1]-0.4 > 0.15,    # spoon_y - table_height > x  (shelf height ignored)
-                    torch.norm(spoon_grasp_pos-right_franka_grasp_pos) < 0.05,  # keep in hand
-                    cup_pos[:,1]-0.4 > 0.1,    
-                    torch.norm(cup_grasp_pos-left_franka_grasp_pos) < 0.05,
-                    ]
+        stage_1 = [spoon_pos[:, 1] - 0.4 > 0.15,  # spoon_y - table_height > x  (shelf height ignored)
+                   torch.norm(spoon_grasp_pos - right_franka_grasp_pos) < 0.05,  # keep in hand
+                   cup_pos[:, 1] - 0.4 > 0.1,
+                   torch.norm(cup_grasp_pos - left_franka_grasp_pos) < 0.05,
+                   ]
 
-        cup_up_axis = torch.tensor([0.0, 1.0, 0.0])     # cup stand: cup-y
-        spoon_stand_axis = torch.tensor([1.0, 0.0, 0.0])    # spoon ready for stir: spoon-x
-        axis1 = tf_vector(cup_rot, cup_up_axis)     
+        cup_up_axis = torch.tensor([0.0, 1.0, 0.0])  # cup stand: cup-y
+        spoon_stand_axis = torch.tensor([1.0, 0.0, 0.0])  # spoon ready for stir: spoon-x
+        axis1 = tf_vector(cup_rot, cup_up_axis)
         axis2 = tf_vector(spoon_rot, spoon_stand_axis)
-        dot1 = torch.bmm(axis1.view(env.num_envs, 1, 3), axis2.view(env.num_envs, 3, 1)).squeeze(-1).squeeze(-1)   
-        axis3 = quat_rotate_inverse(cup_rot, spoon_pos-cup_pos)   # relative spoon pos in cup
+        dot1 = torch.bmm(axis1.view(env.num_envs, 1, 3), axis2.view(env.num_envs, 3, 1)).squeeze(-1).squeeze(-1)
+        axis3 = quat_rotate_inverse(cup_rot, spoon_pos - cup_pos)  # relative spoon pos in cup
 
-        stage_2 = [ torch.acos(dot1) /3.1415*180 < 30,  # spoon-x should align with cup-y(<30deg)
-                    # torch.gt(torch.tensor([0.025, 0.025]),axis3[:, [0,2]]).all() , 
-                    #     axis3[:, 1]-0.15/2 -0.1 > 0, # spoon tip higher than cup height(spoon_base_y-half_spoon_len-cup_height>0)
-                    ]
+        stage_2 = [torch.acos(dot1) / 3.1415 * 180 < 30,  # spoon-x should align with cup-y(<30deg)
+                   # torch.gt(torch.tensor([0.025, 0.025]),axis3[:, [0,2]]).all() ,
+                   #     axis3[:, 1]-0.15/2 -0.1 > 0, # spoon tip higher than cup height(spoon_base_y-half_spoon_len-cup_height>0)
+                   ]
 
-        spoon_tip_pos = quat_rotate_inverse(spoon_rot,spoon_pos) - 0.5 * torch.tensor([0.15, 0, 0])
-        spoon_tip_pos = quat_rotate(spoon_rot,spoon_tip_pos)
-        v1_s3 = quat_rotate_inverse(cup_rot, spoon_tip_pos-cup_pos)   # relative spoon pos in cup
+        spoon_tip_pos = quat_rotate_inverse(spoon_rot, spoon_pos) - 0.5 * torch.tensor([0.15, 0, 0])
+        spoon_tip_pos = quat_rotate(spoon_rot, spoon_tip_pos)
+        v1_s3 = quat_rotate_inverse(cup_rot, spoon_tip_pos - cup_pos)  # relative spoon pos in cup
         stage_3 = [
-                    torch.acos(dot1) /3.1415*180 <30,
-                    torch.gt(torch.tensor([0.025, 0.025]),axis3[:, [0,2]]).all() , 
-                        axis3[:, 1]-0.15/2 - 0.1 < 0,   # spoon tip in cup
-                ]
-        
-        prestage_s3=[torch.gt(torch.tensor([0.025, 0.025]),v1_s3[:, [0,2]]) ,
-                    torch.lt(torch.tensor([-0.025, -0.025]),v1_s3[:, [0,2]]) ,   # x,z in cup
-                        v1_s3[:, 1] - 0.1 < 0 and v1_s3[:, 1] > 0 ]
+            torch.acos(dot1) / 3.1415 * 180 < 30,
+            torch.gt(torch.tensor([0.025, 0.025]), axis3[:, [0, 2]]).all(),
+            axis3[:, 1] - 0.15 / 2 - 0.1 < 0,  # spoon tip in cup
+        ]
+
+        prestage_s3 = [torch.gt(torch.tensor([0.025, 0.025]), v1_s3[:, [0, 2]]),
+                       torch.lt(torch.tensor([-0.025, -0.025]), v1_s3[:, [0, 2]]),  # x,z in cup
+                       v1_s3[:, 1] - 0.1 < 0 and v1_s3[:, 1] > 0]
 
         if debug:
             print("pre_stage_1", pre_stage_1)
@@ -373,7 +376,7 @@ class DualFrankaTest(DualFranka):
             print("stage_2", stage_2)
             print("stage_3", stage_3)
             print("prestage_3", prestage_s3)
-        return [all(pre_stage_1), all(stage_1), all(stage_2), all(stage_3),]
+        return [all(pre_stage_1), all(stage_1), all(stage_2), all(stage_3), ]
 
 
 # calculation
@@ -394,17 +397,18 @@ def control_ik(dpose, jacobian):
 def ee_position_drive(franka, dist: list):
     global manual_drive, now_target
     manual_drive |= 0b10
-    env.curi_dof_targets[:,3:21] = franka_dof.flatten()
-    now_target[:, :, :7] = ee_pose.view(-1,2,7)[...,:7]
+    env.curi_dof_targets[:, 3:21] = franka_dof.flatten()
+    now_target[:, :, :7] = ee_pose.view(-1, 2, 7)[..., :7]
     now_target[:, :, -2:] = gripper_dof
     now_target[:, franka, 0:3] += torch.tensor(dist, dtype=torch.float, device=env.device)
     # env.gym.set_rigid_body_state_tensor(env.sim, gymtorch.unwrap_tensor(now_target))
 
 
 def get_franka():
-    franka_dof = env.dof_state[:,0][3:].view(2,-1)
-    gripper_dof = franka_dof[:,-2:]
-    ee_pose = torch.cat((env.rigid_body_states[:, env.hand_handle][:,0:7],env.rigid_body_states[:, env.hand_handle_1][:,0:7]))
+    franka_dof = env.dof_state[:, 0][3:].view(2, -1)
+    gripper_dof = franka_dof[:, -2:]
+    ee_pose = torch.cat(
+        (env.rigid_body_states[:, env.hand_handle][:, 0:7], env.rigid_body_states[:, env.hand_handle_1][:, 0:7]))
     return franka_dof, gripper_dof, ee_pose
 
 
@@ -456,9 +460,9 @@ def ready_to_track():
         franka_pos = np.hstack((spoon_pos, cup_gripper))
         total_stage[:, 0, :] = franka1_pos
         total_stage[:, 1, :] = franka_pos
-        target_pose=torch.from_numpy(total_stage).float()
+        target_pose = torch.from_numpy(total_stage).float()
     total_stage = target_pose.shape[0]
-    print("The num of total stage is: ",total_stage)
+    print("The num of total stage is: ", total_stage)
     track_time = time.time()
     print('Start tracking, stage 0')
 
@@ -629,16 +633,18 @@ if __name__ == "__main__":
 
                 if MultiPPO:
                     next_obs_left = env.obs_buf_left.clone().view(-1, 37).numpy()
-                    action_left=env.franka_dof_pos.clone().view(-1,9).numpy()
+                    next_action_left = env.franka_dof_pos.clone().view(-1, 9).numpy()
 
                     next_obs_right = env.obs_buf_right.clone().view(-1, 37).numpy()
-                    action_right = env.franka_dof_pos_1.clone().view(-1, 9).numpy()
+                    next_action_right = env.franka_dof_pos_1.clone().view(-1, 9).numpy()
                     if step > 0:
                         # append last stage to writer
-                        writer.add(obs_left, action_left, rew, next_obs_left, done_spoon,
-                                   obs_right, action_right, rew, next_obs_right, done_cup,)
+                        writer.add(obs_left, action_left, rew, next_obs_left, done_spoon, next_action_left,
+                                   obs_right, action_right, rew, next_obs_right, done_cup, next_action_right)
 
                     # next round
+                    action_left = next_action_left.copy()
+                    action_right = next_action_right.copy()
                     obs_left = next_obs_left.copy()
                     obs_right = next_obs_right.copy()
                     rew = env.rew_buf.clone().view(-1, 1).numpy()
@@ -654,8 +660,8 @@ if __name__ == "__main__":
             # for fixed-base franka, tensor has shape (num envs, 10, 6, 9)
             jacobian_curi = env.gym.acquire_jacobian_tensor(env.sim, "curi")
 
-            jacobian_left = gymtorch.wrap_tensor(jacobian_curi)[:,3:12,:,3:12]
-            jacobian_right = gymtorch.wrap_tensor(jacobian_curi)[:,12:,:,12:]
+            jacobian_left = gymtorch.wrap_tensor(jacobian_curi)[:, 3:12, :, 3:12]
+            jacobian_right = gymtorch.wrap_tensor(jacobian_curi)[:, 12:, :, 12:]
 
             # get link index of panda hand, which we will use as end effector
             # franka_link_dict = env.gym.get_asset_rigid_body_dict(franka_asset)
@@ -729,7 +735,7 @@ if __name__ == "__main__":
                 env.compute_reward(action=pos_action.view(env.num_envs, -1))
             else:
                 env.compute_reward(action=None)
-            
+
             # check if trigger reset
             if not reset_flag:
                 if check_reset():
@@ -739,7 +745,7 @@ if __name__ == "__main__":
             # check now stage if in auto tracking
             if auto_track_pose:
                 task_stage = 0
-                for index,s in enumerate(env.judge_now_stage(), start=1):
+                for index, s in enumerate(env.judge_now_stage(), start=1):
                     if s == True:
                         task_stage = index
                 if task_stage != prev_task_stage:
@@ -751,10 +757,9 @@ if __name__ == "__main__":
                 torch.set_printoptions(precision=4, sci_mode=True)
                 print('d err:', torch.norm(left_dpose), torch.norm(right_dpose))
                 print('grip err:', left_grip_err, right_grip_err)
-                print('e:', e, e_gripper, 'relative e:',relative_err)
+                print('e:', e, e_gripper, 'relative e:', relative_err)
                 torch.set_printoptions(precision=4, sci_mode=False)
-        
-        
+
         # Step rendering
         env.gym.step_graphics(env.sim)
         env.gym.draw_viewer(env.viewer, env.sim, False)

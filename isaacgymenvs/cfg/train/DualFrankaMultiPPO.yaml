@@ -34,7 +34,7 @@ params:
   load_path: ${...checkpoint} # path to the checkpoint to load
 
   config:
-    name: ${resolve_default:CURIMultiPPO_0823_stage1,${....experiment}}
+    name: ${resolve_default:CURIMultiPPO_0824_stage1,${....experiment}}
     full_experiment_name: ${.name}
     env_name: rlgpu
     ppo: True

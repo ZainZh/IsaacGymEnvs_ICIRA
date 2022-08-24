@@ -285,7 +285,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             self.value_mean_std_right = self.central_value_net.model.value_mean_std if self.has_central_value else self.model_right.value_mean_std
 
         self.has_value_loss = (self.has_central_value and self.use_experimental_cv) \
-                              or (not self.has_phasic_policy_gradients and not self.has_central_value)
+                              or (not self.has_phasic_policy_gradients and not self.has_central_value) # True
         self.algo_observer_left.after_init(self)
         self.algo_observer_right.after_init(self)
 
@@ -411,10 +411,10 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             action_log_probs = res_dict['prev_neglogp']
             Qvalues = res_dict['values']
             Qvalues_offline = res_dict_offline['values']
+            Qvalues_offline_next = next_res_dict_offline['values']
             entropy = res_dict['entropy']
             mu = res_dict['mus']
             sigma = res_dict['sigmas']
-            Qvalues_offline_next = next_res_dict_offline['values']
             ######################################################
             if self.offlinePPO:
                 ## add CQL
