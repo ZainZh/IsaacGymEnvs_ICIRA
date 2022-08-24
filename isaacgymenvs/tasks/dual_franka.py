@@ -1362,10 +1362,10 @@ def compute_franka_reward(
     around_handle_reward = torch.zeros_like(rot_reward)
     around_handle_reward = torch.where(quat_rotate_inverse(spoon_orientations, franka_lfinger_pos)[:, 2] \
                                        > quat_rotate_inverse(spoon_orientations, spoon_positions)[:, 2] - (
-                                                spoon_size[2]),
+                                           spoon_size[2]),
                                        torch.where(quat_rotate_inverse(spoon_orientations, franka_rfinger_pos)[:, 2] \
                                                    < quat_rotate_inverse(spoon_orientations, spoon_positions)[:, 2] + (
-                                                          spoon_size[2]),
+                                                       spoon_size[2]),
                                                    around_handle_reward + 0.5, around_handle_reward),
                                        around_handle_reward)
     around_handle_reward = torch.where(quat_rotate_inverse(spoon_orientations, franka_lfinger_pos)[:, 0] \
@@ -1376,10 +1376,10 @@ def compute_franka_reward(
                                                    around_handle_reward + 0.5, around_handle_reward),
                                        around_handle_reward)
     around_handle_reward = torch.where(quat_rotate_inverse(spoon_orientations, franka_lfinger_pos)[:, 1] \
-                                       <(quat_rotate_inverse(spoon_orientations, spoon_positions)[:, 1]+0.02),
+                                       < (quat_rotate_inverse(spoon_orientations, spoon_positions)[:, 1] + 0.02),
                                        torch.where(quat_rotate_inverse(spoon_orientations, franka_rfinger_pos)[:, 1] \
                                                    > quat_rotate_inverse(spoon_orientations, spoon_positions)[:, 1] + (
-                                                       spoon_size[1]-0.02),
+                                                           spoon_size[1] - 0.02),
                                                    around_handle_reward + 0.5, around_handle_reward),
                                        around_handle_reward)
     gripped = (around_handle_reward == 1.5)
@@ -1405,7 +1405,7 @@ def compute_franka_reward(
                                          > quat_rotate_inverse(cup_orientations, cup_positions)[:, 1],
                                          torch.where(quat_rotate_inverse(cup_orientations, franka_rfinger_pos_1)[:, 1] \
                                                      < quat_rotate_inverse(cup_orientations, cup_positions)[:, 1] + (
-                                                         cup_size[1]+0.01),
+                                                             cup_size[1] + 0.01),
                                                      around_handle_reward_1 + 0.5, around_handle_reward_1),
                                          around_handle_reward_1)
     gripped_1 = (around_handle_reward_1 == 1.5)
@@ -1456,7 +1456,14 @@ def compute_franka_reward(
     action_penalty = torch.sum(actions ** 2, dim=-1)
 
     # the higher the y coordinates of objects are, the larger the rewards will be set
-
+    '''collision penalty'''
+    reset_num1 = torch.cat((contact_forces[:, 4:9, :], contact_forces[:, 10:11, :]), dim=1)
+    reset_num2 = torch.cat((contact_forces[:, 14:19, :], contact_forces[:, 20:21, :]), dim=1)
+    # reset numm is the sum of the force in all of links which are unable to get force
+    reset_num = torch.cat((reset_num1, reset_num2), dim=-1)
+    reset_numm = torch.norm(torch.norm(reset_num[:, :, 0:6], dim=1), dim=1)  # value is contact force
+    # reward compute
+    collision_penalty = torch.where(reset_numm > 600, 0.1, 0.0)
 
     lift_reward = torch.zeros_like(rot_reward)
     lift_dist = spoon_positions[:, 1] - init_spoon_pos[1]
@@ -1551,14 +1558,13 @@ def compute_franka_reward(
                         + finger_dist_reward_scale * (finger_dist_reward * sf + finger_dist_reward_1 * cf) \
                         + 20 * (lift_reward * sf) + 20 * lift_reward_1 * cf \
                         - action_penalty_scale * action_penalty \
-                        - spoon_fall_penalty)
+                        - spoon_fall_penalty-collision_penalty)
 
-    rewards = rewards + stage2 * fulfill_s1* (dist_reward_stage2 * dist_reward_scale * 20 \
-                                  + rot_reward_stage2 * rot_reward_scale * 20 \
-                                  + dist_reward_stage2_y * dist_reward_scale * 20)
+    rewards = rewards + stage2 * fulfill_s1 * (dist_reward_stage2 * dist_reward_scale * 20 \
+                                               + rot_reward_stage2 * rot_reward_scale * 20 \
+                                               + dist_reward_stage2_y * dist_reward_scale * 20)
 
     # TODO: add stage 3 reward
-
 
     rewards = rewards + stage3 * fulfill_s1 * (h_reward_s3 * 20 \
                                                + d_reward_s3 * 20 \
@@ -1571,14 +1577,14 @@ def compute_franka_reward(
                                    + finger_dist_reward_scale * (finger_dist_reward * sf) \
                                    + 20 * (lift_reward * sf) \
                                    - action_penalty_scale * action_penalty
-                                   - spoon_fall_penalty)
+                                   - spoon_fall_penalty-collision_penalty)
     right_reward_stage1 = stage1 * (dist_reward_scale * (dist_reward_1 * cf) \
                                     + rot_reward_scale * (rot_reward_1 * cf) \
                                     + around_handle_reward_scale * (around_handle_reward_1 * cf) \
                                     + finger_dist_reward_scale * (finger_dist_reward_1 * cf) \
                                     + 20 * (lift_reward_1 * cf) \
                                     - action_penalty_scale * action_penalty
-                                    - cup_fall_penalty
+                                    - cup_fall_penalty-collision_penalty
                                     )
     if stage2begin:
         left_reward_stage2 = stage2 * (dist_reward_stage2 * dist_reward_scale * stage2_3_scale \
