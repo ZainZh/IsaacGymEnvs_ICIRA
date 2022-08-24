@@ -1338,6 +1338,11 @@ class ContinuousMultiA2CBase(A2CBase):
             self.data_next_obs_right = torch.tensor(np.array(data_file['next_observations_right']),
                                                     dtype=torch.float,
                                                     device=self.ppo_device)
+            self.data_next_actions_left = torch.tensor(np.array(data_file['next_actions_left']), dtype=torch.float,
+                                                       device=self.ppo_device)
+
+            self.data_next_actions_right = torch.tensor(np.array(data_file['next_actions_right']), dtype=torch.float,
+                                                        device=self.ppo_device)
 
     def env_reset_multi(self):
         obs_left, obs_right = self.vec_env.reset_multi()
@@ -1999,7 +2004,6 @@ class ContinuousMultiA2CBase(A2CBase):
         min_qf1_losses_left = []
         min_qf1_losses_right = []
 
-
         for mini_ep in range(0, self.mini_epochs_num):
             ep_kls_left = []
             ep_kls_right = []
@@ -2007,21 +2011,23 @@ class ContinuousMultiA2CBase(A2CBase):
             for i in range(len(self.dataset_left)):
                 if self.offlinePPO:
                     a_loss_left, c_loss_left, entropy_left, kl_left, last_lr_left, lr_mul_left, cmu_left, \
-                    csigma_left, b_loss_left, offloss_left, offvalue_left, alpha_left, min_qf1_loss_left,  \
+                    csigma_left, b_loss_left, offloss_left, offvalue_left, alpha_left, min_qf1_loss_left, \
                     a_loss_right, c_loss_right, entropy_right, kl_right, last_lr_right, lr_mul_right, cmu_right, \
-                    csigma_right, b_loss_right, offloss_right, offvalue_right, alpha_right, min_qf1_loss_right,  = \
+                    csigma_right, b_loss_right, offloss_right, offvalue_right, alpha_right, min_qf1_loss_right, = \
                         self.train_actor_critic_multi(self.dataset_left[i], self.dataset_right[i],
                                                       self.data_actions_left, self.data_obs_left,
-                                                      self.data_next_obs_left, self.data_actions_right,
-                                                      self.data_obs_right, self.data_next_obs_right
+                                                       self.data_next_obs_left, self.data_next_actions_left,
+                                                      self.data_actions_right,self.data_obs_right,
+                                                      self.data_next_obs_right,self.data_next_actions_right
                                                       )
                 else:
                     a_loss_left, c_loss_left, entropy_left, kl_left, last_lr_left, lr_mul_left, cmu_left, csigma_left, b_loss_left, \
                     a_loss_right, c_loss_right, entropy_right, kl_right, last_lr_right, lr_mul_right, cmu_right, csigma_right, b_loss_right = \
                         self.train_actor_critic_multi(self.dataset_left[i], self.dataset_right[i],
                                                       self.data_actions_left, self.data_obs_left,
-                                                      self.data_next_obs_left, self.data_actions_right,
-                                                      self.data_obs_right, self.data_next_obs_right
+                                                      self.data_next_obs_left,self.data_next_actions_left,
+                                                      self.data_actions_right,self.data_obs_right,
+                                                      self.data_next_obs_right, self.data_next_actions_right
                                                       )
 
                 a_losses_left.append(a_loss_left)
@@ -2228,9 +2234,9 @@ class ContinuousMultiA2CBase(A2CBase):
             if self.offlinePPO:
                 step_time, play_time, update_time, sum_time, \
                 a_losses_left, c_losses_left, b_losses_left, entropies_left, kls_left, last_lr_left, lr_mul_left, \
-                offlosses_left, offvalues_left, alphas_left, min_qf1_losses_left,  \
+                offlosses_left, offvalues_left, alphas_left, min_qf1_losses_left, \
                 a_losses_right, c_losses_right, b_losses_right, entropies_right, kls_right, last_lr_right, lr_mul_right, \
-                offlosses_right, offvalues_right, alphas_right, min_qf1_losses_right,  = self.train_epoch_multi()
+                offlosses_right, offvalues_right, alphas_right, min_qf1_losses_right, = self.train_epoch_multi()
             else:
                 step_time, play_time, update_time, sum_time, \
                 a_losses_left, c_losses_left, b_losses_left, entropies_left, kls_left, last_lr_left, lr_mul_left, \
@@ -2312,7 +2318,8 @@ class ContinuousMultiA2CBase(A2CBase):
                     mean_length_left = self.game_lengths_left.get_mean_left()
                     self.mean_rewards_left = mean_reward_left[0]
                     print(
-                        'mean_rewards_spoon: {}, mean_length_spoon: {}'.format(self.mean_rewards_left, mean_length_left))
+                        'mean_rewards_spoon: {}, mean_length_spoon: {}'.format(self.mean_rewards_left,
+                                                                               mean_length_left))
                 if self.game_rewards_right.current_size_right > 0:
                     mean_reward_right = self.game_rewards_right.get_mean_right()
                     mean_length_right = self.game_lengths_right.get_mean_right()
@@ -2320,7 +2327,7 @@ class ContinuousMultiA2CBase(A2CBase):
                     # print('current length: {}'.format(self.current_lengths))
                     # print('current rewards: {}'.format(self.current_rewards / self.current_lengths)
                     print('mean_rewards_cup: {}, mean_length_cup: {}'.format(self.mean_rewards_right,
-                                                                                 mean_length_right))
+                                                                             mean_length_right))
 
                     for i in range(self.value_size):
                         rewards_name = 'left_rewards' if i == 0 else 'rewards{0}'.format(i)
