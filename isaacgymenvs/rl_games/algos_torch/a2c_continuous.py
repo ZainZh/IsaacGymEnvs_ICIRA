@@ -4,7 +4,7 @@ from rl_games.algos_torch import torch_ext
 from rl_games.algos_torch import central_value
 from rl_games.common import common_losses
 from rl_games.common import datasets
-
+from rl_games.algos_torch import network_builder
 from itertools import chain
 from torch import optim
 import torch
@@ -235,11 +235,10 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         self.init_rnn_from_model_right(self.model_right)
         self.last_lr_left = float(self.last_lr_left)
         self.last_lr_right = float(self.last_lr_right)
-        self.offlinePPO = self.config.get('offline_ppo')
+
         self.alpha_lr = self.config.get('alpha_lr_rate')
         self.full_stage = self.config.get('full_stage', False)
         self.FrankaLimit = self.config.get('franka_limit')
-        self.Bimanual_regularization = self.config.get('with_Bimanual_regularization')
         self.bound_loss_type = self.config.get('bound_loss_type', 'bound')  # 'regularisation' or 'bound'
         self.optimizer = optim.Adam([
             {'params': self.model_left.parameters(), 'lr': float(self.last_lr_left), 'eps': 1e-08,
@@ -248,8 +247,13 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
              'weight_decay': self.weight_decay}
         ])
         # self.optimizer_right = optim.Adam(self.model_right.parameters(), float(self.last_lr_right), eps=1e-08, weight_decay=self.weight_decay)
-        self.with_lagrange = self.config.get('with_lagrange')
+        self.Bimanual_regularization = self.config['Offline_PPO']['with_Bimanual_regularization']
+        self.with_lagrange = self.config['Offline_PPO']['with_lagrange']
+        self.offlinePPO = self.config['Offline_PPO']['offline_ppo']
+        self.Double_Q = self.config['Offline_PPO']['DoubleQ']
 
+        if self.Double_Q:
+            self.DoubleQ_function = network_builder.DoubleQCritic(output_dim=64,)
         if self.has_central_value:
             cv_config = {
                 'state_shape': self.state_shape,
@@ -426,15 +430,15 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                     'obs': obs_batch_offline,
                 }
 
-                res_dict_random = self.model_left(batch_dict_random)
-                values_random = res_dict_random['values']
-                cat_q1 = torch.cat([values_random, Qvalues_offline], 1)
+                # res_dict_random = self.model_left(batch_dict_random)
+                # values_random = res_dict_random['values']
+                cat_q1 = torch.cat([Qvalues_offline], 1)
                 # logsumexp= Log(Sum(Exp()))
                 min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
-                min_qf1_loss = min_qf1_loss - Qvalues_offline.mean()
+                min_qf1_loss = - Qvalues_offline.mean()
 
                 if self.with_lagrange:
-                    alpha_prime = torch.clamp(self.log_alpha_prime_left.exp(), min=0.0, max=1000000.0)
+                    alpha_prime = torch.clamp(self.log_alpha_prime_left.exp(), min=0.0, max=10.0)
                     min_qf1_loss_alpha = alpha_prime * (min_qf1_loss - self.target_action_gap_left)
 
                     alpha_prime_loss = -min_qf1_loss_alpha
@@ -565,12 +569,12 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                     'obs': obs_batch_offline,
                 }
 
-                res_dict_random = self.model_right(batch_dict_random)
-                values_random = res_dict_random['values']
-                cat_q1 = torch.cat([values_random, Qvalues_offline], 1)
+                # res_dict_random = self.model_right(batch_dict_random)
+                # values_random = res_dict_random['values']
+                cat_q1 = torch.cat([Qvalues_offline], 1)
                 # logsumexp= Log(Sum(Exp()))
-                min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
-                min_qf1_loss = min_qf1_loss - Qvalues_offline.mean()
+                # min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
+                min_qf1_loss = - Qvalues_offline.mean()
                 if self.with_lagrange:
                     alpha_prime = torch.clamp(self.log_alpha_prime_right.exp(), min=0.0, max=10.0)
                     min_qf1_loss_alpha = alpha_prime * (min_qf1_loss - self.target_action_gap_right)

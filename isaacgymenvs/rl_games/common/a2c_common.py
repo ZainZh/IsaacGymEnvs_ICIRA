@@ -1270,7 +1270,7 @@ class ContinuousMultiA2CBase(A2CBase):
         self.full_stage = self.config.get('full_stage', False)
         self.rnn_states_left = None
         self.rnn_states_right = None
-        self.offlinePPO = self.config.get('offline_ppo')
+        self.offlinePPO = self.config['Offline_PPO']['offline_ppo']
         # add new algo_observer
         self.algo_observer_left = self.config['features']['observer']
         self.algo_observer_left.before_init(base_name, self.config, self.experiment_name_left)

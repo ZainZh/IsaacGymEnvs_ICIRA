@@ -34,7 +34,7 @@ params:
   load_path: ${...checkpoint} # path to the checkpoint to load
 
   config:
-    name: ${resolve_default:CURIMultiPPO_0826_offline,${....experiment}}
+    name: ${resolve_default:CURIMultiPPO_0826_baseline,${....experiment}}
     full_experiment_name: ${.name}
     env_name: rlgpu
     ppo: True
@@ -76,9 +76,12 @@ params:
     lagrange_thresh_right: 0.0
     min_q_weight: 1.0
 
-    with_lagrange: True #for function 5
-    offline_ppo: True
+    Offline_PPO:
+      with_lagrange: False #for function 5
+      offline_ppo: False
+      with_Bimanual_regularization: False #for function 6
+      DoubleQ: False
     full_stage: True   # True is fullstage, False is stage1
-    with_Bimanual_regularization: False #for function 6
+
     alpha_lr_rate: 1e-3
     franka_limit: [ [ 2.8973,1.7628,2.8973,-0.0698,2.8973,3.7525,2.8973,0.04,0.04 ],[ -2.8973,-1.7628,-2.8973,-3.0718,-2.8973,-0.00175,-2.8973,0.00,0.00 ] ]
