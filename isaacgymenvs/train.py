@@ -43,7 +43,7 @@ from utils.utils import set_np_formatting, set_seed
 
 from rl_games.common import env_configurations, vecenv
 from rl_games.torch_runner import Runner
-
+import shutil
 import yaml
 
 # from isaacgymenvs.learning import amp_continuous
@@ -123,7 +123,11 @@ def launch_rlg_hydra(cfg: DictConfig):
     os.makedirs(experiment_dir, exist_ok=True)
     with open(os.path.join(experiment_dir, 'config.yaml'), 'w') as f:
         f.write(OmegaConf.to_yaml(cfg))
-
+    if cfg.task_name == 'DualFranka':
+        loacl_dir=os.getcwd()
+        Dualfranka_dir = os.path.join(loacl_dir,'tasks/dual_franka.py')
+        expect_dir=os.path.join(loacl_dir,experiment_dir,'dual_franka.py')
+        shutil.copyfile(f'{Dualfranka_dir}',f"{expect_dir}")
     if cfg.train.params.algo.name == 'cql' or cfg.train.params.algo.name == 'sac':
         runner.run({
             'train': not cfg.test,  # decide train or play in cfg
