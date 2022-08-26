@@ -126,8 +126,14 @@ def launch_rlg_hydra(cfg: DictConfig):
     if cfg.task_name == 'DualFranka':
         loacl_dir=os.getcwd()
         Dualfranka_dir = os.path.join(loacl_dir,'tasks/dual_franka.py')
-        expect_dir=os.path.join(loacl_dir,experiment_dir,'dual_franka.py')
-        shutil.copyfile(f'{Dualfranka_dir}',f"{expect_dir}")
+        A2Ccommon_dir=os.path.join(loacl_dir,'rl_games/common/a2c_common.py')
+        A2Ccontinuous_dir=os.path.join(loacl_dir,'rl_games/algos_torch/a2c_continuous.py')
+        expectdual_dir=os.path.join(loacl_dir,experiment_dir,'dual_franka.py')
+        expectcomm_dir=os.path.join(loacl_dir,experiment_dir,'a2c_common.py')
+        expectcont_dir=os.path.join(loacl_dir,experiment_dir,'a2c_continuous.py')
+        shutil.copyfile(f'{Dualfranka_dir}',f"{expectdual_dir}")
+        shutil.copyfile(f'{A2Ccommon_dir}',f"{expectcomm_dir}")
+        shutil.copyfile(f'{A2Ccontinuous_dir}',f"{expectcont_dir}")
     if cfg.train.params.algo.name == 'cql' or cfg.train.params.algo.name == 'sac':
         runner.run({
             'train': not cfg.test,  # decide train or play in cfg

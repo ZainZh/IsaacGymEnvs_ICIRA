@@ -359,7 +359,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         preds_q1 = preds_q1.view(obs.shape[0], num_repeat, 1)
         return preds_q1, preds_q2
 
-    def calc_gradients_left(self, input_dict, data_actions_left, data_obs_left, data_next_obs_left,data_next_actions_left):
+    def calc_gradients_left(self, input_dict, data_actions_left, data_obs_left, data_next_obs_left,
+                            data_next_actions_left):
         value_preds_batch = input_dict['old_values']
         old_action_log_probs_batch = input_dict['old_logp_actions']
         advantage = input_dict['advantages']
@@ -407,29 +408,28 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         with torch.cuda.amp.autocast(enabled=self.mixed_precision):
             res_dict = self.model_left(batch_dict)
             res_dict_offline = self.model_left(batch_dict_offline)
-            next_res_dict_offline = self.model_left(next_batch_dict_offline)
+            # next_res_dict_offline = self.model_left(next_batch_dict_offline)
             action_log_probs = res_dict['prev_neglogp']
             Qvalues = res_dict['values']
             Qvalues_offline = res_dict_offline['values']
-            Qvalues_offline_next = next_res_dict_offline['values']
+            # Qvalues_offline_next = next_res_dict_offline['values']
             entropy = res_dict['entropy']
             mu = res_dict['mus']
             sigma = res_dict['sigmas']
             ######################################################
             if self.offlinePPO:
-                ## add CQL
-                # add CQL here
-                # random_actions_tensor = self.create_random_action(Qvalues_offline, actions_batch)
-                # batch_dict_random = {
-                #     'is_train': True,
-                #     'prev_actions': random_actions_tensor,
-                #     'obs': obs_batch_offline,
-                # }
-                #
-                # res_dict_random = self.model_left(batch_dict_random)
-                # values_random = res_dict_random['values']
-                cat_q1 = torch.cat([Qvalues_offline, Qvalues_offline_next], 1)
-                ## logsumexp= Log(Sum(Exp()))
+                # add CQL
+                random_actions_tensor = self.create_random_action(Qvalues, actions_batch)
+                batch_dict_random = {
+                    'is_train': True,
+                    'prev_actions': random_actions_tensor,
+                    'obs': obs_batch_offline,
+                }
+
+                res_dict_random = self.model_left(batch_dict_random)
+                values_random = res_dict_random['values']
+                cat_q1 = torch.cat([values_random, Qvalues_offline], 1)
+                # logsumexp= Log(Sum(Exp()))
                 min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
                 min_qf1_loss = min_qf1_loss - Qvalues_offline.mean()
 
@@ -501,7 +501,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                                       kl_dist, self.last_lr_left, lr_mul, \
                                       mu.detach(), sigma.detach(), b_loss)
 
-    def calc_gradients_right(self, input_dict, data_actions_right, data_obs_right, data_next_obs_right,data_next_actions_right):
+    def calc_gradients_right(self, input_dict, data_actions_right, data_obs_right, data_next_obs_right,
+                             data_next_actions_right):
         value_preds_batch = input_dict['old_values']
         old_action_log_probs_batch = input_dict['old_logp_actions']
         advantage = input_dict['advantages']
@@ -547,8 +548,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         with torch.cuda.amp.autocast(enabled=self.mixed_precision):
             res_dict = self.model_right(batch_dict)
             res_dict_offline = self.model_right(batch_dict_offline)
-            res_next_actions_dict = self.model_right(next_actions_offline)
-            Qvalues_offline_next = res_next_actions_dict['values']
+            # res_next_actions_dict = self.model_right(next_actions_offline)
+            # Qvalues_offline_next = res_next_actions_dict['values']
             action_log_probs = res_dict['prev_neglogp']
             Qvalues = res_dict['values']
             Qvalues_offline = res_dict_offline['values']
@@ -556,25 +557,23 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             mu = res_dict['mus']
             sigma = res_dict['sigmas']
             if self.offlinePPO:
-                ## add CQL
-                # add CQL here
-                # random_actions_tensor = self.create_random_action(Qvalues_offline, actions_batch)
-                # batch_dict_random = {
-                #     'is_train': True,
-                #     'prev_actions': random_actions_tensor,
-                #     'obs': obs_batch_offline,
-                # }
+                # add CQL
+                random_actions_tensor = self.create_random_action(Qvalues, actions_batch)
+                batch_dict_random = {
+                    'is_train': True,
+                    'prev_actions': random_actions_tensor,
+                    'obs': obs_batch_offline,
+                }
 
-                # res_dict_random = self.model_right(batch_dict_random)
-                # values_random = res_dict_random['values']
-                cat_q1 = torch.cat([Qvalues_offline, Qvalues_offline_next], 1)
-                ## logsumexp= Log(Sum(Exp()))
+                res_dict_random = self.model_right(batch_dict_random)
+                values_random = res_dict_random['values']
+                cat_q1 = torch.cat([values_random, Qvalues_offline], 1)
+                # logsumexp= Log(Sum(Exp()))
                 min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
                 min_qf1_loss = min_qf1_loss - Qvalues_offline.mean()
                 if self.with_lagrange:
-                    alpha_prime = torch.clamp(self.log_alpha_prime_right.exp(), min=0.0, max=1000000.0)
+                    alpha_prime = torch.clamp(self.log_alpha_prime_right.exp(), min=0.0, max=10.0)
                     min_qf1_loss_alpha = alpha_prime * (min_qf1_loss - self.target_action_gap_right)
-
                     alpha_prime_loss = -min_qf1_loss_alpha
 
             """Subtract the log likelihood of data"""
