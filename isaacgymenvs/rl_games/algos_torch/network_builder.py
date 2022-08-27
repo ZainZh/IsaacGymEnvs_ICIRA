@@ -1140,7 +1140,7 @@ class DiagGaussianActor(NetworkBuilder.BaseNetwork):
 
 class DoubleQCritic(NetworkBuilder.BaseNetwork):
     """Critic network, employes double Q-learning."""
-    def __init__(self, output_dim, **mlp_args):
+    def __init__(self, output_dim,**mlp_args):
         super().__init__()
 
         self.Q1 = self._build_mlp(**mlp_args)

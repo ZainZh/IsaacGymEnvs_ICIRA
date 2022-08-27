@@ -251,9 +251,19 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         self.with_lagrange = self.config['Offline_PPO']['with_lagrange']
         self.offlinePPO = self.config['Offline_PPO']['offline_ppo']
         self.Double_Q = self.config['Offline_PPO']['DoubleQ']
-
+        self.DoubleQ_learningRate = self.config['Offline_PPO']['DoubleQ_lr']
         if self.Double_Q:
-            self.DoubleQ_function = network_builder.DoubleQCritic(output_dim=64,)
+            mlp_args = {
+                'input_size': obs_shape[0],
+                'units': [256, 128, 64],
+                'activation': 'elu',
+                'norm_func_name': None,
+                'dense_func': torch.nn.Linear,
+                'd2rl': False,
+                'norm_only_first_layer': False
+            }
+            self.DoubleQ_network = network_builder.DoubleQCritic(64, **mlp_args)
+
         if self.has_central_value:
             cv_config = {
                 'state_shape': self.state_shape,
@@ -407,41 +417,40 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             rnn_masks = input_dict['rnn_masks']
             batch_dict['rnn_states'] = input_dict['rnn_states']
             batch_dict['seq_length'] = self.seq_len
-        if self.with_lagrange:
-            self.alpha_prime_optimizer_left.zero_grad()
         with torch.cuda.amp.autocast(enabled=self.mixed_precision):
             res_dict = self.model_left(batch_dict)
             res_dict_offline = self.model_left(batch_dict_offline)
-            # next_res_dict_offline = self.model_left(next_batch_dict_offline)
+            next_res_dict_offline = self.model_left(next_batch_dict_offline)
             action_log_probs = res_dict['prev_neglogp']
             Qvalues = res_dict['values']
             Qvalues_offline = res_dict_offline['values']
             # Qvalues_offline_next = next_res_dict_offline['values']
             entropy = res_dict['entropy']
             mu = res_dict['mus']
+            mu_current = res_dict_offline['mus']
+            mu_next = next_res_dict_offline['mus']
             sigma = res_dict['sigmas']
             ######################################################
             if self.offlinePPO:
-                # add CQL
+                # add CQL and DoubleQ function
                 random_actions_tensor = self.create_random_action(Qvalues, actions_batch)
-                batch_dict_random = {
-                    'is_train': True,
-                    'prev_actions': random_actions_tensor,
-                    'obs': obs_batch_offline,
-                }
-
-                # res_dict_random = self.model_left(batch_dict_random)
-                # values_random = res_dict_random['values']
-                cat_q1 = torch.cat([Qvalues_offline], 1)
+                q1_pred, q2_pred = self.DoubleQ_network(obs_batch_offline, data_actions_left)
+                q1_random, q2_random = self.DoubleQ_network(obs_batch_offline, random_actions_tensor)
+                q1_current, q2_current = self.DoubleQ_network(obs_batch_offline, mu_current)
+                q1_next, q2_next = self.DoubleQ_network(obs_batch_offline, mu_next)
+                cat_q1 = torch.cat([q1_random, q1_pred.unsqueeze(1), q1_next, q1_current], 1)
+                cat_q2 = torch.cat([q2_random, q2_pred.unsqueeze(1), q2_next, q2_current], 1)
                 # logsumexp= Log(Sum(Exp()))
                 min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
-                min_qf1_loss = - Qvalues_offline.mean()
+                min_qf2_loss = torch.logsumexp(cat_q2 / 1.0, dim=1, ).mean() * self.min_q_weight
+                min_qf1_loss = min_qf1_loss - q1_pred.mean()
+                min_qf2_loss = min_qf2_loss - q2_pred.mean()
 
                 if self.with_lagrange:
                     alpha_prime = torch.clamp(self.log_alpha_prime_left.exp(), min=0.0, max=10.0)
                     min_qf1_loss_alpha = alpha_prime * (min_qf1_loss - self.target_action_gap_left)
-
-                    alpha_prime_loss = -min_qf1_loss_alpha
+                    min_qf2_loss_alpha = alpha_prime * (min_qf2_loss - self.target_action_gap_left)
+                    alpha_prime_loss = (-min_qf1_loss_alpha-min_qf2_loss_alpha)*0.5
 
                 """Subtract the log likelihood of data"""
 
@@ -453,7 +462,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 c_loss = common_losses.critic_loss(value_preds_batch, Qvalues, curr_e_clip, return_batch,
                                                    self.clip_value)
                 if self.offlinePPO:
-                    c_loss = c_loss + min_qf1_loss_alpha
+                    c_loss = c_loss + (min_qf1_loss_alpha+min_qf2_loss_alpha)*0.5
             else:
                 c_loss = torch.zeros(1, device=self.ppo_device)
             if self.bound_loss_type == 'regularisation':
@@ -475,6 +484,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 for param in self.model_left.parameters():
                     param.grad = None
         if self.with_lagrange:
+            self.alpha_prime_optimizer_left.zero_grad()
             alpha_prime_loss.backward(retain_graph=True)
             self.alpha_prime_optimizer_left.step()
         self.scaler_left.scale(loss).backward()
@@ -521,8 +531,6 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         if self.Bimanual_regularization:
             actions_batch, obs_batch = self.bimanual_regularization(
                 actions_batch, data_actions_right, obs_batch_offline)
-        # value_preds_batch_offline = input_dict_offline['old_values']
-        # return_batch_offline = input_dict_offline['returns']
         lr_mul = 1.0
         curr_e_clip = self.e_clip
 
@@ -547,38 +555,37 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             rnn_masks = input_dict['rnn_masks']
             batch_dict['rnn_states'] = input_dict['rnn_states']
             batch_dict['seq_length'] = self.seq_len
-        if self.with_lagrange:
-            self.alpha_prime_optimizer_right.zero_grad()
         with torch.cuda.amp.autocast(enabled=self.mixed_precision):
             res_dict = self.model_right(batch_dict)
             res_dict_offline = self.model_right(batch_dict_offline)
-            # res_next_actions_dict = self.model_right(next_actions_offline)
-            # Qvalues_offline_next = res_next_actions_dict['values']
+            res_next_actions_dict = self.model_right(next_actions_offline)
             action_log_probs = res_dict['prev_neglogp']
             Qvalues = res_dict['values']
             Qvalues_offline = res_dict_offline['values']
             entropy = res_dict['entropy']
             mu = res_dict['mus']
+            mu_current = res_dict_offline['mus']
+            mu_next = res_next_actions_dict['mus']
             sigma = res_dict['sigmas']
             if self.offlinePPO:
                 # add CQL
                 random_actions_tensor = self.create_random_action(Qvalues, actions_batch)
-                batch_dict_random = {
-                    'is_train': True,
-                    'prev_actions': random_actions_tensor,
-                    'obs': obs_batch_offline,
-                }
-
-                # res_dict_random = self.model_right(batch_dict_random)
-                # values_random = res_dict_random['values']
-                cat_q1 = torch.cat([Qvalues_offline], 1)
+                q1_pred, q2_pred = self.DoubleQ_network(obs_batch_offline, data_actions_right)
+                q1_random, q2_random = self.DoubleQ_network(obs_batch_offline, random_actions_tensor)
+                q1_current, q2_current = self.DoubleQ_network(obs_batch_offline, mu_current)
+                q1_next, q2_next = self.DoubleQ_network(obs_batch_offline, mu_next)
+                cat_q1 = torch.cat([q1_random, q1_pred.unsqueeze(1), q1_next, q1_current], 1)
+                cat_q2 = torch.cat([q2_random, q2_pred.unsqueeze(1), q2_next, q2_current], 1)
                 # logsumexp= Log(Sum(Exp()))
-                # min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
-                min_qf1_loss = - Qvalues_offline.mean()
+                min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
+                min_qf2_loss = torch.logsumexp(cat_q2 / 1.0, dim=1, ).mean() * self.min_q_weight
+                min_qf1_loss = min_qf1_loss - q1_pred.mean()
+                min_qf2_loss = min_qf2_loss - q2_pred.mean()
                 if self.with_lagrange:
                     alpha_prime = torch.clamp(self.log_alpha_prime_right.exp(), min=0.0, max=10.0)
                     min_qf1_loss_alpha = alpha_prime * (min_qf1_loss - self.target_action_gap_right)
-                    alpha_prime_loss = -min_qf1_loss_alpha
+                    min_qf2_loss_alpha = alpha_prime * (min_qf2_loss - self.target_action_gap_right)
+                    alpha_prime_loss = (-min_qf1_loss_alpha-min_qf2_loss_alpha)*0.5
 
             """Subtract the log likelihood of data"""
             a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo,
@@ -589,7 +596,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 c_loss = common_losses.critic_loss(value_preds_batch, Qvalues, curr_e_clip, return_batch,
                                                    self.clip_value)
                 if self.offlinePPO:
-                    c_loss = c_loss + min_qf1_loss_alpha
+                    c_loss = c_loss + (min_qf1_loss_alpha+min_qf2_loss_alpha)*0.5
             else:
                 c_loss = torch.zeros(1, device=self.ppo_device)
             if self.bound_loss_type == 'regularisation':
@@ -611,6 +618,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 for param in self.model_right.parameters():
                     param.grad = None
         if self.with_lagrange:
+            self.alpha_prime_optimizer_right.zero_grad()
             alpha_prime_loss.backward(retain_graph=True)
             self.alpha_prime_optimizer_right.step()
         self.scaler_right.scale(loss).backward()

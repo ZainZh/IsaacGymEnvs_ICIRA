@@ -77,10 +77,11 @@ params:
     min_q_weight: 1.0
 
     Offline_PPO:
-      with_lagrange: False #for function 5
-      offline_ppo: False
+      with_lagrange: True #for function 5
+      offline_ppo: True
       with_Bimanual_regularization: False #for function 6
-      DoubleQ: False
+      DoubleQ: True  # Now the doubleQ can't open or close throught this config because of highly correlation
+      DoubleQ_lr: 1e-3
     full_stage: True   # True is fullstage, False is stage1
 
     alpha_lr_rate: 1e-3
