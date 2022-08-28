@@ -254,7 +254,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         self.DoubleQ_learningRate = self.config['Offline_PPO']['DoubleQ_lr']
         if self.Double_Q:
             mlp_args = {
-                'input_size': obs_shape[0],
+                'input_size': 37+9,  # obs_shape+ action_shape
                 'units': [256, 128, 64],
                 'activation': 'elu',
                 'norm_func_name': None,
@@ -263,6 +263,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 'norm_only_first_layer': False
             }
             self.DoubleQ_network = network_builder.DoubleQCritic(64, **mlp_args)
+            self.DoubleQ_network.to(self.ppo_device)
 
         if self.has_central_value:
             cv_config = {
@@ -433,13 +434,13 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             ######################################################
             if self.offlinePPO:
                 # add CQL and DoubleQ function
-                random_actions_tensor = self.create_random_action(Qvalues, actions_batch)
+                random_actions_tensor = self.create_random_action(data_actions_left, actions_batch)
                 q1_pred, q2_pred = self.DoubleQ_network(obs_batch_offline, data_actions_left)
                 q1_random, q2_random = self.DoubleQ_network(obs_batch_offline, random_actions_tensor)
                 q1_current, q2_current = self.DoubleQ_network(obs_batch_offline, mu_current)
                 q1_next, q2_next = self.DoubleQ_network(obs_batch_offline, mu_next)
-                cat_q1 = torch.cat([q1_random, q1_pred.unsqueeze(1), q1_next, q1_current], 1)
-                cat_q2 = torch.cat([q2_random, q2_pred.unsqueeze(1), q2_next, q2_current], 1)
+                cat_q1 = torch.cat([q1_random, q1_pred, q1_next, q1_current], 1)
+                cat_q2 = torch.cat([q2_random, q2_pred, q2_next, q2_current], 1)
                 # logsumexp= Log(Sum(Exp()))
                 min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
                 min_qf2_loss = torch.logsumexp(cat_q2 / 1.0, dim=1, ).mean() * self.min_q_weight
@@ -569,13 +570,13 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             sigma = res_dict['sigmas']
             if self.offlinePPO:
                 # add CQL
-                random_actions_tensor = self.create_random_action(Qvalues, actions_batch)
+                random_actions_tensor = self.create_random_action(data_actions_right, actions_batch)
                 q1_pred, q2_pred = self.DoubleQ_network(obs_batch_offline, data_actions_right)
                 q1_random, q2_random = self.DoubleQ_network(obs_batch_offline, random_actions_tensor)
                 q1_current, q2_current = self.DoubleQ_network(obs_batch_offline, mu_current)
                 q1_next, q2_next = self.DoubleQ_network(obs_batch_offline, mu_next)
-                cat_q1 = torch.cat([q1_random, q1_pred.unsqueeze(1), q1_next, q1_current], 1)
-                cat_q2 = torch.cat([q2_random, q2_pred.unsqueeze(1), q2_next, q2_current], 1)
+                cat_q1 = torch.cat([q1_random, q1_pred, q1_next, q1_current], 1)
+                cat_q2 = torch.cat([q2_random, q2_pred, q2_next, q2_current], 1)
                 # logsumexp= Log(Sum(Exp()))
                 min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
                 min_qf2_loss = torch.logsumexp(cat_q2 / 1.0, dim=1, ).mean() * self.min_q_weight
