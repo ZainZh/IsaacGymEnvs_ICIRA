@@ -1343,6 +1343,14 @@ class ContinuousMultiA2CBase(A2CBase):
 
             self.data_next_actions_right = torch.tensor(np.array(data_file['next_actions_right']), dtype=torch.float,
                                                         device=self.ppo_device)
+            self.data_rewards_left = torch.tensor(np.array(data_file['rewards_left']), dtype=torch.float,
+                                                  device=self.ppo_device)
+            self.data_rewards_right = torch.tensor(np.array(data_file['rewards_right']), dtype=torch.float,
+                                                   device=self.ppo_device)
+            self.data_dones_left = torch.tensor(np.array(data_file['dones_left']), dtype=torch.float,
+                                                device=self.ppo_device)
+            self.data_dones_right = torch.tensor(np.array(data_file['dones_right']), dtype=torch.float,
+                                                 device=self.ppo_device)
 
     def env_reset_multi(self):
         obs_left, obs_right = self.vec_env.reset_multi()
@@ -1458,7 +1466,6 @@ class ContinuousMultiA2CBase(A2CBase):
         if self.truncate_grads:
             self.scaler_left.unscale_(self.optimizer)
             nn.utils.clip_grad_norm_(self.model_left.parameters(), self.grad_norm)
-
         self.scaler_left.step(self.optimizer)
         self.scaler_left.update()
 
@@ -1466,7 +1473,6 @@ class ContinuousMultiA2CBase(A2CBase):
         if self.truncate_grads:
             self.scaler_right.unscale_(self.optimizer)
             nn.utils.clip_grad_norm_(self.model_right.parameters(), self.grad_norm)
-
         self.scaler_right.step(self.optimizer)
         self.scaler_right.update()
 
@@ -2016,18 +2022,22 @@ class ContinuousMultiA2CBase(A2CBase):
                     csigma_right, b_loss_right, offloss_right, offvalue_right, alpha_right, min_qf1_loss_right, = \
                         self.train_actor_critic_multi(self.dataset_left[i], self.dataset_right[i],
                                                       self.data_actions_left, self.data_obs_left,
-                                                       self.data_next_obs_left, self.data_next_actions_left,
-                                                      self.data_actions_right,self.data_obs_right,
-                                                      self.data_next_obs_right,self.data_next_actions_right
+                                                      self.data_next_obs_left, self.data_next_actions_left,
+                                                      self.data_rewards_left, self.data_dones_left,
+                                                      self.data_actions_right, self.data_obs_right,
+                                                      self.data_next_obs_right, self.data_next_actions_right,
+                                                      self.data_rewards_right, self.data_dones_right
                                                       )
                 else:
                     a_loss_left, c_loss_left, entropy_left, kl_left, last_lr_left, lr_mul_left, cmu_left, csigma_left, b_loss_left, \
                     a_loss_right, c_loss_right, entropy_right, kl_right, last_lr_right, lr_mul_right, cmu_right, csigma_right, b_loss_right = \
                         self.train_actor_critic_multi(self.dataset_left[i], self.dataset_right[i],
                                                       self.data_actions_left, self.data_obs_left,
-                                                      self.data_next_obs_left,self.data_next_actions_left,
-                                                      self.data_actions_right,self.data_obs_right,
-                                                      self.data_next_obs_right, self.data_next_actions_right
+                                                      self.data_next_obs_left, self.data_next_actions_left,
+                                                      self.data_rewards_left, self.data_dones_left,
+                                                      self.data_actions_right, self.data_obs_right,
+                                                      self.data_next_obs_right, self.data_next_actions_right,
+                                                      self.data_rewards_right, self.data_dones_right
                                                       )
 
                 a_losses_left.append(a_loss_left)

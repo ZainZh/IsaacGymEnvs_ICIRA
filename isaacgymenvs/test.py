@@ -628,13 +628,13 @@ if __name__ == "__main__":
                 action = pos_action.clone().view(-1, 18).numpy()
                 # TODO: here calculate done
                 done = np.array([[0]], dtype='i8')
-                done_spoon = np.array([[0]], dtype='i8')
-                done_cup = np.array([[0]], dtype='i8')
+
 
                 if MultiPPO:
                     next_obs_left = env.obs_buf_left.clone().view(-1, 37).numpy()
                     next_action_left = env.franka_dof_pos.clone().view(-1, 9).numpy()
-
+                    done_spoon = env.reset_buf_spoon.clone().view(-1,1).numpy()
+                    done_cup = env.reset_buf_cup.clone().view(-1,1).numpy()
                     next_obs_right = env.obs_buf_right.clone().view(-1, 37).numpy()
                     next_action_right = env.franka_dof_pos_1.clone().view(-1, 9).numpy()
                     if step > 0:

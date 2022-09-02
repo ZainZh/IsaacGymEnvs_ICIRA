@@ -2,7 +2,7 @@ import h5py
 import torch
 import numpy as np
 
-date_file = h5py.File('test_save/hdf5/08-01-06_21_47.hdf5', 'r')
+date_file = h5py.File('test_save/hdf5/09-02-12_03_53.hdf5', 'r')
 cup_npy = np.load('test_save/cup.npy')
 spoon_npy = np.load('test_save/spoon.npy')
 cup_pos = cup_npy[:, :7]

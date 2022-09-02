@@ -64,7 +64,7 @@ params:
     truncate_grads: True
     e_clip: 0.2
     horizon_length: 500
-    minibatch_size: 2048
+    minibatch_size: 16
 #    minibatch_size: 10
     mini_epochs: 8
     critic_coef: 4
@@ -82,6 +82,7 @@ params:
       with_Bimanual_regularization: False #for function 6
       DoubleQ: True  # Now the doubleQ can't open or close throught this config because of highly correlation
       DoubleQ_lr: 1e-3
+      DoubleQ_rewardscale: 1
     full_stage: True   # True is fullstage, False is stage1
 
     alpha_lr_rate: 1e-3

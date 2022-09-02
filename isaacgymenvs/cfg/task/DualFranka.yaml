@@ -37,9 +37,9 @@ env:
   ReadExpertData: False
   Damping: 0.05
   UsingIK: False
-  HighStiffness: False  # for obtaining offline_data in test.py.  low stiffness makes franka be affected by gravity
+
   LocationNoise: false  # make the location of cup, spoon, shelf and box random, false when test
-  ForTest: False
+  ForTest: True # for obtaining offline_data in test.py.  For test will create a low gravity environment and expand franka's stiffness
   asset:
     assetRoot: "../../assets"
     franka_asset_file: "urdf/franka_description/robots/franka_panda.urdf"
@@ -54,7 +54,7 @@ sim:
   substeps: 1
   up_axis: "y"
   use_gpu_pipeline: ${eq:${...pipeline},"gpu"}
-  gravity: [0.0, -9.81, 0.0]
+  gravity: [ 0.0, -9.81, 0.0 ]
   physx:
     num_threads: ${....num_threads}
     solver_type: ${....solver_type}
