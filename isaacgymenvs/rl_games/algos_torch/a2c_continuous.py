@@ -474,9 +474,9 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                     alpha_prime_loss = (-min_qf1_loss_alpha - min_qf2_loss_alpha) * 0.5
 
                 """Subtract the log likelihood of data"""
-                q1_loss = q1_loss + min_qf1_loss_alpha
-                q2_loss = q2_loss + min_qf2_loss_alpha
-                q_loss=q1_loss+q2_loss
+                q1_loss = q1_loss + min_qf1_loss_alpha.detach()
+                q2_loss = q2_loss + min_qf2_loss_alpha.detach()
+                q_loss = q1_loss + q2_loss
             a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo,
                                           curr_e_clip)
             if self.has_value_loss:
@@ -485,7 +485,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 c_loss = common_losses.critic_loss(value_preds_batch, Qvalues, curr_e_clip, return_batch,
                                                    self.clip_value)
                 if self.offlinePPO:
-                    c_loss = c_loss + (min_qf1_loss_alpha + min_qf2_loss_alpha) * 0.5
+                    c_loss = c_loss + (min_qf1_loss_alpha.detach() + min_qf2_loss_alpha.detach()) * 0.5
             else:
                 c_loss = torch.zeros(1, device=self.ppo_device)
             if self.bound_loss_type == 'regularisation':
@@ -510,18 +510,16 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         if self.with_lagrange:
             self.alpha_prime_optimizer_left.zero_grad()
             alpha_prime_loss.backward(retain_graph=True)
-
+            self.alpha_prime_optimizer_left.step()
         if self.Double_Q:
             self.DoubleQ_optimizer_left.zero_grad()
             q_loss.backward(retain_graph=True)
-
-
-
-        self.scaler_left.scale(loss).backward(retain_graph=True)
+            self.DoubleQ_optimizer_left.step()
 
         # TODO: Refactor this ugliest code of they year
-
-
+        self.optimizer.zero_grad()
+        self.scaler_left.scale(loss).backward(retain_graph=False)
+        self.trancate_gradients_and_step_left()
         with torch.no_grad():
             reduce_kl = rnn_masks is None
             kl_dist = torch_ext.policy_kl(mu.detach(), sigma.detach(), old_mu_batch, old_sigma_batch, reduce_kl)
@@ -633,9 +631,9 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                     alpha_prime_loss = (-min_qf1_loss_alpha - min_qf2_loss_alpha) * 0.5
 
                 """Subtract the log likelihood of data"""
-                q1_loss = q1_loss + min_qf1_loss_alpha
-                q2_loss = q2_loss + min_qf2_loss_alpha
-                q_loss=q1_loss+q2_loss
+                q1_loss = q1_loss + min_qf1_loss_alpha.detach()
+                q2_loss = q2_loss + min_qf2_loss_alpha.detach()
+                q_loss = q1_loss + q2_loss
             a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo,
                                           curr_e_clip)
             if self.has_value_loss:
@@ -644,7 +642,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 c_loss = common_losses.critic_loss(value_preds_batch, Qvalues, curr_e_clip, return_batch,
                                                    self.clip_value)
                 if self.offlinePPO:
-                    c_loss = c_loss + (min_qf1_loss_alpha + min_qf2_loss_alpha) * 0.5
+                    c_loss = c_loss + (min_qf1_loss_alpha.detach() + min_qf2_loss_alpha.detach()) * 0.5
             else:
                 c_loss = torch.zeros(1, device=self.ppo_device)
             if self.bound_loss_type == 'regularisation':
@@ -666,25 +664,18 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 for param in self.model_right.parameters():
                     param.grad = None
 
-
-
         if self.with_lagrange:
             self.alpha_prime_optimizer_right.zero_grad()
             alpha_prime_loss.backward(retain_graph=True)
-
-
+            self.alpha_prime_optimizer_right.step()
         if self.Double_Q:
             self.DoubleQ_optimizer_right.zero_grad()
             q_loss.backward(retain_graph=True)
+            self.DoubleQ_optimizer_right.step()
 
         # TODO: Refactor this ugliest code of they year
+        self.optimizer.zero_grad()
         self.scaler_right.scale(loss).backward(retain_graph=False)
-        self.alpha_prime_optimizer_left.step()
-        self.DoubleQ_optimizer_left.step()
-        self.trancate_gradients_and_step_left()
-
-        self.DoubleQ_optimizer_right.step()
-        self.alpha_prime_optimizer_right.step()
         self.trancate_gradients_and_step_right()
         with torch.no_grad():
             reduce_kl = rnn_masks is None
