@@ -32,19 +32,17 @@
 import isaacgym
 
 import os
+import shutil
+
 import hydra
-from omegaconf import DictConfig, OmegaConf
 from hydra.utils import to_absolute_path
+from omegaconf import DictConfig, OmegaConf
 
 from isaacgymenvs.utils.reformat import omegaconf_to_dict, print_dict
 from isaacgymenvs.utils.rlgames_utils import RLGPUEnv, RLGPUAlgoObserver, get_rlgames_env_creator
-
-from utils.utils import set_np_formatting, set_seed
-
 from rl_games.common import env_configurations, vecenv
 from rl_games.torch_runner import Runner
-import shutil
-import yaml
+from utils.utils import set_np_formatting, set_seed
 
 # from isaacgymenvs.learning import amp_continuous
 # from isaacgymenvs.learning import amp_players
@@ -124,16 +122,16 @@ def launch_rlg_hydra(cfg: DictConfig):
     with open(os.path.join(experiment_dir, 'config.yaml'), 'w') as f:
         f.write(OmegaConf.to_yaml(cfg))
     if cfg.task_name == 'DualFranka':
-        loacl_dir=os.getcwd()
-        Dualfranka_dir = os.path.join(loacl_dir,'tasks/dual_franka.py')
-        A2Ccommon_dir=os.path.join(loacl_dir,'rl_games/common/a2c_common.py')
-        A2Ccontinuous_dir=os.path.join(loacl_dir,'rl_games/algos_torch/a2c_continuous.py')
-        expectdual_dir=os.path.join(loacl_dir,experiment_dir,'dual_franka.py')
-        expectcomm_dir=os.path.join(loacl_dir,experiment_dir,'a2c_common.py')
-        expectcont_dir=os.path.join(loacl_dir,experiment_dir,'a2c_continuous.py')
-        shutil.copyfile(f'{Dualfranka_dir}',f"{expectdual_dir}")
-        shutil.copyfile(f'{A2Ccommon_dir}',f"{expectcomm_dir}")
-        shutil.copyfile(f'{A2Ccontinuous_dir}',f"{expectcont_dir}")
+        loacl_dir = os.getcwd()
+        Dualfranka_dir = os.path.join(loacl_dir, 'tasks/dual_franka.py')
+        A2Ccommon_dir = os.path.join(loacl_dir, 'rl_games/common/a2c_common.py')
+        A2Ccontinuous_dir = os.path.join(loacl_dir, 'rl_games/algos_torch/a2c_continuous.py')
+        expectdual_dir = os.path.join(loacl_dir, experiment_dir, 'dual_franka.py')
+        expectcomm_dir = os.path.join(loacl_dir, experiment_dir, 'a2c_common.py')
+        expectcont_dir = os.path.join(loacl_dir, experiment_dir, 'a2c_continuous.py')
+        shutil.copyfile(f'{Dualfranka_dir}', f"{expectdual_dir}")
+        shutil.copyfile(f'{A2Ccommon_dir}', f"{expectcomm_dir}")
+        shutil.copyfile(f'{A2Ccontinuous_dir}', f"{expectcont_dir}")
     if cfg.train.params.algo.name == 'cql' or cfg.train.params.algo.name == 'sac':
         runner.run({
             'train': not cfg.test,  # decide train or play in cfg
