@@ -1995,9 +1995,7 @@ class ContinuousMultiA2CBase(A2CBase):
         c_losses_left = []
         b_losses_left = []
         offlosses_left = []
-        offvalues_left = []
         offlosses_right = []
-        offvalues_right = []
         entropies_left = []
         kls_left = []
         a_losses_right = []
@@ -2017,9 +2015,9 @@ class ContinuousMultiA2CBase(A2CBase):
             for i in range(len(self.dataset_left)):
                 if self.offlinePPO:
                     a_loss_left, c_loss_left, entropy_left, kl_left, last_lr_left, lr_mul_left, cmu_left, \
-                    csigma_left, b_loss_left, offloss_left, offvalue_left, alpha_left, min_qf1_loss_left, \
+                    csigma_left, b_loss_left, offloss_left, alpha_left, min_qf1_loss_left, \
                     a_loss_right, c_loss_right, entropy_right, kl_right, last_lr_right, lr_mul_right, cmu_right, \
-                    csigma_right, b_loss_right, offloss_right, offvalue_right, alpha_right, min_qf1_loss_right, = \
+                    csigma_right, b_loss_right, offloss_right, alpha_right, min_qf1_loss_right, = \
                         self.train_actor_critic_multi(self.dataset_left[i], self.dataset_right[i],
                                                       self.data_actions_left, self.data_obs_left,
                                                       self.data_next_obs_left, self.data_next_actions_left,
@@ -2040,31 +2038,29 @@ class ContinuousMultiA2CBase(A2CBase):
                                                       self.data_rewards_right, self.data_dones_right
                                                       )
 
-                a_losses_left.append(a_loss_left)
-                c_losses_left.append(c_loss_left)
-                if self.offlinePPO:
-                    offlosses_left.append(offloss_left)
-                    offlosses_right.append(offloss_right)
-                    offvalues_left.append(offvalue_left)
-                    offvalues_right.append(offvalue_right)
-                    alphas_left.append(alpha_left)
-                    alphas_right.append(alpha_right)
-                    min_qf1_losses_left.append(min_qf1_loss_left)
-                    min_qf1_losses_right.append(min_qf1_loss_right)
+            a_losses_left.append(a_loss_left)
+            c_losses_left.append(c_loss_left)
+            if self.offlinePPO:
+                offlosses_left.append(offloss_left)
+                offlosses_right.append(offloss_right)
+                alphas_left.append(alpha_left)
+                alphas_right.append(alpha_right)
+                min_qf1_losses_left.append(min_qf1_loss_left)
+                min_qf1_losses_right.append(min_qf1_loss_right)
 
-                ep_kls_left.append(kl_left)
-                entropies_left.append(entropy_left)
-                if self.bounds_loss_coef is not None:
-                    b_losses_left.append(b_loss_left)
+            ep_kls_left.append(kl_left)
+            entropies_left.append(entropy_left)
+            if self.bounds_loss_coef is not None:
+                b_losses_left.append(b_loss_left)
 
-                a_losses_right.append(a_loss_right)
-                c_losses_right.append(c_loss_right)
-                ep_kls_right.append(kl_right)
-                entropies_right.append(entropy_right)
-                if self.bounds_loss_coef is not None:
-                    b_losses_right.append(b_loss_right)
-                self.dataset_left.update_mu_sigma(cmu_left, csigma_left)
-                self.dataset_right.update_mu_sigma(cmu_right, csigma_right)
+            a_losses_right.append(a_loss_right)
+            c_losses_right.append(c_loss_right)
+            ep_kls_right.append(kl_right)
+            entropies_right.append(entropy_right)
+            if self.bounds_loss_coef is not None:
+                b_losses_right.append(b_loss_right)
+            self.dataset_left.update_mu_sigma(cmu_left, csigma_left)
+            self.dataset_right.update_mu_sigma(cmu_right, csigma_right)
 
             av_kls_left = torch_ext.mean_list(ep_kls_left)
             av_kls_right = torch_ext.mean_list(ep_kls_right)
@@ -2102,9 +2098,9 @@ class ContinuousMultiA2CBase(A2CBase):
             return batch_dict_left[
                        'step_time'], play_time, update_time, total_time, \
                    a_losses_left, c_losses_left, b_losses_left, entropies_left, kls_left, last_lr_left, \
-                   lr_mul_left, offlosses_left, offvalues_left, alphas_left, min_qf1_losses_left, \
+                   lr_mul_left, offlosses_left,  alphas_left, min_qf1_losses_left, \
                    a_losses_right, c_losses_right, b_losses_right, entropies_right, kls_right, last_lr_right, \
-                   lr_mul_right, offlosses_right, offvalues_right, alphas_right, min_qf1_losses_right,
+                   lr_mul_right, offlosses_right,  alphas_right, min_qf1_losses_right,
         else:
             return batch_dict_left[
                        'step_time'], play_time, update_time, total_time, \
@@ -2244,9 +2240,9 @@ class ContinuousMultiA2CBase(A2CBase):
             if self.offlinePPO:
                 step_time, play_time, update_time, sum_time, \
                 a_losses_left, c_losses_left, b_losses_left, entropies_left, kls_left, last_lr_left, lr_mul_left, \
-                offlosses_left, offvalues_left, alphas_left, min_qf1_losses_left, \
+                offlosses_left, alphas_left, min_qf1_losses_left, \
                 a_losses_right, c_losses_right, b_losses_right, entropies_right, kls_right, last_lr_right, lr_mul_right, \
-                offlosses_right, offvalues_right, alphas_right, min_qf1_losses_right, = self.train_epoch_multi()
+                offlosses_right, alphas_right, min_qf1_losses_right, = self.train_epoch_multi()
             else:
                 step_time, play_time, update_time, sum_time, \
                 a_losses_left, c_losses_left, b_losses_left, entropies_left, kls_left, last_lr_left, lr_mul_left, \
@@ -2289,14 +2285,6 @@ class ContinuousMultiA2CBase(A2CBase):
                     self.writer.add_scalar('losses/bounds_loss_right', torch_ext.mean_list(b_losses_right).item(),
                                            frame)
                 if self.offlinePPO:
-                    if len(offvalues_left) > 0:
-                        self.writer.add_scalar('offline_losses/offvalues_left',
-                                               torch_ext.mean_list(offvalues_left).item(),
-                                               frame)
-                    if len(offvalues_right) > 0:
-                        self.writer.add_scalar('offline_losses/offvalues_right',
-                                               torch_ext.mean_list(offvalues_right).item(),
-                                               frame)
                     if len(offlosses_left) > 0:
                         self.writer.add_scalar('offline_losses/min_qf1_loss_alpha_left',
                                                torch_ext.mean_list(offlosses_left).item(),

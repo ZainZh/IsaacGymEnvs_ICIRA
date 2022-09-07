@@ -258,7 +258,6 @@ class SACAgent(BaseAlgorithm):
         critic2_loss = self.c_loss(current_Q2, target_Q)
         critic_loss = critic1_loss + critic2_loss
 
-
         self.critic_optimizer.zero_grad(set_to_none=True)
         critic_loss.backward()
         self.critic_optimizer.step()
@@ -369,7 +368,8 @@ class SACAgent(BaseAlgorithm):
         if self.is_tensor_obses:
             return self.obs_to_tensors(obs), rewards.to(self.sac_device), dones.to(self.sac_device), infos
         else:
-            return torch.from_numpy(obs).to(self.sac_device), torch.from_numpy(rewards).to(self.sac_device), torch.from_numpy(dones).to(self.sac_device), infos
+            return torch.from_numpy(obs).to(self.sac_device), torch.from_numpy(rewards).to(
+                self.sac_device), torch.from_numpy(dones).to(self.sac_device), infos
 
     def env_reset(self):
         with torch.no_grad():
@@ -420,7 +420,8 @@ class SACAgent(BaseAlgorithm):
         for _ in range(self.num_steps_per_episode):
             self.set_eval()
             if random_exploration:
-                action = torch.rand((self.num_actors, *self.env_info["action_space"].shape), device=self.sac_device) * 2 - 1
+                action = torch.rand((self.num_actors, *self.env_info["action_space"].shape),
+                                    device=self.sac_device) * 2 - 1
             else:
                 with torch.no_grad():
                     action = self.act(obs.float(), self.env_info["action_space"].shape, sample=True)
