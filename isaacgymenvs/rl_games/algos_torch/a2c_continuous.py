@@ -253,16 +253,31 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         self.offlinePPO = self.config['Offline_PPO']['offline_ppo']
         self.Double_Q = self.config['Offline_PPO']['DoubleQ']
         self.Double_Q = self.config['Offline_PPO']['DoubleQ']
-        self.DoubleQ_learningRate = self.config['Offline_PPO']['DoubleQ_lr']
+        self.SAC_critic_lr = self.config['Offline_PPO']['critic_lr']
+        self.SAC_actor_lr = self.config['Offline_PPO']['actor_lr']
         self.DoubleQ_rewardscale = self.config['Offline_PPO']['DoubleQ_rewardscale']
         if self.Double_Q:
-            net_config = {
+            sacnet_config = {
                 'obs_dim': 37,
                 'action_dim': 9,
                 'actions_num': int(self.actions_num / 2),
                 'input_shape': obs_shape,
                 'normalize_input': self.normalize_input,
             }
+            self.sacmodel_left = self.sac_network.build(sacnet_config)
+            self.sacmodel_right = self.sac_network.build(sacnet_config)
+            self.sacmodel_left.to(self.ppo_device)
+            self.sacmodel_right.to(self.ppo_device)
+            self.sac_Closs = nn.MSELoss()
+            self.sac_CriticOptimizer_left = torch.optim.Adam(self.sacmodel_left.sac_network.critic.parameters(),
+                                                       lr=self.SAC_critic_lr,
+                                                       betas=self.config.get("critic_betas", [0.9, 0.999]))
+            self.sac_CriticOptimizer_right = torch.optim.Adam(self.sacmodel_right.sac_network.critic.parameters(),
+                                                        lr=self.SAC_critic_lr,
+                                                        betas=self.config.get("critic_betas", [0.9, 0.999]))
+            self.sac_Actoroptimizer_left=torch.optim.Adam(self.sacmodel_left.sac_network.actor.parameters(),
+                                                       lr=self.SAC_critic_lr,
+                                                       betas=self.config.get("critic_betas", [0.9, 0.999]))
         if self.has_central_value:
             cv_config = {
                 'state_shape': self.state_shape,
@@ -330,9 +345,10 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         return current_action, current_obs
 
     def load_SACnetworks(self, params):
-        sac_params=params
+        sac_params = params
         sac_params['algo']['name'] = 'sac'
         sac_params['network']['name'] = 'soft_actor_critic'
+        sac_params['network']['separate'] = 'True'
         sac_params['model']['name'] = 'soft_actor_critic'
         builder = model_builder.ModelBuilder()
         self.sac_network = builder.load(sac_params)
@@ -441,19 +457,19 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             if self.offlinePPO:
                 # add CQL and DoubleQ function
                 random_actions_tensor = self.create_random_action(data_actions_left, actions_batch)
-                q1_pred, q2_pred = self.DoubleQ_network_left(obs_batch_offline, data_actions_left)
-                q1_random, q2_random = self.DoubleQ_network_left(obs_batch_offline, random_actions_tensor)
-                q1_current, q2_current = self.DoubleQ_network_left(obs_batch_offline, mu_current)
-                q1_next, q2_next = self.DoubleQ_network_left(obs_batch_offline, mu_next)
-                q1_target, q2_target = self.Target_DoubleQ_network_left(next_obs_batch_offline, mu_next)
+                q1_pred, q2_pred = self.sacmodel_left.critic(obs_batch_offline, data_actions_left)
+                # q1_random, q2_random = self.sacmodel_left.critic(obs_batch_offline, random_actions_tensor)
+                q1_current, q2_current = self.sacmodel_left.critic(obs_batch_offline, mu_current)
+                # q1_next, q2_next = self.sacmodel_left.critic(obs_batch_offline, mu_next)
+                q1_target, q2_target = self.sacmodel_left.critic_target(next_obs_batch_offline, mu_next)
                 target_q_values = torch.min(q1_target, q2_target)
                 q_target = self.DoubleQ_rewardscale * data_rewards_left + (
                         1 - data_dones_left) * self.DoubleQ_rewardscale * target_q_values
                 q_target.detach()
-                q1_loss = self.qf_criterion(q1_pred, q_target)
-                q2_loss = self.qf_criterion(q2_pred, q_target)
-                cat_q1 = torch.cat([q1_random, q1_pred, q1_next, q1_current], 1)
-                cat_q2 = torch.cat([q2_random, q2_pred, q2_next, q2_current], 1)
+                q1_loss = self.sac_Closs(q1_pred, q_target)
+                q2_loss = self.sac_Closs(q2_pred, q_target)
+                cat_q1 = torch.cat([q1_pred, q1_current], 1)
+                cat_q2 = torch.cat([q2_pred, q2_current], 1)
                 # logsumexp= Log(Sum(Exp()))
                 min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
                 min_qf2_loss = torch.logsumexp(cat_q2 / 1.0, dim=1, ).mean() * self.min_q_weight
@@ -502,15 +518,14 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
         if self.with_lagrange:
             self.alpha_prime_optimizer_left.zero_grad()
-            alpha_prime_loss.backward(retain_graph=True)
+            alpha_prime_loss.backward()
             self.alpha_prime_optimizer_left.step()
         if self.Double_Q:
-            self.DoubleQ_optimizer_left.zero_grad()
+            self.sac_optimizer_left.zero_grad(set_to_none=True)
             q_loss.backward(retain_graph=True)
-            self.DoubleQ_optimizer_left.step()
+            self.sac_optimizer_left.step()
 
         # TODO: Refactor this ugliest code of they year
-        self.optimizer.zero_grad()
         self.scaler_left.scale(loss).backward(retain_graph=False)
         self.trancate_gradients_and_step_left()
         with torch.no_grad():
@@ -598,19 +613,19 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             if self.offlinePPO:
                 # add CQL and DoubleQ function
                 random_actions_tensor = self.create_random_action(data_actions_right, actions_batch)
-                q1_pred, q2_pred = self.DoubleQ_network_right(obs_batch_offline, data_actions_right)
-                q1_random, q2_random = self.DoubleQ_network_right(obs_batch_offline, random_actions_tensor)
-                q1_next, q2_next = self.DoubleQ_network_right(obs_batch_offline, mu_next)
-                q1_current, q2_current = self.DoubleQ_network_right(obs_batch_offline, mu_current)
-                q1_target, q2_target = self.Target_DoubleQ_network_right(next_obs_batch_offline, mu_next)
+                q1_pred, q2_pred = self.sacmodel_right.critic(obs_batch_offline, data_actions_right)
+                # q1_random, q2_random = self.sacmodel_right.critic(obs_batch_offline, random_actions_tensor)
+                # q1_next, q2_next = self.sacmodel_right.critic(obs_batch_offline, mu_next)
+                q1_current, q2_current = self.sacmodel_right.critic(obs_batch_offline, mu_current)
+                q1_target, q2_target = self.sacmodel_right.critic_target(next_obs_batch_offline, mu_next)
                 target_q_values = torch.min(q1_target, q2_target)
                 q_target = self.DoubleQ_rewardscale * data_rewards_right + (
                         1 - data_dones_right) * self.DoubleQ_rewardscale * target_q_values
                 q_target.detach()
-                q1_loss = self.qf_criterion(q1_pred, q_target)
-                q2_loss = self.qf_criterion(q2_pred, q_target)
-                cat_q1 = torch.cat([q1_random, q1_pred, q1_next, q1_current], 1)
-                cat_q2 = torch.cat([q2_random, q2_pred, q2_next, q2_current], 1)
+                q1_loss = self.sac_Closs(q1_pred, q_target)
+                q2_loss = self.sac_Closs(q2_pred, q_target)
+                cat_q1 = torch.cat([q1_pred, q1_current], 1)
+                cat_q2 = torch.cat([q2_pred, q2_current], 1)
                 # logsumexp= Log(Sum(Exp()))
                 min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
                 min_qf2_loss = torch.logsumexp(cat_q2 / 1.0, dim=1, ).mean() * self.min_q_weight
@@ -658,16 +673,16 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                     param.grad = None
 
         if self.with_lagrange:
-            self.alpha_prime_optimizer_right.zero_grad()
+            self.alpha_prime_optimizer_right.zero_grad(set_to_none=True)
             alpha_prime_loss.backward(retain_graph=True)
             self.alpha_prime_optimizer_right.step()
         if self.Double_Q:
-            self.DoubleQ_optimizer_right.zero_grad()
+            self.sac_optimizer_right.zero_grad(set_to_none=True)
             q_loss.backward(retain_graph=True)
-            self.DoubleQ_optimizer_right.step()
+            self.sac_optimizer_right.step()
 
         # TODO: Refactor this ugliest code of they year
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad(set_to_none=True)
         self.scaler_right.scale(loss).backward(retain_graph=False)
         self.trancate_gradients_and_step_right()
         with torch.no_grad():
