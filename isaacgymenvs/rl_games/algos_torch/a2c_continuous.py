@@ -5,6 +5,7 @@ from rl_games.algos_torch import central_value
 from rl_games.common import common_losses
 from rl_games.common import datasets
 from rl_games.algos_torch import network_builder
+from rl_games.algos_torch import model_builder
 from itertools import chain
 from torch import optim
 import torch
@@ -215,7 +216,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
     def __init__(self, base_name, params):
         a2c_common.ContinuousMultiA2CBase.__init__(self, base_name, params)
         obs_shape = self.obs_shape
-
+        self.load_SACnetworks(params)
         build_config = {
             'actions_num': int(self.actions_num / 2),
             'input_shape': obs_shape,
@@ -255,29 +256,13 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         self.DoubleQ_learningRate = self.config['Offline_PPO']['DoubleQ_lr']
         self.DoubleQ_rewardscale = self.config['Offline_PPO']['DoubleQ_rewardscale']
         if self.Double_Q:
-            mlp_args = {
-                'input_size': 37 + 9,  # obs_shape+ action_shape
-                'units': [256, 128, 64],
-                'activation': 'elu',
-                'norm_func_name': None,
-                'dense_func': torch.nn.Linear,
-                'd2rl': False,
-                'norm_only_first_layer': False
+            net_config = {
+                'obs_dim': 37,
+                'action_dim': 9,
+                'actions_num': int(self.actions_num / 2),
+                'input_shape': obs_shape,
+                'normalize_input': self.normalize_input,
             }
-            self.DoubleQ_network_left = network_builder.DoubleQCritic(1, **mlp_args)
-            self.Target_DoubleQ_network_left = network_builder.DoubleQCritic(1, **mlp_args)
-            self.DoubleQ_network_right = network_builder.DoubleQCritic(1, **mlp_args)
-            self.Target_DoubleQ_network_right = network_builder.DoubleQCritic(1, **mlp_args)
-            self.DoubleQ_network_left.to(self.ppo_device)
-            self.Target_DoubleQ_network_left.to(self.ppo_device)
-            self.DoubleQ_network_right.to(self.ppo_device)
-            self.Target_DoubleQ_network_right.to(self.ppo_device)
-            self.DoubleQ_optimizer_left = optim.Adam(self.DoubleQ_network_left.parameters(),
-                                                     float(self.DoubleQ_learningRate))
-            self.DoubleQ_optimizer_right = optim.Adam(self.DoubleQ_network_right.parameters(),
-                                                      float(self.DoubleQ_learningRate))
-
-            self.qf_criterion = nn.MSELoss()  # for calculating q_loss
         if self.has_central_value:
             cv_config = {
                 'state_shape': self.state_shape,
@@ -343,6 +328,14 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         current_obs = offline_obs[min]
 
         return current_action, current_obs
+
+    def load_SACnetworks(self, params):
+        sac_params=params
+        sac_params['algo']['name'] = 'sac'
+        sac_params['network']['name'] = 'soft_actor_critic'
+        sac_params['model']['name'] = 'soft_actor_critic'
+        builder = model_builder.ModelBuilder()
+        self.sac_network = builder.load(sac_params)
 
     def create_random_action(self, values_offline, actions_batch):
         random_actions_tensor = torch.FloatTensor(values_offline.size(0) *
