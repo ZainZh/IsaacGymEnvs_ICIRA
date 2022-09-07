@@ -442,7 +442,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             batch_dict['seq_length'] = self.seq_len
         with torch.cuda.amp.autocast(enabled=self.mixed_precision):
             res_dict = self.model_left(batch_dict)
-            res_dict_offline = self.model_left(batch_dict_offline)
+            res_dict_offline = self.sacmodel_left.actor(data_obs_left)
             next_res_dict_offline = self.model_left(next_batch_dict_offline)
             action_log_probs = res_dict['prev_neglogp']
             Qvalues = res_dict['values']
