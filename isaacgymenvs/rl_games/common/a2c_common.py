@@ -24,7 +24,7 @@ from torch import nn
 from time import sleep
 
 from rl_games.common import common_losses
-from memory_profiler import profile
+
 
 def swap_and_flatten01(arr):
     """
@@ -1965,7 +1965,6 @@ class ContinuousMultiA2CBase(A2CBase):
         batch_dict_right['step_time'] = step_time
 
         return batch_dict_left, batch_dict_right
-
 
     def train_epoch_multi(self):
         super().train_epoch_multi()

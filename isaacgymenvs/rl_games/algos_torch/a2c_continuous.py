@@ -10,7 +10,6 @@ from torch import optim
 import torch
 from torch import nn
 import numpy as np
-from memory_profiler import profile
 import time
 import gym
 from torch.nn import functional as F
@@ -318,12 +317,14 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         self.algo_observer_left.after_init(self)
         self.algo_observer_right.after_init(self)
 
-        self.log_alpha_prime_left = torch.zeros(1, requires_grad=True, device=self.ppo_device)
-        self.log_alpha_prime_right = torch.zeros(1, requires_grad=True, device=self.ppo_device)
-        self.target_action_gap_left = self.config.get('lagrange_thresh_left')
-        self.target_action_gap_right = self.config.get('lagrange_thresh_right')
         if self.with_lagrange:
-            self.alpha_prime_optimizer_left = torch.optim.Adam([self.log_alpha_prime_left],                                                 )
+            self.target_action_gap_left = self.config.get('lagrange_thresh_left')
+            self.target_action_gap_right = self.config.get('lagrange_thresh_right')
+            self.log_alpha_prime_left = torch.zeros(1, requires_grad=True, device=self.ppo_device)
+            self.log_alpha_prime_right = torch.zeros(1, requires_grad=True, device=self.ppo_device)
+            self.alpha_prime_optimizer_left = torch.optim.Adam([self.log_alpha_prime_left],
+                                                               lr=self.alpha_lr
+                                                               )
             self.alpha_prime_optimizer_right = torch.optim.Adam([self.log_alpha_prime_right],
                                                                 lr=self.alpha_lr
                                                                 )
@@ -386,7 +387,6 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         preds_q1 = preds_q1.view(obs.shape[0], num_repeat, 1)
         return preds_q1, preds_q2
 
-
     def calc_gradients_left(self, input_dict, data_actions_left, data_obs_left, data_next_obs_left,
                             data_next_actions_left, data_rewards_left, data_dones_left):
         value_preds_batch = input_dict['old_values']
@@ -446,43 +446,37 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             sigma = res_dict['sigmas']
             ######################################################
             if self.offlinePPO:
-                if self.Double_Q:
                 # add CQL and DoubleQ function
-                    random_actions_tensor = self.create_random_action(data_actions_left, actions_batch)
-                    q1_pred, q2_pred = self.DoubleQ_network_left(obs_batch_offline, data_actions_left)
-                    q1_random, q2_random = self.DoubleQ_network_left(obs_batch_offline, random_actions_tensor)
-                    q1_current, q2_current = self.DoubleQ_network_left(obs_batch_offline, mu_current)
-                    q1_next, q2_next = self.DoubleQ_network_left(obs_batch_offline, mu_next)
-                    q1_target, q2_target = self.Target_DoubleQ_network_left(next_obs_batch_offline, mu_next)
-                    target_q_values = torch.min(q1_target, q2_target)
-                    q_target = self.DoubleQ_rewardscale * data_rewards_left + (
-                            1 - data_dones_left) * self.DoubleQ_rewardscale * target_q_values
-                    q_target.detach()
-                    q1_loss = self.qf_criterion(q1_pred, q_target)
-                    q2_loss = self.qf_criterion(q2_pred, q_target)
-                    cat_q1 = torch.cat([q1_random, q1_pred, q1_next, q1_current], 1)
-                    cat_q2 = torch.cat([q2_random, q2_pred, q2_next, q2_current], 1)
-                    # logsumexp= Log(Sum(Exp()))
-                    min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
-                    min_qf2_loss = torch.logsumexp(cat_q2 / 1.0, dim=1, ).mean() * self.min_q_weight
-                    min_qf1_loss = min_qf1_loss - q1_pred.mean()
-                    min_qf2_loss = min_qf2_loss - q2_pred.mean()
+                random_actions_tensor = self.create_random_action(data_actions_left, actions_batch)
+                q1_pred, q2_pred = self.DoubleQ_network_left(obs_batch_offline, data_actions_left)
+                q1_random, q2_random = self.DoubleQ_network_left(obs_batch_offline, random_actions_tensor)
+                q1_current, q2_current = self.DoubleQ_network_left(obs_batch_offline, mu_current)
+                q1_next, q2_next = self.DoubleQ_network_left(obs_batch_offline, mu_next)
+                q1_target, q2_target = self.Target_DoubleQ_network_left(next_obs_batch_offline, mu_next)
+                target_q_values = torch.min(q1_target, q2_target)
+                q_target = self.DoubleQ_rewardscale * data_rewards_left + (
+                        1 - data_dones_left) * self.DoubleQ_rewardscale * target_q_values
+                q_target.detach()
+                q1_loss = self.qf_criterion(q1_pred, q_target)
+                q2_loss = self.qf_criterion(q2_pred, q_target)
+                cat_q1 = torch.cat([q1_random, q1_pred, q1_next, q1_current], 1)
+                cat_q2 = torch.cat([q2_random, q2_pred, q2_next, q2_current], 1)
+                # logsumexp= Log(Sum(Exp()))
+                min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
+                min_qf2_loss = torch.logsumexp(cat_q2 / 1.0, dim=1, ).mean() * self.min_q_weight
+                min_qf1_loss = min_qf1_loss - q1_pred.mean()
+                min_qf2_loss = min_qf2_loss - q2_pred.mean()
 
                 if self.with_lagrange:
                     alpha_prime = torch.clamp(self.log_alpha_prime_left.exp(), min=0.0, max=10.0)
-                    if self.Double_Q:
-                        min_qf1_loss_alpha = alpha_prime * (min_qf1_loss - self.target_action_gap_left)
-                        min_qf2_loss_alpha = alpha_prime * (min_qf2_loss - self.target_action_gap_left)
-                        q1_loss = q1_loss + min_qf1_loss_alpha
-                        q2_loss = q2_loss + min_qf2_loss_alpha
-                        q_loss = q1_loss + q2_loss
-                    else:
-                        min_qf1_loss_alpha = alpha_prime * ( - self.target_action_gap_left)
-                        min_qf2_loss_alpha = alpha_prime * ( - self.target_action_gap_left)
+                    min_qf1_loss_alpha = alpha_prime * (min_qf1_loss - self.target_action_gap_left)
+                    min_qf2_loss_alpha = alpha_prime * (min_qf2_loss - self.target_action_gap_left)
                     alpha_prime_loss = (-min_qf1_loss_alpha - min_qf2_loss_alpha) * 0.5
-                alpha_prime = torch.clamp(self.log_alpha_prime_left.exp(), min=0.0, max=10.0)
 
                 """Subtract the log likelihood of data"""
+                q1_loss = q1_loss + min_qf1_loss_alpha.detach()
+                q2_loss = q2_loss + min_qf2_loss_alpha.detach()
+                q_loss = q1_loss + q2_loss
             a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo,
                                           curr_e_clip)
             if self.has_value_loss:
@@ -490,7 +484,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 #                                    self.clip_value)
                 c_loss = common_losses.critic_loss(value_preds_batch, Qvalues, curr_e_clip, return_batch,
                                                    self.clip_value)
-
+                if self.offlinePPO:
+                    c_loss = c_loss + (min_qf1_loss_alpha.detach() + min_qf2_loss_alpha.detach()) * 0.5
             else:
                 c_loss = torch.zeros(1, device=self.ppo_device)
             if self.bound_loss_type == 'regularisation':
@@ -522,6 +517,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             self.DoubleQ_optimizer_left.step()
 
         # TODO: Refactor this ugliest code of they year
+        self.optimizer.zero_grad()
         self.scaler_left.scale(loss).backward(retain_graph=False)
         self.trancate_gradients_and_step_left()
         with torch.no_grad():
@@ -539,17 +535,10 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                                         'masks': rnn_masks
                                     }, curr_e_clip, 0)
         if self.offlinePPO:
-            if self.Double_Q:
-                self.train_result_left = (a_loss, c_loss, entropy, \
-                                          kl_dist, self.last_lr_left, lr_mul, \
-                                          mu.detach(), sigma.detach(), b_loss, min_qf1_loss_alpha, Qvalues_offline.mean(),
-                                          alpha_prime.mean(), min_qf1_loss)
-            else:
-                self.train_result_left = (a_loss, c_loss, entropy, \
-                                          kl_dist, self.last_lr_left, lr_mul, \
-                                          mu.detach(), sigma.detach(), b_loss, b_loss,
-                                          Qvalues_offline.mean(),
-                                          alpha_prime.mean(), b_loss)
+            self.train_result_left = (a_loss, c_loss, entropy, \
+                                      kl_dist, self.last_lr_left, lr_mul, \
+                                      mu.detach(), sigma.detach(), b_loss, min_qf1_loss_alpha, Qvalues_offline.mean(),
+                                      alpha_prime.mean(), min_qf1_loss)
         else:
             self.train_result_left = (a_loss, c_loss, entropy, \
                                       kl_dist, self.last_lr_left, lr_mul, \
@@ -615,43 +604,36 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             ######################################################
             if self.offlinePPO:
                 # add CQL and DoubleQ function
-                if self.Double_Q:
-                    random_actions_tensor = self.create_random_action(data_actions_right, actions_batch)
-                    q1_pred, q2_pred = self.DoubleQ_network_right(obs_batch_offline, data_actions_right)
-                    q1_random, q2_random = self.DoubleQ_network_right(obs_batch_offline, random_actions_tensor)
-                    q1_next, q2_next = self.DoubleQ_network_right(obs_batch_offline, mu_next)
-                    q1_current, q2_current = self.DoubleQ_network_right(obs_batch_offline, mu_current)
-                    q1_target, q2_target = self.Target_DoubleQ_network_right(next_obs_batch_offline, mu_next)
-                    target_q_values = torch.min(q1_target, q2_target)
-                    q_target = self.DoubleQ_rewardscale * data_rewards_right + (
-                            1 - data_dones_right) * self.DoubleQ_rewardscale * target_q_values
-                    q_target.detach()
-                    q1_loss = self.qf_criterion(q1_pred, q_target)
-                    q2_loss = self.qf_criterion(q2_pred, q_target)
-                    cat_q1 = torch.cat([q1_random, q1_pred, q1_next, q1_current], 1)
-                    cat_q2 = torch.cat([q2_random, q2_pred, q2_next, q2_current], 1)
-                    # logsumexp= Log(Sum(Exp()))
-                    min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
-                    min_qf2_loss = torch.logsumexp(cat_q2 / 1.0, dim=1, ).mean() * self.min_q_weight
-                    min_qf1_loss = min_qf1_loss - q1_pred.mean()
-                    min_qf2_loss = min_qf2_loss - q2_pred.mean()
+                random_actions_tensor = self.create_random_action(data_actions_right, actions_batch)
+                q1_pred, q2_pred = self.DoubleQ_network_right(obs_batch_offline, data_actions_right)
+                q1_random, q2_random = self.DoubleQ_network_right(obs_batch_offline, random_actions_tensor)
+                q1_next, q2_next = self.DoubleQ_network_right(obs_batch_offline, mu_next)
+                q1_current, q2_current = self.DoubleQ_network_right(obs_batch_offline, mu_current)
+                q1_target, q2_target = self.Target_DoubleQ_network_right(next_obs_batch_offline, mu_next)
+                target_q_values = torch.min(q1_target, q2_target)
+                q_target = self.DoubleQ_rewardscale * data_rewards_right + (
+                        1 - data_dones_right) * self.DoubleQ_rewardscale * target_q_values
+                q_target.detach()
+                q1_loss = self.qf_criterion(q1_pred, q_target)
+                q2_loss = self.qf_criterion(q2_pred, q_target)
+                cat_q1 = torch.cat([q1_random, q1_pred, q1_next, q1_current], 1)
+                cat_q2 = torch.cat([q2_random, q2_pred, q2_next, q2_current], 1)
+                # logsumexp= Log(Sum(Exp()))
+                min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
+                min_qf2_loss = torch.logsumexp(cat_q2 / 1.0, dim=1, ).mean() * self.min_q_weight
+                min_qf1_loss = min_qf1_loss - q1_pred.mean()
+                min_qf2_loss = min_qf2_loss - q2_pred.mean()
 
                 if self.with_lagrange:
                     alpha_prime = torch.clamp(self.log_alpha_prime_right.exp(), min=0.0, max=10.0)
-                    if self.Double_Q:
-                        min_qf1_loss_alpha = alpha_prime * (min_qf1_loss - self.target_action_gap_right)
-                        min_qf2_loss_alpha = alpha_prime * (min_qf2_loss - self.target_action_gap_right)
-                        q1_loss = q1_loss + min_qf1_loss_alpha
-                        q2_loss = q2_loss + min_qf2_loss_alpha
-                        q_loss = q1_loss + q2_loss
-                    else:
-                        min_qf1_loss_alpha = alpha_prime * ( - self.target_action_gap_right)
-                        min_qf2_loss_alpha = alpha_prime * ( - self.target_action_gap_right)
+                    min_qf1_loss_alpha = alpha_prime * (min_qf1_loss - self.target_action_gap_right)
+                    min_qf2_loss_alpha = alpha_prime * (min_qf2_loss - self.target_action_gap_right)
                     alpha_prime_loss = (-min_qf1_loss_alpha - min_qf2_loss_alpha) * 0.5
 
-                alpha_prime = torch.clamp(self.log_alpha_prime_left.exp(), min=0.0, max=10.0)
                 """Subtract the log likelihood of data"""
-
+                q1_loss = q1_loss + min_qf1_loss_alpha.detach()
+                q2_loss = q2_loss + min_qf2_loss_alpha.detach()
+                q_loss = q1_loss + q2_loss
             a_loss = self.actor_loss_func(old_action_log_probs_batch, action_log_probs, advantage, self.ppo,
                                           curr_e_clip)
             if self.has_value_loss:
@@ -659,7 +641,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 #                                    self.clip_value)
                 c_loss = common_losses.critic_loss(value_preds_batch, Qvalues, curr_e_clip, return_batch,
                                                    self.clip_value)
-
+                if self.offlinePPO:
+                    c_loss = c_loss + (min_qf1_loss_alpha.detach() + min_qf2_loss_alpha.detach()) * 0.5
             else:
                 c_loss = torch.zeros(1, device=self.ppo_device)
             if self.bound_loss_type == 'regularisation':
@@ -691,6 +674,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             self.DoubleQ_optimizer_right.step()
 
         # TODO: Refactor this ugliest code of they year
+        self.optimizer.zero_grad()
         self.scaler_right.scale(loss).backward(retain_graph=False)
         self.trancate_gradients_and_step_right()
         with torch.no_grad():
@@ -708,17 +692,10 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                                         'masks': rnn_masks
                                     }, curr_e_clip, 0)
         if self.offlinePPO:
-            if self.Double_Q:
-                self.train_result_right = (a_loss, c_loss, entropy, \
-                                           kl_dist, self.last_lr_right, lr_mul, \
-                                           mu.detach(), sigma.detach(), b_loss, min_qf1_loss_alpha, Qvalues_offline.mean(),
-                                           alpha_prime.mean(), min_qf1_loss)
-            else:
-                self.train_result_right = (a_loss, c_loss, entropy, \
-                                           kl_dist, self.last_lr_right, lr_mul, \
-                                           mu.detach(), sigma.detach(), b_loss, b_loss,
-                                           Qvalues_offline.mean(),
-                                           alpha_prime.mean(), b_loss)
+            self.train_result_right = (a_loss, c_loss, entropy, \
+                                       kl_dist, self.last_lr_right, lr_mul, \
+                                       mu.detach(), sigma.detach(), b_loss, min_qf1_loss_alpha, Qvalues_offline.mean(),
+                                       alpha_prime.mean(), min_qf1_loss)
         else:
             self.train_result_right = (a_loss, c_loss, entropy, \
                                        kl_dist, self.last_lr_right, lr_mul, \
