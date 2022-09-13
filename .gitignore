@@ -39,3 +39,5 @@ isaacgymenvs/graphics_images/
 isaacgymenvs/replay_buffer/
 
 exp_log/
+
+isaacgymenvs/CURIMultiPPO_0813_offline.pth
