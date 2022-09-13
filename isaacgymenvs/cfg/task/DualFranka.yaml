@@ -39,7 +39,7 @@ env:
   UsingIK: False
 
   LocationNoise: false  # make the location of cup, spoon, shelf and box random, false when test
-  ForTest: True # for obtaining offline_data in test.py.  For test will create a low gravity environment and expand franka's stiffness
+  ForTest: False # for obtaining offline_data in test.py.  For test will create a low gravity environment and expand franka's stiffness
   asset:
     assetRoot: "../../assets"
     franka_asset_file: "urdf/franka_description/robots/franka_panda.urdf"

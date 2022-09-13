@@ -183,6 +183,20 @@ class PpoMultiPlayerContinuous(BaseMultiPlayer):
 
     def restore(self, fn):
         checkpoint = torch_ext.load_checkpoint(fn)
+        if 'a2c_network.critic_mlp.4.weight' in checkpoint['model_left']['model']:
+            del checkpoint['model_left']['model']['a2c_network.critic_mlp.0.weight']
+            del checkpoint['model_left']['model']['a2c_network.critic_mlp.2.weight']
+            del checkpoint['model_left']['model']['a2c_network.critic_mlp.4.weight']
+            del checkpoint['model_left']['model']['a2c_network.critic_mlp.0.bias']
+            del checkpoint['model_left']['model']['a2c_network.critic_mlp.2.bias']
+            del checkpoint['model_left']['model']['a2c_network.critic_mlp.4.bias']
+
+            del checkpoint['model_right']['model']['a2c_network.critic_mlp.0.weight']
+            del checkpoint['model_right']['model']['a2c_network.critic_mlp.2.weight']
+            del checkpoint['model_right']['model']['a2c_network.critic_mlp.4.weight']
+            del checkpoint['model_right']['model']['a2c_network.critic_mlp.0.bias']
+            del checkpoint['model_right']['model']['a2c_network.critic_mlp.2.bias']
+            del checkpoint['model_right']['model']['a2c_network.critic_mlp.4.bias']
         self.model_left.load_state_dict(checkpoint['model_left']['model'])
         self.model_right.load_state_dict(checkpoint['model_right']['model'])
         if self.normalize_input and 'running_mean_std' in checkpoint['model_left']:

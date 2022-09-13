@@ -437,8 +437,9 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             res_dict = self.model_left(batch_dict)
             # res_dict_offline = self.sacmodel_left.actor(data_obs_left)
             # current_actions = res_dict_offline.rsample()
-            next_res_dict_offline = self.sacmodel_left.actor(data_next_obs_left)
-            next_actions = next_res_dict_offline.rsample()
+            if self.Double_Q:
+                next_res_dict_offline = self.sacmodel_left.actor(data_next_obs_left)
+                next_actions = next_res_dict_offline.rsample()
             action_log_probs = res_dict['prev_neglogp']
             Qvalues = res_dict['values']
 
@@ -582,8 +583,9 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             res_dict = self.model_right(batch_dict)
             # res_dict_offline = self.sacmodel_right.actor(data_obs_right)
             # current_actions = res_dict_offline.rsample()
-            next_res_dict_offline = self.sacmodel_right.actor(data_next_obs_right)
-            next_actions = next_res_dict_offline.rsample()
+            if self.Double_Q:
+                next_res_dict_offline = self.sacmodel_right.actor(data_next_obs_right)
+                next_actions = next_res_dict_offline.rsample()
             action_log_probs = res_dict['prev_neglogp']
             Qvalues = res_dict['values']
 
