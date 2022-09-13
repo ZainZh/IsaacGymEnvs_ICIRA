@@ -2040,13 +2040,6 @@ class ContinuousMultiA2CBase(A2CBase):
 
             a_losses_left.append(a_loss_left)
             c_losses_left.append(c_loss_left)
-            if self.offlinePPO:
-                offlosses_left.append(offloss_left)
-                offlosses_right.append(offloss_right)
-                alphas_left.append(alpha_left)
-                alphas_right.append(alpha_right)
-                min_qf1_losses_left.append(min_qf1_loss_left)
-                min_qf1_losses_right.append(min_qf1_loss_right)
 
             ep_kls_left.append(kl_left)
             entropies_left.append(entropy_left)
@@ -2057,6 +2050,13 @@ class ContinuousMultiA2CBase(A2CBase):
             c_losses_right.append(c_loss_right)
             ep_kls_right.append(kl_right)
             entropies_right.append(entropy_right)
+            if self.offlinePPO:
+                offlosses_left.append(offloss_left)
+                offlosses_right.append(offloss_right)
+                alphas_left.append(alpha_left)
+                alphas_right.append(alpha_right)
+                min_qf1_losses_left.append(min_qf1_loss_left)
+                min_qf1_losses_right.append(min_qf1_loss_right)
             if self.bounds_loss_coef is not None:
                 b_losses_right.append(b_loss_right)
             self.dataset_left.update_mu_sigma(cmu_left, csigma_left)
@@ -2284,29 +2284,29 @@ class ContinuousMultiA2CBase(A2CBase):
                 if len(b_losses_right) > 0:
                     self.writer.add_scalar('losses/bounds_loss_right', torch_ext.mean_list(b_losses_right).item(),
                                            frame)
-                if self.offlinePPO:
-                    if len(offlosses_left) > 0:
-                        self.writer.add_scalar('offline_losses/min_qf1_loss_alpha_left',
-                                               torch_ext.mean_list(offlosses_left).item(),
-                                               frame)
-                    if len(offlosses_right) > 0:
-                        self.writer.add_scalar('offline_losses/min_qf1_loss_alpha_right',
-                                               torch_ext.mean_list(offlosses_right).item(),
-                                               frame)
-                    if len(alphas_left) > 0:
-                        self.writer.add_scalar('offline_losses/alphas_left', torch_ext.mean_list(alphas_left).item(),
-                                               frame)
-                    if len(alphas_right) > 0:
-                        self.writer.add_scalar('offline_losses/alphas_right', torch_ext.mean_list(alphas_right).item(),
-                                               frame)
-                    if len(min_qf1_losses_left) > 0:
-                        self.writer.add_scalar('offline_losses/min_qf1_losses_left',
-                                               torch_ext.mean_list(min_qf1_losses_left).item(),
-                                               frame)
-                    if len(min_qf1_losses_right) > 0:
-                        self.writer.add_scalar('offline_losses/min_qf1_losses_right',
-                                               torch_ext.mean_list(min_qf1_losses_right).item(),
-                                               frame)
+                    if self.offlinePPO:
+                        if len(offlosses_left) > 0:
+                            self.writer.add_scalar('offline_losses/min_qf1_loss_alpha_left',
+                                                   torch_ext.mean_list(offlosses_left).item(),
+                                                   frame)
+                        if len(offlosses_right) > 0:
+                            self.writer.add_scalar('offline_losses/min_qf1_loss_alpha_right',
+                                                   torch_ext.mean_list(offlosses_right).item(),
+                                                   frame)
+                        if len(alphas_left) > 0:
+                            self.writer.add_scalar('offline_losses/alphas_left', torch_ext.mean_list(alphas_left).item(),
+                                                   frame)
+                        if len(alphas_right) > 0:
+                            self.writer.add_scalar('offline_losses/alphas_right', torch_ext.mean_list(alphas_right).item(),
+                                                   frame)
+                        if len(min_qf1_losses_left) > 0:
+                            self.writer.add_scalar('offline_losses/min_qf1_losses_left',
+                                                   torch_ext.mean_list(min_qf1_losses_left).item(),
+                                                   frame)
+                        if len(min_qf1_losses_right) > 0:
+                            self.writer.add_scalar('offline_losses/min_qf1_losses_right',
+                                                   torch_ext.mean_list(min_qf1_losses_right).item(),
+                                                   frame)
 
                 if self.has_soft_aug:
                     self.writer.add_scalar('losses/aug_loss', np.mean(aug_losses), frame)

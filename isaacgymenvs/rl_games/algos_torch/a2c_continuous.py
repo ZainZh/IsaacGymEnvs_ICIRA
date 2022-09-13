@@ -427,16 +427,6 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             'obs': obs_batch,
         }
 
-        batch_dict_offline = {
-            'is_train': True,
-            'prev_actions': data_actions_left,
-            'obs': obs_batch_offline,
-        }
-        next_batch_dict_offline = {
-            'is_train': True,
-            'prev_actions': data_next_actions_left,
-            'obs': next_obs_batch_offline,
-        }
 
         rnn_masks = None
         if self.is_rnn_left:
@@ -445,8 +435,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             batch_dict['seq_length'] = self.seq_len
         with torch.cuda.amp.autocast(enabled=self.mixed_precision):
             res_dict = self.model_left(batch_dict)
-            res_dict_offline = self.sacmodel_left.actor(data_obs_left)
-            current_actions = res_dict_offline.rsample()
+            # res_dict_offline = self.sacmodel_left.actor(data_obs_left)
+            # current_actions = res_dict_offline.rsample()
             next_res_dict_offline = self.sacmodel_left.actor(data_next_obs_left)
             next_actions = next_res_dict_offline.rsample()
             action_log_probs = res_dict['prev_neglogp']
@@ -459,11 +449,11 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             ######################################################
             if self.offlinePPO:
                 # add CQL and DoubleQ function
-                random_actions_tensor = self.create_random_action(data_actions_left, actions_batch)
+                # random_actions_tensor = self.create_random_action(data_actions_left, actions_batch)
                 q1_pred, q2_pred = self.sacmodel_left.critic(obs_batch_offline, data_actions_left)
-                q1_random, q2_random = self.sacmodel_left.critic(obs_batch_offline, random_actions_tensor)
-                q1_current, q2_current = self.sacmodel_left.critic(obs_batch_offline, current_actions)
-                q1_next, q2_next = self.sacmodel_left.critic(obs_batch_offline, next_actions)
+                # q1_random, q2_random = self.sacmodel_left.critic(obs_batch_offline, random_actions_tensor)
+                # q1_current, q2_current = self.sacmodel_left.critic(obs_batch_offline, current_actions)
+                # q1_next, q2_next = self.sacmodel_left.critic(obs_batch_offline, next_actions)
                 q1_target, q2_target = self.sacmodel_left.critic_target(next_obs_batch_offline, next_actions)
                 target_q_values = torch.min(q1_target, q2_target)
                 q_target = self.DoubleQ_rewardscale * data_rewards_left + (
@@ -471,13 +461,13 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 q_target.detach()
                 q1_loss = self.sac_Closs(q1_pred, q_target)
                 q2_loss = self.sac_Closs(q2_pred, q_target)
-                cat_q1 = torch.cat([q1_random, q1_pred, q1_next, q1_current], 1)
-                cat_q2 = torch.cat([q2_random, q2_pred, q2_next, q2_current], 1)
+                cat_q1 = torch.cat([q1_pred], 1)
+                cat_q2 = torch.cat([q2_pred], 1)
                 # logsumexp= Log(Sum(Exp()))
                 min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
                 min_qf2_loss = torch.logsumexp(cat_q2 / 1.0, dim=1, ).mean() * self.min_q_weight
-                min_qf1_loss = min_qf1_loss - q1_pred.mean()
-                min_qf2_loss = min_qf2_loss - q2_pred.mean()
+                # min_qf1_loss = min_qf1_loss - q1_pred.mean()
+                # min_qf2_loss = min_qf2_loss - q2_pred.mean()
 
                 if self.with_lagrange:
                     alpha_prime = torch.clamp(self.log_alpha_prime_left.exp(), min=0.0, max=10.0)
@@ -590,8 +580,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             batch_dict['seq_length'] = self.seq_len
         with torch.cuda.amp.autocast(enabled=self.mixed_precision):
             res_dict = self.model_right(batch_dict)
-            res_dict_offline = self.sacmodel_right.actor(data_obs_right)
-            current_actions = res_dict_offline.rsample()
+            # res_dict_offline = self.sacmodel_right.actor(data_obs_right)
+            # current_actions = res_dict_offline.rsample()
             next_res_dict_offline = self.sacmodel_right.actor(data_next_obs_right)
             next_actions = next_res_dict_offline.rsample()
             action_log_probs = res_dict['prev_neglogp']
@@ -605,11 +595,11 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             ######################################################
             if self.offlinePPO:
                 # add CQL and DoubleQ function
-                random_actions_tensor = self.create_random_action(data_actions_right, actions_batch)
+                # random_actions_tensor = self.create_random_action(data_actions_right, actions_batch)
                 q1_pred, q2_pred = self.sacmodel_right.critic(obs_batch_offline, data_actions_right)
-                q1_random, q2_random = self.sacmodel_right.critic(obs_batch_offline, random_actions_tensor)
-                q1_next, q2_next = self.sacmodel_right.critic(obs_batch_offline, next_actions)
-                q1_current, q2_current = self.sacmodel_right.critic(obs_batch_offline, current_actions)
+                # q1_random, q2_random = self.sacmodel_right.critic(obs_batch_offline, random_actions_tensor)
+                # q1_next, q2_next = self.sacmodel_right.critic(obs_batch_offline, next_actions)
+                # q1_current, q2_current = self.sacmodel_right.critic(obs_batch_offline, current_actions)
                 q1_target, q2_target = self.sacmodel_right.critic_target(next_obs_batch_offline, next_actions)
                 target_q_values = torch.min(q1_target, q2_target)
                 q_target = self.DoubleQ_rewardscale * data_rewards_right + (
@@ -617,8 +607,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 q_target.detach()
                 q1_loss = self.sac_Closs(q1_pred, q_target)
                 q2_loss = self.sac_Closs(q2_pred, q_target)
-                cat_q1 = torch.cat([q1_random, q1_pred, q1_next, q1_current], 1)
-                cat_q2 = torch.cat([q2_random, q2_pred, q2_next, q2_current], 1)
+                cat_q1 = torch.cat([q1_pred], 1)
+                cat_q2 = torch.cat([q2_pred], 1)
                 # logsumexp= Log(Sum(Exp()))
                 min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
                 min_qf2_loss = torch.logsumexp(cat_q2 / 1.0, dim=1, ).mean() * self.min_q_weight
