@@ -83,7 +83,7 @@ class A2CBase(BaseAlgorithm):
             self.rank = self.hvd.rank
             self.rank_size = self.hvd.rank_size
 
-        self.use_diagnostics = config.get('use_diagnostics', False)
+        self.use_diagnostics = config.get('use_diagnostics', False) # False
 
         if self.use_diagnostics and self.rank == 0:
             self.diagnostics = PpoDiagnostics()
