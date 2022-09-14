@@ -241,9 +241,10 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         self.full_stage = self.config.get('full_stage', False)
         self.FrankaLimit = self.config.get('franka_limit')
         self.bound_loss_type = self.config.get('bound_loss_type', 'bound')  # 'regularisation' or 'bound'
-        self.optimizer_left = optim.Adam(self.model_left.parameters(), float(self.last_lr_right), eps=1e-08,
+        self.optimizer_left = optim.Adam(self.model_left.parameters(), float(self.last_lr_left), eps=1e-08,
                                           weight_decay=self.weight_decay)
-        self.optimizer_right = optim.Adam(self.model_right.parameters(), float(self.last_lr_right), eps=1e-08, weight_decay=self.weight_decay)
+        self.optimizer_right = optim.Adam(self.model_right.parameters(), float(self.last_lr_right), eps=1e-08,
+                                          weight_decay=self.weight_decay)
         self.Bimanual_regularization = self.config['Offline_PPO']['with_Bimanual_regularization']
         self.with_lagrange = self.config['Offline_PPO']['with_lagrange']
         self.offlinePPO = self.config['Offline_PPO']['offline_ppo']
@@ -517,7 +518,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
         # TODO: Refactor this ugliest code of they year
         self.optimizer_left.zero_grad(set_to_none=True)
-        self.scaler_left.scale(loss).backward(retain_graph=True)
+        self.scaler_left.scale(loss).backward()
         self.trancate_gradients_and_step_left()
         with torch.no_grad():
             reduce_kl = rnn_masks is None
@@ -665,7 +666,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
         # TODO: Refactor this ugliest code of they year
         self.optimizer_right.zero_grad(set_to_none=True)
-        self.scaler_right.scale(loss).backward(retain_graph=False)
+        self.scaler_right.scale(loss).backward()
         self.trancate_gradients_and_step_right()
         with torch.no_grad():
             reduce_kl = rnn_masks is None
