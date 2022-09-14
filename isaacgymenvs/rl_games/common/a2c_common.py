@@ -1256,7 +1256,7 @@ class ContinuousA2CBase(A2CBase):
 class ContinuousMultiA2CBase(A2CBase):
 
     # ToDo: add split Datasets function
-
+    # In the network describe, left represents spoon arm, right represents cup arm
     def __init__(self, base_name, params):
         import h5py
         A2CBase.__init__(self, base_name, params)
