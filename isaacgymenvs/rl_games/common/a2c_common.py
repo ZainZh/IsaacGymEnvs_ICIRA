@@ -1797,13 +1797,13 @@ class ContinuousMultiA2CBase(A2CBase):
 
         fdones_left = self.dones_spoon.float()
         fdones_right = self.dones_cup.float()
-        mb_fdones_left = self.experience_buffer_left.tensor_dict_left['dones'].float()
-        mb_fdones_right = self.experience_buffer_right.tensor_dict_right['dones'].float()
+        mb_fdones_left = self.experience_buffer_left.tensor_dict['dones'].float()
+        mb_fdones_right = self.experience_buffer_right.tensor_dict['dones'].float()
 
-        mb_values_left = self.experience_buffer_left.tensor_dict_left['values']
-        mb_values_right = self.experience_buffer_right.tensor_dict_right['values']
-        mb_rewards_left = self.experience_buffer_left.tensor_dict_left['rewards']
-        mb_rewards_right = self.experience_buffer_right.tensor_dict_right['rewards']
+        mb_values_left = self.experience_buffer_left.tensor_dict['values']
+        mb_values_right = self.experience_buffer_right.tensor_dict['values']
+        mb_rewards_left = self.experience_buffer_left.tensor_dict['rewards']
+        mb_rewards_right = self.experience_buffer_right.tensor_dict['rewards']
         mb_advs_left = self.discount_values(fdones_left, last_values_left, mb_fdones_left, mb_values_left,
                                             mb_rewards_left)
         mb_advs_right = self.discount_values(fdones_right, last_values_right, mb_fdones_right, mb_values_right,
@@ -1861,9 +1861,9 @@ class ContinuousMultiA2CBase(A2CBase):
                 self.experience_buffer_left.update_data('states', n, self.obs_left['states'])
 
             for k in update_list_right:
-                self.experience_buffer_right.update_data_right(k, n, res_dict_right[k])
+                self.experience_buffer_right.update_data(k, n, res_dict_right[k])
             if self.has_central_value:
-                self.experience_buffer_right.update_data_right('states', n, self.obs_right['states'])
+                self.experience_buffer_right.update_data('states', n, self.obs_right['states'])
 
             step_time_start = time.time()
 
@@ -1939,12 +1939,12 @@ class ContinuousMultiA2CBase(A2CBase):
         fdones = self.dones.float()
         fdones_left = self.dones_spoon.float()
         fdones_right = self.dones_cup.float()
-        mb_fdones_left = self.experience_buffer_left.tensor_dict_left['dones'].float()
-        mb_values_left = self.experience_buffer_left.tensor_dict_left['values']
-        mb_rewards_left = self.experience_buffer_left.tensor_dict_left['rewards']
-        mb_fdones_right = self.experience_buffer_right.tensor_dict_right['dones'].float()
-        mb_values_right = self.experience_buffer_right.tensor_dict_right['values']
-        mb_rewards_right = self.experience_buffer_right.tensor_dict_right['rewards']
+        mb_fdones_left = self.experience_buffer_left.tensor_dict['dones'].float()
+        mb_values_left = self.experience_buffer_left.tensor_dict['values']
+        mb_rewards_left = self.experience_buffer_left.tensor_dict['rewards']
+        mb_fdones_right = self.experience_buffer_right.tensor_dict['dones'].float()
+        mb_values_right = self.experience_buffer_right.tensor_dict['values']
+        mb_rewards_right = self.experience_buffer_right.tensor_dict['rewards']
         mb_advs_left = self.discount_values(fdones_left, last_values_left, mb_fdones_left, mb_values_left,
                                             mb_rewards_left)
         mb_returns_left = mb_advs_left + mb_values_left
