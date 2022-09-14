@@ -241,13 +241,9 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
         self.full_stage = self.config.get('full_stage', False)
         self.FrankaLimit = self.config.get('franka_limit')
         self.bound_loss_type = self.config.get('bound_loss_type', 'bound')  # 'regularisation' or 'bound'
-        self.optimizer = optim.Adam([
-            {'params': self.model_left.parameters(), 'lr': float(self.last_lr_left), 'eps': 1e-08,
-             'weight_decay': self.weight_decay},
-            {'params': self.model_right.parameters(), 'lr': float(self.last_lr_right), 'eps': 1e-08,
-             'weight_decay': self.weight_decay}
-        ])
-        # self.optimizer_right = optim.Adam(self.model_right.parameters(), float(self.last_lr_right), eps=1e-08, weight_decay=self.weight_decay)
+        self.optimizer_left = optim.Adam(self.model_left.parameters(), float(self.last_lr_right), eps=1e-08,
+                                          weight_decay=self.weight_decay)
+        self.optimizer_right = optim.Adam(self.model_right.parameters(), float(self.last_lr_right), eps=1e-08, weight_decay=self.weight_decay)
         self.Bimanual_regularization = self.config['Offline_PPO']['with_Bimanual_regularization']
         self.with_lagrange = self.config['Offline_PPO']['with_lagrange']
         self.offlinePPO = self.config['Offline_PPO']['offline_ppo']
@@ -505,7 +501,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             loss = a_loss + 0.5 * c_loss * self.critic_coef - entropy * self.entropy_coef + b_loss * self.bounds_loss_coef
 
             if self.multi_gpu:
-                self.optimizer.zero_grad()
+                self.optimizer_left.zero_grad()
             else:
                 for param in self.model_left.parameters():
                     param.grad = None
@@ -520,6 +516,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             self.sac_CriticOptimizer_left.step()
 
         # TODO: Refactor this ugliest code of they year
+        self.optimizer_left.zero_grad(set_to_none=True)
         self.scaler_left.scale(loss).backward(retain_graph=True)
         self.trancate_gradients_and_step_left()
         with torch.no_grad():
@@ -652,7 +649,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             loss = a_loss + 0.5 * c_loss * self.critic_coef - entropy * self.entropy_coef + b_loss * self.bounds_loss_coef
 
             if self.multi_gpu:
-                self.optimizer.zero_grad()
+                self.optimizer_right.zero_grad()
             else:
                 for param in self.model_right.parameters():
                     param.grad = None
@@ -667,7 +664,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
             self.sac_CriticOptimizer_right.step()
 
         # TODO: Refactor this ugliest code of they year
-        self.optimizer.zero_grad(set_to_none=True)
+        self.optimizer_right.zero_grad(set_to_none=True)
         self.scaler_right.scale(loss).backward(retain_graph=False)
         self.trancate_gradients_and_step_right()
         with torch.no_grad():

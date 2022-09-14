@@ -1464,16 +1464,16 @@ class ContinuousMultiA2CBase(A2CBase):
 
     def trancate_gradients_and_step_left(self):
         if self.truncate_grads:
-            self.scaler_left.unscale_(self.optimizer)
+            self.scaler_left.unscale_(self.optimizer_left)
             nn.utils.clip_grad_norm_(self.model_left.parameters(), self.grad_norm)
-        self.scaler_left.step(self.optimizer)
+        self.scaler_left.step(self.optimizer_left)
         self.scaler_left.update()
 
     def trancate_gradients_and_step_right(self):
         if self.truncate_grads:
-            self.scaler_right.unscale_(self.optimizer)
+            self.scaler_right.unscale_(self.optimizer_right)
             nn.utils.clip_grad_norm_(self.model_right.parameters(), self.grad_norm)
-        self.scaler_right.step(self.optimizer)
+        self.scaler_right.step(self.optimizer_right)
         self.scaler_right.update()
 
     def get_action_values_left(self, obs):
@@ -1560,7 +1560,7 @@ class ContinuousMultiA2CBase(A2CBase):
             self.hvd.broadcast_value(lr_tensor, 'learning_rate')
             lr = lr_tensor.item()
 
-        for param_group in self.optimizer.param_groups:
+        for param_group in self.optimizer_left.param_groups:
             param_group['lr'] = lr
 
     def update_lr_right(self, lr):
@@ -1568,7 +1568,7 @@ class ContinuousMultiA2CBase(A2CBase):
             lr_tensor = torch.tensor([lr])
             self.hvd.broadcast_value(lr_tensor, 'learning_rate')
             lr = lr_tensor.item()
-        for param_group in self.optimizer.param_groups:
+        for param_group in self.optimizer_right.param_groups:
             param_group['lr'] = lr
 
     def init_rnn_from_model_left(self, model):
@@ -1624,8 +1624,8 @@ class ContinuousMultiA2CBase(A2CBase):
         state_left, state_right = self.get_weights()
         state_left['epoch'] = self.epoch_num
         state_right['epoch'] = self.epoch_num
-        state_left['optimizer'] = self.optimizer.state_dict()
-        state_right['optimizer'] = self.optimizer.state_dict()
+        state_left['optimizer'] = self.optimizer_left.state_dict()
+        state_right['optimizer'] = self.optimizer_right.state_dict()
         if self.has_central_value:
             state_left['assymetric_vf_nets'] = self.central_value_net.state_dict()
             state_right['assymetric_vf_nets'] = self.central_value_net.state_dict()
@@ -1647,7 +1647,8 @@ class ContinuousMultiA2CBase(A2CBase):
     def set_full_state_weights(self, weights):
         self.set_weights(weights)
         self.epoch_num = weights['epoch']
-        self.optimizer.load_state_dict(weights['optimizer'])
+        self.optimizer_left.load_state_dict(weights['optimizer'])
+        self.optimizer_right.load_state_dict(weights['optimizer'])
 
         self.frame = weights.get('frame', 0)
         self.last_mean_rewards = weights.get('last_mean_rewards', -100500)
