@@ -1722,15 +1722,15 @@ class ContinuousMultiA2CBase(A2CBase):
 
             self.rnn_states_left = res_dict_left['rnn_states']
             self.rnn_states_right = res_dict_right['rnn_states']
-            self.experience_buffer_left.update_data_left('obses', n, self.obs_left['obs'])
-            self.experience_buffer_left.update_data_left('dones', n, self.dones_spoon.byte())
-            self.experience_buffer_right.update_data_right('obses', n, self.obs_right['obs'])
-            self.experience_buffer_right.update_data_right('dones', n, self.dones_cup.byte())
+            self.experience_buffer_left.update_data('obses', n, self.obs_left['obs'])
+            self.experience_buffer_left.update_data('dones', n, self.dones_spoon.byte())
+            self.experience_buffer_right.update_data('obses', n, self.obs_right['obs'])
+            self.experience_buffer_right.update_data('dones', n, self.dones_cup.byte())
 
             for k in update_list_left:
-                self.experience_buffer_left.update_data_left(k, n, res_dict_left[k])
+                self.experience_buffer_left.update_data(k, n, res_dict_left[k])
             for k in update_list_right:
-                self.experience_buffer_right.update_data_right(k, n, res_dict_right[k])
+                self.experience_buffer_right.update_data(k, n, res_dict_right[k])
 
             step_time_start = time.time()
             # actions_new = self.obs['obs'][:,-18:]
@@ -1755,8 +1755,8 @@ class ContinuousMultiA2CBase(A2CBase):
                     infos['time_outs']).unsqueeze(
                     1).float()
 
-            self.experience_buffer_left.update_data_left('rewards', n, shaped_rewards_left)
-            self.experience_buffer_right.update_data_right('rewards', n, shaped_rewards_right)
+            self.experience_buffer_left.update_data('rewards', n, shaped_rewards_left)
+            self.experience_buffer_right.update_data('rewards', n, shaped_rewards_right)
 
             self.current_rewards_left += rewards_left
             self.current_rewards_right += rewards_right
@@ -1810,9 +1810,9 @@ class ContinuousMultiA2CBase(A2CBase):
                                              mb_rewards_right)
         mb_returns_left = mb_advs_left + mb_values_left
         mb_returns_right = mb_advs_right + mb_values_right
-        batch_dict_left = self.experience_buffer_left.get_transformed_list_left(swap_and_flatten01,
+        batch_dict_left = self.experience_buffer_left.get_transformed_list(swap_and_flatten01,
                                                                                 self.tensor_list_left)
-        batch_dict_right = self.experience_buffer_right.get_transformed_list_right(swap_and_flatten01,
+        batch_dict_right = self.experience_buffer_right.get_transformed_list(swap_and_flatten01,
                                                                                    self.tensor_list_right)
         batch_dict_left['returns'] = swap_and_flatten01(mb_returns_left)
         batch_dict_right['returns'] = swap_and_flatten01(mb_returns_right)
@@ -1849,16 +1849,16 @@ class ContinuousMultiA2CBase(A2CBase):
             # self.experience_buffer.update_data('dones', n, self.dones)
 
             # Todo: add informations
-            self.experience_buffer_left.update_data_left('obses', n, self.obs_left['obs'])
-            self.experience_buffer_left.update_data_left('dones', n, self.dones_spoon)
-            self.experience_buffer_right.update_data_right('obses', n, self.obs_right['obs'])
-            self.experience_buffer_right.update_data_right('dones', n, self.dones_cup)
+            self.experience_buffer_left.update_data('obses', n, self.obs_left['obs'])
+            self.experience_buffer_left.update_data('dones', n, self.dones_spoon)
+            self.experience_buffer_right.update_data('obses', n, self.obs_right['obs'])
+            self.experience_buffer_right.update_data('dones', n, self.dones_cup)
 
             # Todo: add informations
             for k in update_list_left:
-                self.experience_buffer_left.update_data_left(k, n, res_dict_left[k])
+                self.experience_buffer_left.update_data(k, n, res_dict_left[k])
             if self.has_central_value:
-                self.experience_buffer_left.update_data_left('states', n, self.obs_left['states'])
+                self.experience_buffer_left.update_data('states', n, self.obs_left['states'])
 
             for k in update_list_right:
                 self.experience_buffer_right.update_data_right(k, n, res_dict_right[k])
@@ -1896,8 +1896,8 @@ class ContinuousMultiA2CBase(A2CBase):
                     1).float()
 
             # self.experience_buffer.update_data('rewards', n, shaped_rewards)
-            self.experience_buffer_left.update_data_left('rewards', n, shaped_rewards_left)
-            self.experience_buffer_right.update_data_right('rewards', n, shaped_rewards_right)
+            self.experience_buffer_left.update_data('rewards', n, shaped_rewards_left)
+            self.experience_buffer_right.update_data('rewards', n, shaped_rewards_right)
 
             # self.current_rewards += rewards
             # self.current_lengths += 1
@@ -1953,13 +1953,13 @@ class ContinuousMultiA2CBase(A2CBase):
         mb_returns_right = mb_advs_right + mb_values_right
 
         # Todo: add other batch_dict for another arm
-        batch_dict_left = self.experience_buffer_left.get_transformed_list_left(swap_and_flatten01,
+        batch_dict_left = self.experience_buffer_left.get_transformed_list(swap_and_flatten01,
                                                                                 self.tensor_list_left)
         batch_dict_left['returns'] = swap_and_flatten01(mb_returns_left)
         batch_dict_left['played_frames'] = self.batch_size
         batch_dict_left['step_time'] = step_time
 
-        batch_dict_right = self.experience_buffer_right.get_transformed_list_right(swap_and_flatten01,
+        batch_dict_right = self.experience_buffer_right.get_transformed_list(swap_and_flatten01,
                                                                                    self.tensor_list_right)
         batch_dict_right['returns'] = swap_and_flatten01(mb_returns_right)
         batch_dict_right['played_frames'] = self.batch_size
