@@ -499,7 +499,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 [a_loss.unsqueeze(1), c_loss, entropy.unsqueeze(1), b_loss.unsqueeze(1)], rnn_masks)
             a_loss, c_loss, entropy, b_loss = losses[0], losses[1], losses[2], losses[3]
 
-            loss = a_loss + 0.5 * c_loss * self.critic_coef - entropy * self.entropy_coef + b_loss * self.bounds_loss_coef
+            loss = a_loss + 0.5 * c_loss * self.critic_coef - entropy * self.entropy_coef_left + b_loss * self.bounds_loss_coef
 
             if self.multi_gpu:
                 self.optimizer_left.zero_grad()
@@ -647,7 +647,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 [a_loss.unsqueeze(1), c_loss, entropy.unsqueeze(1), b_loss.unsqueeze(1)], rnn_masks)
             a_loss, c_loss, entropy, b_loss = losses[0], losses[1], losses[2], losses[3]
 
-            loss = a_loss + 0.5 * c_loss * self.critic_coef - entropy * self.entropy_coef + b_loss * self.bounds_loss_coef
+            loss = a_loss + 0.5 * c_loss * self.critic_coef - entropy * self.entropy_coef_right + b_loss * self.bounds_loss_coef
 
             if self.multi_gpu:
                 self.optimizer_right.zero_grad()
