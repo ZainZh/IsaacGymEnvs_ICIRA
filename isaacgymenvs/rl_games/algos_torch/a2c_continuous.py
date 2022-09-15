@@ -612,8 +612,8 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
                 # logsumexp= Log(Sum(Exp()))
                 min_qf1_loss = torch.logsumexp(cat_q1 / 1.0, dim=1, ).mean() * self.min_q_weight
                 min_qf2_loss = torch.logsumexp(cat_q2 / 1.0, dim=1, ).mean() * self.min_q_weight
-                min_qf1_loss = min_qf1_loss - q1_pred.mean()
-                min_qf2_loss = min_qf2_loss - q2_pred.mean()
+                # min_qf1_loss = min_qf1_loss - q1_pred.mean()
+                # min_qf2_loss = min_qf2_loss - q2_pred.mean()
 
                 if self.with_lagrange:
                     alpha_prime = torch.clamp(self.log_alpha_prime_right.exp(), min=0.0, max=10.0)
