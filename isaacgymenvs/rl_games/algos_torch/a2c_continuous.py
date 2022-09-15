@@ -518,7 +518,7 @@ class A2CMultiAgent(a2c_common.ContinuousMultiA2CBase):
 
         # TODO: Refactor this ugliest code of they year
         self.optimizer_left.zero_grad(set_to_none=True)
-        self.scaler_left.scale(loss).backward()
+        self.scaler_left.scale(loss).backward(retain_graph=True)
         self.trancate_gradients_and_step_left()
         with torch.no_grad():
             reduce_kl = rnn_masks is None
