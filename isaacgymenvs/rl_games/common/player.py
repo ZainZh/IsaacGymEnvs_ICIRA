@@ -4,8 +4,8 @@ import numpy as np
 import torch
 from rl_games.common import env_configurations
 from rl_games.algos_torch import model_builder
-from utils.utils import HDF5DatasetWriter
-from utils.utils import HDF5DatasetWriter_multi
+from isaacgymenvs.utils.utils import HDF5DatasetWriter
+from isaacgymenvs.utils.utils import HDF5DatasetWriter_multi
 import os
 from datetime import datetime
 
