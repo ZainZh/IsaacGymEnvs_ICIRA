@@ -1,7 +1,10 @@
 # IsaacGym Bimanual Franka task
 
 This repo is based on Nvidia's repo [IsaacGymEnvs](https://github.com/NVIDIA-Omniverse/IsaacGymEnvs), edited by me for
-the ICIRA conference and RAS conference experiment.
+the [ICIRA conference](https://arxiv.org/pdf/2211.02243) and RAS conference experiment.
+
+The title of our work is '[Mixline: A Hybrid Reinforcement Learning Framework for Long-horizon Bimanual Coffee](https://arxiv.org/pdf/2211.02243)“
+
 
 In this work, we propose new training methods for multi-agent RL.
 And we will provide Isaac Gym's users a test environment to help you monitor your training process.
